@@ -26,7 +26,7 @@
             <span>签到消课</span>
           </el-menu-item>
 
-          <el-menu-item index="/orders">
+          <el-menu-item index="/orders" v-if="role === 'admin'">
             <el-icon>
               <Money />
             </el-icon> <span>订单流水</span>
@@ -38,7 +38,7 @@
             </el-icon> <span>课程/班级</span>
           </el-menu-item>
 
-          <el-menu-item index="/users">
+          <el-menu-item index="/users" v-if="role === 'admin'">
             <el-icon>
               <Tools />
             </el-icon>
@@ -68,6 +68,11 @@ import { ElMessage } from 'element-plus';
 
 const router = useRouter();
 const route = useRoute();
+
+// 1. 获取用户信息
+const userInfoStr = localStorage.getItem('user_info');
+const userInfo = userInfoStr ? JSON.parse(userInfoStr) : {};
+const role = userInfo.role || 'teacher'; // 默认为 teacher 防止报错
 
 const handleLogout = () => {
   // 1. 清除本地存储

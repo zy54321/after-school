@@ -8,6 +8,7 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 // === 引入拦截器 ===
 const checkAuth = require('./src/middleware/authMiddleware');
+const checkAdmin = require('./src/middleware/adminMiddleware');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -55,7 +56,9 @@ app.use('/api/classes', checkAuth, classRoutes);
 app.use('/api/orders', checkAuth, orderRoutes);
 app.use('/api/attendance', checkAuth, attendanceRoutes);
 app.use('/api/dashboard', checkAuth, dashboardRoutes);
-app.use('/api/users', checkAuth, userRoutes);
+
+// 🔒 管理员专属路由 (加双重锁：先登录，再查权限)
+app.use('/api/users', checkAuth, checkAdmin, userRoutes);
 
 // 启动服务
 app.listen(port, () => {

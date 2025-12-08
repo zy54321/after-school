@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const classController = require('../controllers/classController');
+const checkAdmin = require('../middleware/adminMiddleware');
 
 // 报名下拉框用 (保持不变)
 router.get('/active', classController.getActiveClasses);
@@ -9,6 +10,8 @@ router.get('/active', classController.getActiveClasses);
 router.get('/', classController.getAllClasses);
 router.post('/', classController.createClass);
 router.put('/:id', classController.updateClass);
-router.delete('/:id', classController.deleteClass); // DELETE /api/classes/:id
+
+// 🛑 给删除接口加锁
+router.delete('/:id', checkAdmin, classController.deleteClass);
 
 module.exports = router;

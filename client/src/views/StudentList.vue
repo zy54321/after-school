@@ -58,14 +58,21 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="220">
+        <el-table-column label="操作" width="300">
           <template #default="scope">
             <el-button size="small" link @click="$router.push(`/students/${scope.row.id}`)">
               详情
             </el-button>
             <el-button size="small" type="primary" link @click="openEnrollDialog(scope.row)">报名/续费</el-button>
             <el-button size="small" type="success" link @click="openEditDialog(scope.row)">编辑</el-button>
-            <el-button size="small" type="danger" link @click="handleDelete(scope.row)">删除</el-button>
+            <el-popconfirm v-if="role === 'admin'" width="220" confirm-button-text="确认退学" cancel-button-text="取消"
+              icon-color="#F56C6C" title="确定办理退学吗？这将清空该学员所有剩余课时！" @confirm="handleWithdraw(scope.row)">
+              <template #reference>
+                <el-button size="small" type="warning" link>退学</el-button>
+              </template>
+            </el-popconfirm>
+            <el-button v-if="role === 'admin'" size="small" type="danger" link
+              @click="handleDelete(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -178,6 +185,9 @@ const mapPickerVisible = ref(false); // 地图选择器显示状态
 const mapViewMode = ref(false); // 地图查看模式（只读）
 const viewingStudent = ref(null); // 正在查看的学员信息
 
+const userInfoStr = localStorage.getItem('user_info');
+const role = userInfoStr ? JSON.parse(userInfoStr).role : 'teacher';
+
 // 学员表单
 const form = reactive({
   id: null,
@@ -203,8 +213,6 @@ const enrollForm = reactive({
   displayAmount: 0, // 显示用的金额（元）
   remark: ''
 });
-
-// --- 3. 方法定义 ---
 
 // 获取学员列表
 const fetchStudents = async () => {
@@ -446,6 +454,23 @@ const handleDelete = async (row) => {
         ElMessage.error('删除失败');
       }
     }
+  }
+};
+
+// 办理退学
+const handleWithdraw = async (row) => {
+  try {
+    const res = await axios.put(`/api/students/${row.id}/withdraw`);
+    
+    if (res.data.code === 200) {
+      ElMessage.success('退学办理成功');
+      fetchStudents(); // 刷新列表，该学员应该会消失（因为 getStudents 只查 status=1）
+    } else {
+      ElMessage.error(res.data.msg || '操作失败');
+    }
+  } catch (err) {
+    console.error(err);
+    ElMessage.error('操作失败: ' + (err.response?.data?.msg || err.message));
   }
 };
 

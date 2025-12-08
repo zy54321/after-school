@@ -23,7 +23,7 @@
         </el-card>
       </el-col>
 
-      <el-col :span="6">
+      <el-col :span="6" v-if="role === 'admin'">
         <el-card shadow="hover">
           <template #header>
             <div class="card-header">
@@ -118,6 +118,9 @@ const stats = ref({
 const activities = ref([]);
 const lowBalanceList = ref([]);
 const loading = ref(false);
+
+const userInfoStr = localStorage.getItem('user_info');
+const role = userInfoStr ? JSON.parse(userInfoStr).role : 'teacher';
 
 // 格式化时间的小工具
 const formatTime = (isoString) => {

@@ -236,10 +236,57 @@ const getStudentDetail = async (req, res) => {
   }
 };
 
+// 办理退学 (清退余额 + 停用账号)
+const withdrawStudent = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1. 将该学员所有课程余额清零，且有效期设为昨天 (立即过期)
+    await client.query(`
+      UPDATE student_course_balance
+      SET remaining_lessons = 0, 
+          expired_at = CURRENT_DATE - INTERVAL '1 day',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE student_id = $1
+    `, [id]);
+
+    // 2. 将学员状态改为 0 (退学/软删除)
+    const result = await client.query(`
+      UPDATE students 
+      SET status = 0 
+      WHERE id = $1
+      RETURNING *
+    `, [id]);
+
+    await client.query('COMMIT');
+
+    if (result.rows.length === 0) {
+      return res.json({ code: 404, msg: '学员不存在' });
+    }
+
+    res.json({
+      code: 200,
+      msg: '退学办理成功，余额已清零',
+      data: result.rows[0]
+    });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('退学办理失败:', err);
+    res.status(500).json({ code: 500, msg: '操作失败', error: err.message });
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   getStudents,
   createStudent,
   updateStudent,
   deleteStudent,
-  getStudentDetail
+  getStudentDetail,
+  withdrawStudent
 };
