@@ -41,6 +41,11 @@ const routes = [
         path: 'classes', 
         name: 'Classes', 
         component: () => import('../views/ClassManagement.vue') 
+      },
+      {
+        path: 'students/:id', // 动态路由
+        name: 'StudentDetail',
+        component: () => import('../views/StudentDetail.vue')
       }
     ]
   }

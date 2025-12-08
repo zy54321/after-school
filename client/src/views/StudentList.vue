@@ -16,14 +16,11 @@
 
         <el-table-column label="地址" min-width="150">
           <template #default="scope">
-            <el-button 
-              v-if="scope.row.address || (scope.row.longitude && scope.row.latitude)"
-              type="primary" 
-              link 
-              size="small"
-              @click="viewLocation(scope.row)"
-            >
-              <el-icon><Location /></el-icon>
+            <el-button v-if="scope.row.address || (scope.row.longitude && scope.row.latitude)" type="primary" link
+              size="small" @click="viewLocation(scope.row)">
+              <el-icon>
+                <Location />
+              </el-icon>
               {{ scope.row.address || '查看位置' }}
             </el-button>
             <span v-else style="color: #C0C4CC;">未设置</span>
@@ -63,6 +60,9 @@
 
         <el-table-column label="操作" width="220">
           <template #default="scope">
+            <el-button size="small" link @click="$router.push(`/students/${scope.row.id}`)">
+              详情
+            </el-button>
             <el-button size="small" type="primary" link @click="openEnrollDialog(scope.row)">报名/续费</el-button>
             <el-button size="small" type="success" link @click="openEditDialog(scope.row)">编辑</el-button>
             <el-button size="small" type="danger" link @click="handleDelete(scope.row)">删除</el-button>
@@ -89,11 +89,7 @@
           <el-input v-model="form.parent_phone" placeholder="11位手机号" />
         </el-form-item>
         <el-form-item label="地址">
-          <el-input 
-            v-model="form.address" 
-            placeholder="请点击右侧按钮选择地址位置"
-            readonly
-          >
+          <el-input v-model="form.address" placeholder="请点击右侧按钮选择地址位置" readonly>
             <template #append>
               <el-button @click="showMapPicker" icon="Location">选择位置</el-button>
             </template>
@@ -116,15 +112,11 @@
     </el-dialog>
 
     <!-- 地图选择组件 -->
-    <MapPicker
-      v-model="mapPickerVisible"
+    <MapPicker v-model="mapPickerVisible"
       :initial-lng="mapViewMode ? (viewingStudent?.longitude || null) : form.longitude"
       :initial-lat="mapViewMode ? (viewingStudent?.latitude || null) : form.latitude"
-      :initial-address="mapViewMode ? (viewingStudent?.address || null) : null"
-      :readonly="mapViewMode"
-      :title="mapViewMode ? '查看地址位置' : '选择地址位置'"
-      @confirm="handleMapConfirm"
-    />
+      :initial-address="mapViewMode ? (viewingStudent?.address || null) : null" :readonly="mapViewMode"
+      :title="mapViewMode ? '查看地址位置' : '选择地址位置'" @confirm="handleMapConfirm" />
 
     <el-dialog v-model="enrollDialogVisible" title="学员报名/续费" width="500px">
       <el-form :model="enrollForm" label-width="100px">
@@ -418,7 +410,7 @@ const isCourseExpiring = (course) => {
     const today = new Date();
     const sevenDaysLater = new Date();
     sevenDaysLater.setDate(today.getDate() + 7);
-    
+
     return expireDate < sevenDaysLater;
   }
   return false;
@@ -438,7 +430,7 @@ const handleDelete = async (row) => {
     );
 
     const res = await axios.delete(`/api/students/${row.id}`);
-    
+
     if (res.data.code === 200) {
       ElMessage.success('删除成功');
       fetchStudents(); // 刷新列表

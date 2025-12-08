@@ -177,9 +177,69 @@ const deleteStudent = async (req, res) => {
   }
 };
 
+// 获取单个学员详情 (聚合查询)
+const getStudentDetail = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+
+  try {
+    // 1. 查基本信息
+    const studentRes = await client.query('SELECT * FROM students WHERE id = $1', [id]);
+    if (studentRes.rows.length === 0) {
+      return res.status(404).json({ code: 404, msg: '学员不存在' });
+    }
+    const student = studentRes.rows[0];
+
+    // 2. 查在读课程 (关联班级表)
+    const courseRes = await client.query(`
+      SELECT scb.*, c.class_name, c.tuition_fee
+      FROM student_course_balance scb
+      JOIN classes c ON scb.class_id = c.id
+      WHERE scb.student_id = $1
+    `, [id]);
+
+    // 3. 查最近 50 条签到记录
+    const attendanceRes = await client.query(`
+      SELECT a.*, c.class_name, u.real_name as operator_name
+      FROM attendance a
+      LEFT JOIN classes c ON a.class_id = c.id
+      LEFT JOIN users u ON a.operator_id = u.id
+      WHERE a.student_id = $1
+      ORDER BY a.sign_in_time DESC
+      LIMIT 50
+    `, [id]);
+
+    // 4. 查缴费记录
+    const orderRes = await client.query(`
+      SELECT o.*, c.class_name
+      FROM orders o
+      LEFT JOIN classes c ON o.class_id = c.id
+      WHERE o.student_id = $1
+      ORDER BY o.created_at DESC
+    `, [id]);
+
+    res.json({
+      code: 200,
+      data: {
+        info: student,
+        courses: courseRes.rows,
+        attendanceLogs: attendanceRes.rows,
+        orders: orderRes.rows
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ code: 500, msg: '获取详情失败' });
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   getStudents,
   createStudent,
   updateStudent,
-  deleteStudent
+  deleteStudent,
+  getStudentDetail
 };
