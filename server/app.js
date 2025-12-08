@@ -19,6 +19,7 @@ const classRoutes = require('./src/routes/classRoutes');
 const orderRoutes = require('./src/routes/orderRoutes');
 const attendanceRoutes = require('./src/routes/attendanceRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
+const userRoutes = require('./src/routes/userRoutes');
 
 // 中间件
 app.use(cors({
@@ -54,6 +55,7 @@ app.use('/api/classes', checkAuth, classRoutes);
 app.use('/api/orders', checkAuth, orderRoutes);
 app.use('/api/attendance', checkAuth, attendanceRoutes);
 app.use('/api/dashboard', checkAuth, dashboardRoutes);
+app.use('/api/users', checkAuth, userRoutes);
 
 // 启动服务
 app.listen(port, () => {

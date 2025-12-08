@@ -37,6 +37,13 @@
               <School />
             </el-icon> <span>课程/班级</span>
           </el-menu-item>
+
+          <el-menu-item index="/users">
+            <el-icon>
+              <Tools />
+            </el-icon>
+            <span>员工管理</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
 
@@ -55,7 +62,7 @@
 </template>
 
 <script setup>
-import { Odometer, User, Calendar } from '@element-plus/icons-vue';
+import { Odometer, User, Calendar, Money, School, Tools } from '@element-plus/icons-vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 

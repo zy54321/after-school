@@ -46,6 +46,11 @@ const routes = [
         path: 'students/:id', // 动态路由
         name: 'StudentDetail',
         component: () => import('../views/StudentDetail.vue')
+      },
+      { 
+        path: 'users', 
+        name: 'Users', 
+        component: () => import('../views/UserList.vue') 
       }
     ]
   }
