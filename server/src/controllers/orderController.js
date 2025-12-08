@@ -19,13 +19,21 @@ const createOrder = async (req, res) => {
     `;
     await client.query(insertOrderText, [student_id, class_id, quantity, amount, remark]);
 
-    // 2. 判断班级计费类型
-    // 注意：确保你的数据库 classes 表有 billing_type 字段，否则会报错
-    // 如果没有这个字段，请先去数据库执行: ALTER TABLE classes ADD COLUMN billing_type VARCHAR(20) DEFAULT 'count';
-    const classInfo = await client.query('SELECT billing_type FROM classes WHERE id = $1', [class_id]);
+    // 2. 获取班级信息（包含计费类型和排课信息）
+    const classInfo = await client.query(`
+      SELECT billing_type, start_date, schedule_days 
+      FROM classes 
+      WHERE id = $1
+    `, [class_id]);
+    
+    if (classInfo.rows.length === 0) {
+      throw new Error('课程不存在');
+    }
+    
     const type = classInfo.rows[0]?.billing_type || 'count'; // 默认按次
+    const classStartDate = classInfo.rows[0].start_date;
+    const scheduleDays = classInfo.rows[0].schedule_days; // 格式: "1,3,5" 或数组
 
-    // ⭐ 核心修复点：这里必须用 let，不能用 const
     let upsertBalanceText = ''; 
     const params = [];
 
@@ -39,21 +47,71 @@ const createOrder = async (req, res) => {
           expired_at = GREATEST(student_course_balance.expired_at, CURRENT_DATE) + ($3 * 30 * INTERVAL '1 day'),
           updated_at = CURRENT_TIMESTAMP;
       `;
-      // 参数顺序：student_id($1), class_id($2), quantity($3)
       params.push(student_id, class_id, quantity);
 
     } else {
-      // === 🔢 按次模式 (默认) ===
+      // === 🔢 按次模式：统一改为按有效期计算 ===
+      // 先检查是否已有记录（续费情况）
+      const existingBalance = await client.query(`
+        SELECT expired_at FROM student_course_balance 
+        WHERE student_id = $1 AND class_id = $2
+      `, [student_id, class_id]);
+      
+      let startDate;
+      if (existingBalance.rows.length > 0 && existingBalance.rows[0].expired_at) {
+        // 续费：从现有有效期开始计算
+        startDate = new Date(existingBalance.rows[0].expired_at);
+        // 如果现有有效期已过期，从今天开始
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (startDate < today) {
+          startDate = today;
+        }
+      } else {
+        // 新报名：从当前日期或课程开始日期（取较晚的）开始计算
+        startDate = classStartDate ? new Date(classStartDate) : new Date();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (today > startDate) {
+          startDate = today;
+        }
+      }
+      
+      // 解析上课周期（格式: "1,3,5" -> [1,3,5]）
+      const targetDays = scheduleDays 
+        ? (typeof scheduleDays === 'string' ? scheduleDays.split(',').map(d => parseInt(d.trim())) : scheduleDays)
+        : [1, 2, 3, 4, 5]; // 默认周一到周五
+      
+      // 计算有效期：从开始日期往后数，直到凑够 quantity 节课
+      let lessonsFound = 0;
+      let currentDate = new Date(startDate);
+      let safeGuard = 0;
+      
+      while (lessonsFound < quantity && safeGuard < 3650) {
+        const dayOfWeek = currentDate.getDay(); // 0(周日) - 6(周六)
+        
+        if (targetDays.includes(dayOfWeek)) {
+          lessonsFound++;
+        }
+        
+        if (lessonsFound < quantity) {
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        safeGuard++;
+      }
+      
+      const expiredAt = currentDate.toISOString().split('T')[0];
+      
+      // 统一使用 expired_at 字段
       upsertBalanceText = `
-        INSERT INTO student_course_balance (student_id, class_id, remaining_lessons)
-        VALUES ($1, $2, $3)
+        INSERT INTO student_course_balance (student_id, class_id, expired_at)
+        VALUES ($1, $2, $3::date)
         ON CONFLICT (student_id, class_id) 
         DO UPDATE SET 
-          remaining_lessons = student_course_balance.remaining_lessons + EXCLUDED.remaining_lessons,
+          expired_at = $3::date,
           updated_at = CURRENT_TIMESTAMP;
       `;
-      // 参数顺序：同上
-      params.push(student_id, class_id, quantity);
+      params.push(student_id, class_id, expiredAt);
     }
 
     // 执行 SQL

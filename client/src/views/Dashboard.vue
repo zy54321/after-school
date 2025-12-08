@@ -58,16 +58,18 @@
         <el-card shadow="never">
           <template #header>
             <div class="clearfix">
-              <span>📉 需要续费的学员 (< 5课时)</span>
+              <span>📉 需要续费的学员 (有效期 < 7天)</span>
               <el-button style="float: right; padding: 3px 0" text>查看全部</el-button>
             </div>
           </template>
           <el-table :data="lowBalanceList" style="width: 100%" stripe>
             <el-table-column prop="name" label="姓名" width="100" />
             <el-table-column prop="className" label="课程" />
-            <el-table-column label="剩余" width="80">
+            <el-table-column label="有效期至" width="150">
               <template #default="scope">
-                <span style="color: red; font-weight: bold;">{{ scope.row.remaining }}</span>
+                <span style="color: red; font-weight: bold;">
+                  {{ new Date(scope.row.expired_at).toLocaleDateString() }}
+                </span>
               </template>
             </el-table-column>
             <el-table-column label="操作">
@@ -114,6 +116,7 @@ const stats = ref({
 });
 
 const activities = ref([]);
+const lowBalanceList = ref([]);
 const loading = ref(false);
 
 // 格式化时间的小工具
@@ -136,6 +139,9 @@ const fetchDashboardData = async () => {
         todayIncome: (data.todayIncome / 100).toFixed(2),
         lowBalanceCount: data.lowBalanceCount
       };
+      
+      // 处理需要续费的学员列表
+      lowBalanceList.value = data.lowBalanceList || [];
       
       // 处理动态列表
       activities.value = data.activities.map(item => ({

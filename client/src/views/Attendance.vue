@@ -43,8 +43,8 @@
                 <span v-if="card.expiredAt">
                   有效期至: <span class="highlight" style="color: #E6A23C">{{ formatDate(card.expiredAt) }}</span>
                 </span>
-                <span v-else>
-                  剩余: <span class="highlight">{{ card.currentBalance }}</span> 课时
+                <span v-else style="color: #909399;">
+                  未设置有效期
                 </span>
               </div>
             </div>
@@ -109,7 +109,6 @@ const filteredStudents = computed(() => {
       // 课程信息
       classId: course.class_id,
       className: course.class_name,
-      currentBalance: course.remaining,
       expiredAt: course.expired_at,
       todaySignedIn: course.has_signed_today, // 后端返回的签到状态
       loading: false
@@ -143,7 +142,9 @@ const handleCheckIn = async (card) => {
       if (sourceStudent && sourceStudent.courses) {
         const sourceCourse = sourceStudent.courses.find(c => c.class_id === card.classId);
         if (sourceCourse) {
-          sourceCourse.remaining = res.data.data.remaining;
+          if (res.data.data.expired_at) {
+            sourceCourse.expired_at = res.data.data.expired_at;
+          }
           sourceCourse.has_signed_today = true; // 关键：更新源数据的签到状态
         }
       }

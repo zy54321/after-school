@@ -20,19 +20,32 @@ const getSummary = async (req, res) => {
       WHERE DATE(created_at) = CURRENT_DATE
     `);
 
-    // 4. 续费预警 (修复版)
-    // 逻辑升级：
-    // A. 如果是按次课 (expired_at IS NULL)：看剩余次数是否 < 3
-    // B. 如果是包月课 (expired_at IS NOT NULL)：只看有效期是否 < 7天，无视 remaining_lessons
+    // 4. 续费预警 (统一按有效期判断)
+    // 逻辑：有效期小于7天的课程需要续费
     const warningRes = await client.query(`
       SELECT COUNT(*) FROM student_course_balance
-      WHERE 
-        (expired_at IS NULL AND remaining_lessons < 3) 
-        OR 
-        (expired_at IS NOT NULL AND expired_at < CURRENT_DATE + INTERVAL '7 days')
+      WHERE expired_at IS NOT NULL 
+        AND expired_at < CURRENT_DATE + INTERVAL '7 days'
+        AND expired_at >= CURRENT_DATE
+    `);
+    
+    // 5. 获取需要续费的学员列表（有效期小于7天）
+    const lowBalanceListRes = await client.query(`
+      SELECT 
+        s.name,
+        c.class_name,
+        scb.expired_at
+      FROM student_course_balance scb
+      JOIN students s ON scb.student_id = s.id
+      JOIN classes c ON scb.class_id = c.id
+      WHERE scb.expired_at IS NOT NULL 
+        AND scb.expired_at < CURRENT_DATE + INTERVAL '7 days'
+        AND scb.expired_at >= CURRENT_DATE
+      ORDER BY scb.expired_at ASC
+      LIMIT 10
     `);
 
-    // 5. (可选) 获取最新的 5 条动态 (签到 + 订单)
+    // 6. (可选) 获取最新的 5 条动态 (签到 + 订单)
     // 这里为了偷懒 MVP 先只查签到记录
     const activityRes = await client.query(`
       SELECT 
@@ -54,6 +67,11 @@ const getSummary = async (req, res) => {
         todayCheckins: parseInt(checkinRes.rows[0].count),
         todayIncome: parseInt(incomeRes.rows[0].total), // 单位：分
         lowBalanceCount: parseInt(warningRes.rows[0].count),
+        lowBalanceList: lowBalanceListRes.rows.map(row => ({
+          name: row.name,
+          className: row.class_name,
+          expired_at: row.expired_at
+        })),
         activities: activityRes.rows
       }
     });

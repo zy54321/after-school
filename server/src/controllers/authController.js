@@ -28,18 +28,21 @@ const login = async (req, res) => {
         return res.json({ code: 403, msg: '该账号已被禁用，请联系管理员' });
       }
 
+      // ✅ 关键：把用户信息存入 Session
+      req.session.user = user;
+
       // 登录成功
       res.json({
         code: 200,
         msg: '登录成功',
-        data: user 
+        data: user,
         // 💡 进阶提示：正式项目这里应该生成 JWT Token 返回给前端
       });
     } else {
       // 登录失败
       res.json({
         code: 401, // 401 Unauthorized
-        msg: '用户名或密码错误'
+        msg: '用户名或密码错误',
       });
     }
   } catch (err) {
@@ -49,5 +52,5 @@ const login = async (req, res) => {
 };
 
 module.exports = {
-  login
+  login,
 };

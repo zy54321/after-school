@@ -26,35 +26,16 @@ const checkIn = async (req, res) => {
 
     // ... 下面是原来的扣费逻辑 (保持不变) ...
     
-    // 1. 判断班级计费类型
-    const classResult = await client.query('SELECT billing_type FROM classes WHERE id = $1', [class_id]);
-    const billingType = classResult.rows[0].billing_type;
-
-    let remaining = 0;
-
-    if (billingType === 'time') {
-      // ... 包月逻辑 ...
-      const checkTimeText = `
-        SELECT expired_at FROM student_course_balance 
-        WHERE student_id = $1 AND class_id = $2 
-        AND expired_at >= CURRENT_DATE
-      `;
-      const timeRes = await client.query(checkTimeText, [student_id, class_id]);
-      if (timeRes.rows.length === 0) throw new Error('该包月课程已过期，请续费');
-      remaining = -1; 
-
-    } else {
-      // ... 按次逻辑 ...
-      const updateBalanceText = `
-        UPDATE student_course_balance
-        SET remaining_lessons = remaining_lessons - 1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE student_id = $1 AND class_id = $2 AND remaining_lessons > 0
-        RETURNING remaining_lessons;
-      `;
-      const countRes = await client.query(updateBalanceText, [student_id, class_id]);
-      if (countRes.rows.length === 0) throw new Error('剩余课时不足，请续费');
-      remaining = countRes.rows[0].remaining_lessons;
+    // 1. 统一检查有效期（包月和按次都使用有效期）
+    const checkExpiredText = `
+      SELECT expired_at FROM student_course_balance 
+      WHERE student_id = $1 AND class_id = $2 
+      AND expired_at >= CURRENT_DATE
+    `;
+    const expiredRes = await client.query(checkExpiredText, [student_id, class_id]);
+    
+    if (expiredRes.rows.length === 0) {
+      throw new Error('该课程已过期，请续费');
     }
 
     // 2. 写入签到记录
@@ -69,7 +50,7 @@ const checkIn = async (req, res) => {
     res.json({
       code: 200,
       msg: '签到成功',
-      data: { remaining: remaining }
+      data: { expired_at: expiredRes.rows[0].expired_at }
     });
 
   } catch (err) {

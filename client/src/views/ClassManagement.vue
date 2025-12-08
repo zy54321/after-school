@@ -40,6 +40,15 @@
 
         <el-table-column prop="teacher_name" label="负责老师" width="100" />
         
+        <el-table-column label="备注" min-width="150" show-overflow-tooltip>
+          <template #default="scope">
+            <span v-if="scope.row.description" style="color: #606266;">
+              {{ scope.row.description }}
+            </span>
+            <span v-else style="color: #C0C4CC;">--</span>
+          </template>
+        </el-table-column>
+        
         <el-table-column label="状态" width="80">
           <template #default="scope">
             <el-switch 
@@ -52,9 +61,10 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="80">
+        <el-table-column label="操作" width="150">
           <template #default="scope">
             <el-button size="small" type="primary" link @click="openEditDialog(scope.row)">编辑</el-button>
+            <el-button size="small" type="danger" link @click="handleDelete(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -166,7 +176,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import axios from 'axios';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 const tableData = ref([]);
 const loading = ref(false);
@@ -327,6 +337,39 @@ const handleStatusChange = async (row) => {
   } catch (err) {
     ElMessage.error('更新失败');
     row.is_active = !row.is_active;
+  }
+};
+
+// 删除课程
+const handleDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除课程 "${row.class_name}" 吗？删除后无法恢复。如果课程有在读学员或历史记录，建议使用"停用"功能。`,
+      '确认删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    );
+
+    const res = await axios.delete(`/api/classes/${row.id}`);
+    
+    if (res.data.code === 200) {
+      ElMessage.success('删除成功');
+      fetchClasses(); // 刷新列表
+    } else {
+      ElMessage.error(res.data.msg || '删除失败');
+    }
+  } catch (err) {
+    if (err !== 'cancel') {
+      console.error(err);
+      if (err.response?.data?.msg) {
+        ElMessage.error(err.response.data.msg);
+      } else {
+        ElMessage.error('删除失败');
+      }
+    }
   }
 };
 

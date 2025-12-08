@@ -9,5 +9,6 @@ router.get('/active', classController.getActiveClasses);
 router.get('/', classController.getAllClasses);
 router.post('/', classController.createClass);
 router.put('/:id', classController.updateClass);
+router.delete('/:id', classController.deleteClass); // DELETE /api/classes/:id
 
 module.exports = router;

@@ -96,4 +96,66 @@ const updateClass = async (req, res) => {
   }
 };
 
-module.exports = { getAllClasses, getActiveClasses, createClass, updateClass };
+// 5. 删除课程/班级
+const deleteClass = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 检查是否有学员报名（有效的课程余额）
+    const checkBalance = await pool.query(`
+      SELECT COUNT(*) as count FROM student_course_balance
+      WHERE class_id = $1 
+      AND (expired_at IS NULL OR expired_at >= CURRENT_DATE)
+    `, [id]);
+
+    if (parseInt(checkBalance.rows[0].count) > 0) {
+      return res.json({ 
+        code: 400, 
+        msg: '该课程还有在读学员，无法删除。请先处理学员的课程余额后再删除。' 
+      });
+    }
+
+    // 检查是否有订单记录
+    const checkOrders = await pool.query(`
+      SELECT COUNT(*) as count FROM orders WHERE class_id = $1
+    `, [id]);
+
+    if (parseInt(checkOrders.rows[0].count) > 0) {
+      return res.json({ 
+        code: 400, 
+        msg: '该课程存在历史订单记录，无法删除。建议使用"停用"功能。' 
+      });
+    }
+
+    // 检查是否有签到记录
+    const checkAttendance = await pool.query(`
+      SELECT COUNT(*) as count FROM attendance WHERE class_id = $1
+    `, [id]);
+
+    if (parseInt(checkAttendance.rows[0].count) > 0) {
+      return res.json({ 
+        code: 400, 
+        msg: '该课程存在历史签到记录，无法删除。建议使用"停用"功能。' 
+      });
+    }
+
+    // 如果没有任何关联数据，可以删除
+    const query = `DELETE FROM classes WHERE id = $1 RETURNING *;`;
+    const result = await pool.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return res.json({ code: 404, msg: '课程不存在' });
+    }
+
+    res.json({
+      code: 200,
+      msg: '删除成功',
+      data: result.rows[0]
+    });
+  } catch (err) {
+    console.error('删除课程失败:', err);
+    res.status(500).json({ code: 500, msg: '删除失败', error: err.message });
+  }
+};
+
+module.exports = { getAllClasses, getActiveClasses, createClass, updateClass, deleteClass };
