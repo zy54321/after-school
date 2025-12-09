@@ -65,12 +65,8 @@
             </el-button>
             <el-button size="small" type="primary" link @click="openEnrollDialog(scope.row)">报名/续费</el-button>
             <el-button size="small" type="success" link @click="openEditDialog(scope.row)">编辑</el-button>
-            <el-popconfirm v-if="role === 'admin'" width="220" confirm-button-text="确认退学" cancel-button-text="取消"
-              icon-color="#F56C6C" title="确定办理退学吗？这将清空该学员所有剩余课时！" @confirm="handleWithdraw(scope.row)">
-              <template #reference>
-                <el-button size="small" type="warning" link>退学</el-button>
-              </template>
-            </el-popconfirm>
+            <el-button v-if="role === 'admin'" size="small" type="warning" link
+              @click="openDropDialog(scope.row)">退课</el-button>
             <el-button v-if="role === 'admin'" size="small" type="danger" link
               @click="handleDelete(scope.row)">删除</el-button>
           </template>
@@ -164,6 +160,45 @@
           <el-button @click="enrollDialogVisible = false">取消</el-button>
           <el-button type="primary" @click="submitEnroll" :loading="submitting">确认收费</el-button>
         </span>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="dropDialogVisible" title="办理退课/退费" width="500px">
+      <el-form :model="dropForm" label-width="100px">
+        <el-form-item label="学员姓名">
+          <el-tag size="large">{{ dropForm.studentName }}</el-tag>
+        </el-form-item>
+
+        <el-form-item label="退哪个课" required>
+          <el-select v-model="dropForm.class_id" placeholder="请选择要退出的课程" style="width: 100%">
+            <el-option v-for="c in studentCourses" :key="c.class_id" :label="c.class_name" :value="c.class_id">
+              <span style="float: left">{{ c.class_name }}</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">
+                <span v-if="c.remaining > 0">剩 {{ c.remaining }} 节</span>
+
+                <span v-if="c.remaining > 0 && c.expired_at"> / </span>
+
+                <span v-if="c.expired_at">有效期至 {{ new Date(c.expired_at).toLocaleDateString() }}</span>
+              </span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="退费金额">
+          <el-input-number v-model="dropForm.refund_amount" :min="0" :step="100" />
+          <span style="margin-left: 10px; color: #F56C6C; font-size: 12px;">
+            元 (将在订单流水中生成一条负数记录)
+          </span>
+        </el-form-item>
+
+        <el-form-item label="退课备注">
+          <el-input v-model="dropForm.remark" type="textarea" placeholder="例如：家长工作调动，余额退回微信" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="dropDialogVisible = false">取消</el-button>
+        <el-button type="danger" @click="submitDrop">确认办理</el-button>
       </template>
     </el-dialog>
   </div>
@@ -457,20 +492,70 @@ const handleDelete = async (row) => {
   }
 };
 
-// 办理退学
-const handleWithdraw = async (row) => {
+// 退课相关数据
+const dropDialogVisible = ref(false);
+const studentCourses = ref([]); // 当前选中学生的在读课程列表
+const dropForm = reactive({
+  studentId: null,
+  studentName: '',
+  class_id: null,
+  refund_amount: 0,
+  remark: ''
+});
+// 打开退课弹窗
+const openDropDialog = (row) => {
+  // 检查该学员是否有课程
+  if (!row.courses || row.courses.length === 0) {
+    return ElMessage.warning('该学员当前没有在读课程');
+  }
+
+  dropForm.studentId = row.id;
+  dropForm.studentName = row.name;
+  dropForm.class_id = null; // 重置
+  dropForm.refund_amount = 0;
+  dropForm.remark = '';
+
+  // 这里的 row.courses 是 getStudents 接口聚合好的数据
+  studentCourses.value = row.courses;
+
+  dropDialogVisible.value = true;
+};
+
+// 提交退课
+const submitDrop = async () => {
+  if (!dropForm.class_id) return ElMessage.warning('请选择要退出的课程');
+
   try {
-    const res = await axios.put(`/api/students/${row.id}/withdraw`);
-    
+    await ElMessageBox.confirm(
+      `确定要退掉 "${dropForm.studentName}" 的这门课程吗？\n操作不可逆，请确认退费金额。`,
+      '最终确认',
+      { type: 'warning' }
+    );
+
+    const res = await axios.post(`/api/students/${dropForm.studentId}/drop`, {
+      class_id: dropForm.class_id,
+      refund_amount: dropForm.refund_amount,
+      remark: dropForm.remark
+    });
+
     if (res.data.code === 200) {
-      ElMessage.success('退学办理成功');
-      fetchStudents(); // 刷新列表，该学员应该会消失（因为 getStudents 只查 status=1）
+      ElMessage.success(res.data.msg);
+
+      // 如果后端提示没有其他课程了，可以弹个窗提示一下
+      if (!res.data.data.hasOtherCourses) {
+        ElMessage.info('该学员名下已无其他课程');
+      }
+
+      dropDialogVisible.value = false;
+      fetchStudents(); // 刷新列表
     } else {
-      ElMessage.error(res.data.msg || '操作失败');
+      ElMessage.error(res.data.msg);
     }
   } catch (err) {
-    console.error(err);
-    ElMessage.error('操作失败: ' + (err.response?.data?.msg || err.message));
+    if (err !== 'cancel') {
+      console.error(err);
+      ElMessage.error(err.response?.data?.msg || '操作失败');
+    }
   }
 };
 

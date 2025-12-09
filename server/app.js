@@ -9,6 +9,7 @@ const pgSession = require('connect-pg-simple')(session);
 // === 引入拦截器 ===
 const checkAuth = require('./src/middleware/authMiddleware');
 const checkAdmin = require('./src/middleware/adminMiddleware');
+const checkGuest = require('./src/middleware/guestMiddleware');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -49,6 +50,7 @@ app.use(session({
 // 挂载路由
 // 这样访问就是 POST /api/login
 app.use('/api', authRoutes);
+app.use(checkGuest);
 // 🔒 受保护路由：加上 checkAuth
 // 只有登录后才能访问以下接口
 app.use('/api/students', checkAuth, studentRoutes);

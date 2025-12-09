@@ -4,28 +4,22 @@
       <template #header>
         <div class="login-header">
           <h2>托管班管理系统</h2>
+          <div class="demo-tip">
+            <el-tag type="warning" effect="plain" @click="fillVisitor" style="cursor: pointer">
+              游客(只读): visitor / 123456 (点我填入)
+            </el-tag>
+          </div>
         </div>
       </template>
-      
+
       <el-form :model="loginForm" :rules="rules" ref="loginFormRef" @keyup.enter="handleLogin">
         <el-form-item prop="username">
-          <el-input 
-            v-model="loginForm.username" 
-            placeholder="用户名" 
-            prefix-icon="User"
-            size="large"
-          />
+          <el-input v-model="loginForm.username" placeholder="用户名" prefix-icon="User" size="large" />
         </el-form-item>
-        
+
         <el-form-item prop="password">
-          <el-input 
-            v-model="loginForm.password" 
-            type="password" 
-            placeholder="密码" 
-            prefix-icon="Lock" 
-            show-password
-            size="large"
-          />
+          <el-input v-model="loginForm.password" type="password" placeholder="密码" prefix-icon="Lock" show-password
+            size="large" />
         </el-form-item>
 
         <el-form-item>
@@ -39,57 +33,63 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { User, Lock } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { ref, reactive } from 'vue';
+import { useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
+import { User, Lock } from '@element-plus/icons-vue';
+import axios from 'axios';
 
-const router = useRouter()
-const loginFormRef = ref(null)
-const loading = ref(false)
+const router = useRouter();
+const loginFormRef = ref(null);
+const loading = ref(false);
 
 const loginForm = reactive({
   username: '',
   password: ''
-})
+});
 
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
-}
+};
+
+const fillVisitor = () => {
+  loginForm.username = 'visitor';
+  loginForm.password = '123456';
+  ElMessage.info('已填入游客账号，请点击登录');
+};
 
 const handleLogin = async () => {
-  if (!loginFormRef.value) return
-  
+  if (!loginFormRef.value) return;
+
   await loginFormRef.value.validate(async (valid) => {
     if (valid) {
-      loading.value = true
+      loading.value = true;
       try {
         // 调用后端登录接口
-        const res = await axios.post('/api/login', loginForm)
-        
+        const res = await axios.post('/api/login', loginForm);
+
         if (res.data.code === 200) {
-          ElMessage.success('登录成功')
-          
+          ElMessage.success('登录成功');
+
           // 核心：把 Token 或用户信息存到浏览器
-          localStorage.setItem('user_token', 'logged_in') 
-          localStorage.setItem('user_info', JSON.stringify(res.data.data))
-          
+          localStorage.setItem('user_token', 'logged_in');
+          localStorage.setItem('user_info', JSON.stringify(res.data.data));
+
           // 跳转回首页
-          router.push('/')
+          router.push('/');
         } else {
-          ElMessage.error(res.data.msg || '登录失败')
+          ElMessage.error(res.data.msg || '登录失败');
         }
       } catch (err) {
-        console.error(err)
-        ElMessage.error('服务器连接失败')
+        console.error(err);
+        ElMessage.error('服务器连接失败');
       } finally {
-        loading.value = false
+        loading.value = false;
       }
     }
-  })
-}
+  });
+};
 </script>
 
 <style scoped>
@@ -98,17 +98,30 @@ const handleLogin = async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #2d3a4b; /* 深色背景，显得专业 */
+  background-color: #2d3a4b;
+  /* 深色背景，显得专业 */
 }
+
 .login-card {
   width: 400px;
 }
+
 .login-header h2 {
   text-align: center;
   margin: 0;
   color: #333;
 }
+
 .login-btn {
   width: 100%;
+}
+
+.demo-tip {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
 }
 </style>

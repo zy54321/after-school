@@ -3,7 +3,6 @@ const pool = require('../config/db');
 // 获取学员列表
 const getStudents = async (req, res) => {
   try {
-    // ⭐ 使用 CTE (WITH语句) 先把课程和签到状态查出来，避免嵌套过深报错
     const query = `
       WITH course_data AS (
         SELECT 
@@ -12,7 +11,6 @@ const getStudents = async (req, res) => {
           c.class_name, 
           scb.remaining_lessons,
           scb.expired_at,
-          -- 在这里提前计算好"今日是否已签到"
           EXISTS (
              SELECT 1 
              FROM attendance a 
@@ -22,6 +20,14 @@ const getStudents = async (req, res) => {
           ) as has_signed_today
         FROM student_course_balance scb
         JOIN classes c ON scb.class_id = c.id
+        -- ⭐ 核心修改：增加过滤条件，排除掉无效课程
+        WHERE (
+          -- 情况A: 包月课，必须没过期
+          (c.billing_type = 'time' AND scb.expired_at >= CURRENT_DATE)
+          OR
+          -- 情况B: 按次课，必须还有剩余次数 (即使有效期没到，次数用完了也不算在读)
+          (COALESCE(c.billing_type, 'count') != 'time' AND scb.remaining_lessons > 0)
+        )
       )
       SELECT 
         s.*,
@@ -46,11 +52,7 @@ const getStudents = async (req, res) => {
     
     const result = await pool.query(query);
     
-    res.json({
-      code: 200,
-      msg: 'success',
-      data: result.rows
-    });
+    res.json({ code: 200, msg: 'success', data: result.rows });
   } catch (err) {
     console.error('获取学员列表失败:', err);
     res.status(500).json({ code: 500, msg: '获取列表失败', error: err.message });
@@ -191,11 +193,17 @@ const getStudentDetail = async (req, res) => {
     const student = studentRes.rows[0];
 
     // 2. 查在读课程 (关联班级表)
+    // ⭐ 核心修改：同样增加过滤条件
     const courseRes = await client.query(`
       SELECT scb.*, c.class_name, c.tuition_fee
       FROM student_course_balance scb
       JOIN classes c ON scb.class_id = c.id
       WHERE scb.student_id = $1
+      AND (
+        (c.billing_type = 'time' AND scb.expired_at >= CURRENT_DATE)
+        OR
+        (COALESCE(c.billing_type, 'count') != 'time' AND scb.remaining_lessons > 0)
+      )
     `, [id]);
 
     // 3. 查最近 50 条签到记录
@@ -236,46 +244,71 @@ const getStudentDetail = async (req, res) => {
   }
 };
 
-// 办理退学 (清退余额 + 停用账号)
-const withdrawStudent = async (req, res) => {
-  const { id } = req.params;
+// ⭐ 新增/替换：办理退课/退费
+const dropClass = async (req, res) => {
+  const { id } = req.params; // 学生ID
+  const { class_id, refund_amount, remark } = req.body;
+
+  if (!class_id) {
+    return res.status(400).json({ code: 400, msg: '请选择要退出的课程' });
+  }
+
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
-    // 1. 将该学员所有课程余额清零，且有效期设为昨天 (立即过期)
-    await client.query(`
+    // 1. 如果有退费金额，插入一条负数订单 (财务平账)
+    if (refund_amount && refund_amount > 0) {
+      // 前端传的是“元”，转成“分”存库，并取负数
+      const amountInCents = -Math.abs(parseFloat(refund_amount) * 100);
+      
+      await client.query(`
+        INSERT INTO orders (student_id, class_id, amount, quantity, remark)
+        VALUES ($1, $2, $3, 0, $4)
+      `, [id, class_id, amountInCents, `办理退课退费: ${remark || ''}`]);
+    }
+
+    // 2. 清理该课程的余额 (设为 0 且过期)
+    const updateRes = await client.query(`
       UPDATE student_course_balance
       SET remaining_lessons = 0, 
           expired_at = CURRENT_DATE - INTERVAL '1 day',
           updated_at = CURRENT_TIMESTAMP
-      WHERE student_id = $1
-    `, [id]);
-
-    // 2. 将学员状态改为 0 (退学/软删除)
-    const result = await client.query(`
-      UPDATE students 
-      SET status = 0 
-      WHERE id = $1
+      WHERE student_id = $1 AND class_id = $2
       RETURNING *
-    `, [id]);
+    `, [id, class_id]);
+
+    if (updateRes.rowCount === 0) {
+      throw new Error('未找到该学员的该课程记录');
+    }
+
+    // 3. 检查该学员是否还有其他在读课程
+    // 如果没有其他课程了，是否要把 student.status 改为 0 (退学)？
+    // 这里建议保留 status=1，因为只要档案还在，随时可能报新班。
+    // 我们只返回一个标志位给前端提示即可。
+    const checkOther = await client.query(`
+      SELECT count(*) FROM student_course_balance 
+      WHERE student_id = $1 
+      AND class_id != $2
+      AND (expired_at >= CURRENT_DATE OR remaining_lessons > 0)
+    `, [id, class_id]);
+    
+    const hasOtherCourses = parseInt(checkOther.rows[0].count) > 0;
 
     await client.query('COMMIT');
 
-    if (result.rows.length === 0) {
-      return res.json({ code: 404, msg: '学员不存在' });
-    }
-
     res.json({
       code: 200,
-      msg: '退学办理成功，余额已清零',
-      data: result.rows[0]
+      msg: '退课办理成功' + (refund_amount > 0 ? '，退费记录已生成' : ''),
+      data: {
+        hasOtherCourses // 告诉前端他是否还有别的课
+      }
     });
 
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('退学办理失败:', err);
+    console.error('退课失败:', err);
     res.status(500).json({ code: 500, msg: '操作失败', error: err.message });
   } finally {
     client.release();
@@ -288,5 +321,5 @@ module.exports = {
   updateStudent,
   deleteStudent,
   getStudentDetail,
-  withdrawStudent
+  dropClass
 };

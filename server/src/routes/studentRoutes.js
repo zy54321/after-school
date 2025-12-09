@@ -13,7 +13,7 @@ router.get('/:id', studentController.getStudentDetail);
 
 // 🛑 给删除接口加锁
 router.delete('/:id', checkAdmin, studentController.deleteStudent);
-// 🛑 办理退学接口 (建议加管理员权限锁 checkAdmin)
-router.put('/:id/withdraw', checkAdmin, studentController.withdrawStudent);
+// 🛑 办理退课/退费接口 (管理员权限)
+router.post('/:id/drop', checkAdmin, studentController.dropClass);
 
 module.exports = router;
