@@ -19,6 +19,8 @@ if (apiUrl) {
   // 为了防止拼成 "/api/api/login"，我们把环境变量末尾的 /api 去掉，只留域名
   axios.defaults.baseURL = apiUrl.replace(/\/api$/, '');
 }
+// 👇👇👇 3. 关键代码！(开启跨域携带 Cookie) 👇👇👇
+axios.defaults.withCredentials = true;
 
 // 注册所有图标
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
