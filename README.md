@@ -107,38 +107,3 @@ root/
 │   └── package.json
 │
 └── README.md
-
-
-
-# 全栈项目部署实战手册 (Vue3 + Node.js + PostgreSQL + PostGIS)
-
-> **项目背景**：托管班管理系统 (After-School Management System)
-> **环境目标**：Ubuntu 24.04 LTS, Node.js v20, Nginx, PostgreSQL 16 + PostGIS
-> **部署架构**：单体服务器部署 (VPS)，Nginx 反向代理，PM2 进程守护。
-
----
-
-## 📋 目录
-1.  服务器选购与初始化
-2.  基础环境搭建 (Node/Nginx/PM2/DB)
-3.  数据库配置与 GIS 插件
-4.  代码拉取与后端配置
-5.  数据迁移 (Navicat SSH 隧道)
-6.  前端构建与 Nginx 反向代理
-7.  服务启动与验证
-
----
-
-## 1. 服务器选购与初始化
-
-### 1.1 选购配置 (Tencent Cloud Lighthouse)
-* **地域**：新加坡 (Singapore) 或 中国香港 (Hong Kong) —— *为了免备案与访问速度*。
-* **镜像**：**Ubuntu 24.04 LTS** (或 22.04 LTS) —— *必须选系统镜像，不要选应用镜像*。
-* **配置**：2核 2G (入门型) 或 2核 4G (推荐型)。
-* **注意事项**：购买时设置自定义密码，记下 `Public IP`。
-
-### 1.2 远程连接 (SSH)
-本地终端执行：
-```bash
-# 默认用户通常是 ubuntu，非 root
-ssh ubuntu@<你的公网IP>
