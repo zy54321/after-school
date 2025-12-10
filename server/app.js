@@ -25,8 +25,14 @@ const userRoutes = require('./src/routes/userRoutes');
 
 // 中间件
 app.use(cors({
-  origin: 'http://localhost:5173', // ⚠️ 注意：使用 Session 时，这里最好指定前端的具体地址，不要写 '*'
-  credentials: true // 允许跨域携带 Cookie
+  // 👇 改成数组，允许多个来源
+  origin: [
+    'http://localhost:5173',             // 本地开发用
+    'https://after-school.pages.dev',    // Cloudflare 默认域名
+    'https://www.afterlessons.com',      // 你的自定义域名 (带www)
+    'https://afterlessons.com'           // 你的自定义域名 (不带www)
+  ],
+  credentials: true
 }));
 app.use(express.json());
 
