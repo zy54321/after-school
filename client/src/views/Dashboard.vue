@@ -5,10 +5,10 @@
         <el-card shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>🎓 在读学员</span>
+              <span>🎓 {{ $t('dashboard.totalStudents') }}</span>
             </div>
           </template>
-          <div class="card-value">{{ stats.totalStudents }} 人</div>
+          <div class="card-value">{{ stats.totalStudents }}</div>
         </el-card>
       </el-col>
 
@@ -16,10 +16,10 @@
         <el-card shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>📅 今日签到</span>
+              <span>📅 {{ $t('dashboard.todayCheckins') }}</span>
             </div>
           </template>
-          <div class="card-value">{{ stats.todayCheckins }} 人</div>
+          <div class="card-value">{{ stats.todayCheckins }}</div>
         </el-card>
       </el-col>
 
@@ -27,7 +27,7 @@
         <el-card shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>💰 今日营收</span>
+              <span>💰 {{ $t('dashboard.todayIncome') }}</span>
             </div>
           </template>
           <div class="card-value" style="color: #67C23A">¥ {{ stats.todayIncome }}</div>
@@ -38,19 +38,19 @@
         <el-card shadow="hover" class="warning-card">
           <template #header>
             <div class="card-header">
-              <span>🚨 续费预警</span>
+              <span>🚨 {{ $t('dashboard.renewalAlert') }}</span>
             </div>
           </template>
-          <div class="card-value" style="color: #F56C6C">{{ stats.lowBalanceCount }} 人</div>
+          <div class="card-value" style="color: #F56C6C">{{ stats.lowBalanceCount }}</div>
         </el-card>
       </el-col>
     </el-row>
 
     <el-card class="action-card" shadow="never">
-      <div style="font-weight: bold; margin-bottom: 15px;">⚡ 快捷操作</div>
-      <el-button type="primary" size="large" icon="Plus">学员报名</el-button>
-      <el-button type="success" size="large" icon="Check">快速签到</el-button>
-      <el-button size="large" icon="User">新增档案</el-button>
+      <div style="font-weight: bold; margin-bottom: 15px;">⚡ {{ $t('dashboard.quickActions') }}</div>
+      <el-button type="primary" size="large" icon="Plus">{{ $t('dashboard.btnEnroll') }}</el-button>
+      <el-button type="success" size="large" icon="Check">{{ $t('dashboard.btnCheckin') }}</el-button>
+      <el-button size="large" icon="User">{{ $t('dashboard.btnAddProfile') }}</el-button>
     </el-card>
 
     <el-row :gutter="20" style="margin-top: 20px;">
@@ -58,23 +58,23 @@
         <el-card shadow="never">
           <template #header>
             <div class="clearfix">
-              <span>📉 需要续费的学员 (有效期 < 7天)</span>
-              <el-button style="float: right; padding: 3px 0" text>查看全部</el-button>
+              <span>📉 {{ $t('dashboard.listTitle') }}</span>
+              <el-button style="float: right; padding: 3px 0" text>{{ $t('dashboard.viewAll') }}</el-button>
             </div>
           </template>
           <el-table :data="lowBalanceList" style="width: 100%" stripe>
-            <el-table-column prop="name" label="姓名" width="100" />
-            <el-table-column prop="className" label="课程" />
-            <el-table-column label="有效期至" width="150">
+            <el-table-column prop="name" :label="$t('dashboard.colName')" width="100" />
+            <el-table-column prop="className" :label="$t('dashboard.colClass')" />
+            <el-table-column :label="$t('dashboard.colExpiry')" width="150">
               <template #default="scope">
                 <span style="color: red; font-weight: bold;">
                   {{ new Date(scope.row.expired_at).toLocaleDateString() }}
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="操作">
+            <el-table-column :label="$t('dashboard.colAction')">
               <template #default>
-                <el-button size="small" type="primary" link>催费</el-button>
+                <el-button size="small" type="primary" link>{{ $t('dashboard.btnRemind') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -84,7 +84,7 @@
       <el-col :span="12">
         <el-card shadow="never">
           <template #header>
-            <span>📝 今日动态</span>
+            <span>📝 {{ $t('dashboard.activities') }}</span>
           </template>
           <el-timeline>
             <el-timeline-item
@@ -106,6 +106,8 @@
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
+import { useI18n } from 'vue-i18n'; // 引入 i18n
+const { t } = useI18n();
 
 // 响应式数据
 const stats = ref({
@@ -138,24 +140,21 @@ const fetchDashboardData = async () => {
       stats.value = {
         totalStudents: data.totalStudents,
         todayCheckins: data.todayCheckins,
-        // 后端返回的是分，前端除以 100
         todayIncome: (data.todayIncome / 100).toFixed(2),
         lowBalanceCount: data.lowBalanceCount
       };
       
-      // 处理需要续费的学员列表
       lowBalanceList.value = data.lowBalanceList || [];
       
-      // 处理动态列表
       activities.value = data.activities.map(item => ({
         content: item.content,
         time: formatTime(item.time),
-        type: 'success' // 颜色
+        type: 'success'
       }));
     }
   } catch (error) {
     console.error('Failed to fetch dashboard data', error);
-    ElMessage.error('面板数据加载失败');
+    ElMessage.error(t('common.failed')); // 使用翻译
   } finally {
     loading.value = false;
   }
@@ -169,7 +168,7 @@ onMounted(() => {
 <style scoped>
 .dashboard-container {
   padding: 20px;
-  background-color: #f0f2f5; /* 浅灰底色，更有质感 */
+  background-color: #f0f2f5;
   min-height: 100vh;
 }
 .card-header {

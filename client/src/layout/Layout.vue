@@ -2,55 +2,58 @@
   <div class="common-layout">
     <el-container>
       <el-aside width="200px" class="aside-menu">
-        <div class="logo">托管班管理系统</div>
-        <el-menu active-text-color="#ffd04b" background-color="#545c64" class="el-menu-vertical-demo"
+        <div class="logo">{{ $t('app.name') }}</div> <el-menu active-text-color="#ffd04b" background-color="#545c64" class="el-menu-vertical-demo"
           :default-active="route.path" text-color="#fff" router>
+          
           <el-menu-item index="/">
-            <el-icon>
-              <Odometer />
-            </el-icon>
-            <span>仪表盘</span>
+            <el-icon><Odometer /></el-icon>
+            <span>{{ $t('menu.dashboard') }}</span>
           </el-menu-item>
 
           <el-menu-item index="/students">
-            <el-icon>
-              <User />
-            </el-icon>
-            <span>学员管理</span>
+            <el-icon><User /></el-icon>
+            <span>{{ $t('menu.students') }}</span>
           </el-menu-item>
 
           <el-menu-item index="/attendance">
-            <el-icon>
-              <Calendar />
-            </el-icon>
-            <span>签到消课</span>
+            <el-icon><Calendar /></el-icon>
+            <span>{{ $t('menu.attendance') }}</span>
           </el-menu-item>
 
           <el-menu-item index="/orders" v-if="role === 'admin'">
-            <el-icon>
-              <Money />
-            </el-icon> <span>订单流水</span>
+            <el-icon><Money /></el-icon> <span>{{ $t('menu.orders') }}</span>
           </el-menu-item>
 
           <el-menu-item index="/classes">
-            <el-icon>
-              <School />
-            </el-icon> <span>课程/班级</span>
+            <el-icon><School /></el-icon> <span>{{ $t('menu.classes') }}</span>
           </el-menu-item>
 
           <el-menu-item index="/users" v-if="role === 'admin'">
-            <el-icon>
-              <Tools />
-            </el-icon>
-            <span>员工管理</span>
+            <el-icon><Tools /></el-icon>
+            <span>{{ $t('menu.users') }}</span>
           </el-menu-item>
         </el-menu>
       </el-aside>
 
       <el-container>
         <el-header class="header">
-          <span>欢迎回来，管理员</span>
-          <el-button type="danger" size="small" link @click="handleLogout">退出</el-button>
+          <span>{{ $t('header.welcome') }}</span>
+          
+          <div class="header-right">
+             <el-dropdown @command="handleLangCommand" style="margin-right: 20px; cursor: pointer;">
+              <span class="lang-switch-dark">
+                🌐 {{ currentLang === 'zh' ? '中文' : 'English' }}
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="zh">中文</el-dropdown-item>
+                  <el-dropdown-item command="en">English</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+
+            <el-button type="danger" size="small" link @click="handleLogout">{{ $t('header.logout') }}</el-button>
+          </div>
         </el-header>
 
         <el-main class="main-content">
@@ -65,23 +68,31 @@
 import { Odometer, User, Calendar, Money, School, Tools } from '@element-plus/icons-vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
+import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 const router = useRouter();
 const route = useRoute();
+const { locale } = useI18n(); // 获取 i18n
+const currentLang = ref(locale.value);
 
-// 1. 获取用户信息
 const userInfoStr = localStorage.getItem('user_info');
 const userInfo = userInfoStr ? JSON.parse(userInfoStr) : {};
-const role = userInfo.role || 'teacher'; // 默认为 teacher 防止报错
+const role = userInfo.role || 'teacher';
 
 const handleLogout = () => {
-  // 1. 清除本地存储
   localStorage.removeItem('user_token');
   localStorage.removeItem('user_info');
-
-  // 2. 强制跳转回登录页
   router.push('/login');
-  ElMessage.success('已退出登录');
+  ElMessage.success('Logout success');
+};
+
+// 切换语言
+const handleLangCommand = (command) => {
+  locale.value = command;
+  currentLang.value = command;
+  localStorage.setItem('lang', command);
+  ElMessage.success(command === 'zh' ? '已切换至中文' : 'Switched to English');
 };
 </script>
 
@@ -89,14 +100,11 @@ const handleLogout = () => {
 .common-layout,
 .el-container {
   height: 100vh;
-  /* 全屏高度 */
 }
-
 .aside-menu {
   background-color: #545c64;
   color: white;
 }
-
 .logo {
   height: 60px;
   line-height: 60px;
@@ -105,7 +113,6 @@ const handleLogout = () => {
   font-size: 18px;
   background-color: #434a50;
 }
-
 .header {
   background-color: #fff;
   border-bottom: 1px solid #ddd;
@@ -113,9 +120,16 @@ const handleLogout = () => {
   justify-content: space-between;
   align-items: center;
 }
-
+.header-right {
+  display: flex;
+  align-items: center;
+}
 .main-content {
   background-color: #f0f2f5;
   padding: 20px;
+}
+.lang-switch-dark {
+  font-size: 14px;
+  color: #606266;
 }
 </style>

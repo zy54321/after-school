@@ -1,0 +1,184 @@
+export default {
+  app: {
+    name: '智托管',
+    systemName: '教务管理系统'
+  },
+  menu: {
+    dashboard: '仪表盘',
+    students: '学员管理',
+    attendance: '签到消课',
+    orders: '订单流水',
+    classes: '课程/班级',
+    users: '员工管理'
+  },
+  header: {
+    welcome: '欢迎回来，管理员',
+    logout: '退出'
+  },
+  common: {
+    action: '操作',
+    edit: '编辑',
+    delete: '删除',
+    save: '保存',
+    cancel: '取消',
+    confirm: '确定',
+    detail: '详情',
+    remark: '备注',
+    status: '状态',
+    success: '操作成功',
+    failed: '操作失败',
+    loading: '加载中...',
+    placeholderSelect: '请选择',
+    placeholderInput: '请输入'
+  },
+  // 1. 仪表盘
+  dashboard: {
+    totalStudents: '在读学员',
+    todayCheckins: '今日签到',
+    todayIncome: '今日营收',
+    renewalAlert: '续费预警',
+    quickActions: '快捷操作',
+    btnEnroll: '学员报名',
+    btnCheckin: '快速签到',
+    btnAddProfile: '新增档案',
+    listTitle: '需要续费的学员 (有效期 < 7天)',
+    viewAll: '查看全部',
+    activities: '今日动态',
+    colName: '姓名',
+    colClass: '课程',
+    colExpiry: '有效期至',
+    btnRemind: '催费'
+  },
+  // 2. 学员管理
+  student: {
+    title: '学员列表',
+    addBtn: '新增学员',
+    colName: '姓名',
+    colGender: '性别',
+    colParent: '家长姓名',
+    colPhone: '联系电话',
+    colAddress: '地址',
+    colBalance: '账户余额',
+    colJoined: '入学时间',
+    colCourses: '在读课程 / 有效期',
+    btnEnroll: '报名/续费',
+    btnDrop: '退课',
+    // 弹窗
+    dialogAddTitle: '新增学员档案',
+    dialogEditTitle: '编辑学员信息',
+    labelName: '学员姓名',
+    labelGender: '性别',
+    genderMale: '男',
+    genderFemale: '女',
+    labelParent: '家长姓名',
+    labelPhone: '联系电话',
+    labelAddress: '地址',
+    btnSelectLoc: '选择位置',
+    labelBalance: '账户余额',
+    labelInitialBalance: '初始预存',
+    placeholderName: '请输入姓名',
+    placeholderParent: '例如：张爸爸',
+    placeholderPhone: '11位手机号',
+    placeholderAddress: '请点击右侧按钮选择',
+    unitYuan: '元'
+  },
+  // 3. 签到消课
+  attendance: {
+    title: '签到消课',
+    filterClass: '筛选班级 (留空显示所有)',
+    btnCheckin: '签 到',
+    btnSigned: '已 签',
+    validUntil: '有效期至',
+    noExpiry: '未设置有效期',
+    empty: '暂无在读学员数据',
+    msgSuccess: '签到成功'
+  },
+  // 4. 订单流水
+  order: {
+    title: '订单流水',
+    exportBtn: '导出 Excel',
+    colId: '单号',
+    colTime: '时间',
+    colStudent: '学员',
+    colClass: '购买课程',
+    colContent: '交易内容',
+    colAmount: '实收金额',
+    typeTime: '包期',
+    typeCount: '课时',
+    unitMonth: '个月',
+    unitLesson: '节'
+  },
+  // 5. 课程/班级
+  class: {
+    title: '课程/班级管理',
+    addBtn: '新建课程',
+    colName: '课程名称',
+    colType: '类型',
+    colSchedule: '开课/排课',
+    colFee: '学费',
+    colTeacher: '负责老师',
+    typeTime: '包期/月',
+    typeCount: '按次',
+    // 弹窗
+    dialogCreateTitle: '新建课程',
+    dialogEditTitle: '编辑课程',
+    labelName: '课程名称',
+    labelTeacher: '负责老师',
+    labelType: '计费类型',
+    labelStartDate: '开课日期',
+    labelSchedule: '上课周期',
+    labelTime: '上课时间',
+    labelDurationTime: '有效期(月)',
+    labelDurationCount: '总课时(节)',
+    labelEndDate: '结课日期',
+    labelFee: '学费金额',
+    labelDesc: '备注/描述',
+    week: { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 0: '周日' },
+    hintAutoCalc: '系统根据周期自动计算'
+  },
+  // 6. 员工管理
+  user: {
+    title: '员工/权限管理',
+    addBtn: '新增员工',
+    colUsername: '用户名',
+    colRealName: '真实姓名',
+    colRole: '角色',
+    colStatus: '状态',
+    colCreated: '创建时间',
+    roleAdmin: '管理员',
+    roleTeacher: '普通教师',
+    btnResetPwd: '重置密码',
+    dialogCreateTitle: '新增员工',
+    dialogEditTitle: '编辑员工',
+    labelUsername: '用户名',
+    labelRealName: '真实姓名',
+    labelPassword: '初始密码',
+    labelRole: '角色权限',
+    dialogResetTitle: '重置密码',
+    msgResetSuccess: '密码重置成功'
+  },
+  // 登录页 (之前的)
+  login: {
+    navBtn: '登录系统',
+    slogan: '让教务管理回归简单与纯粹',
+    subSlogan: '专为中小托管机构打造的智能管家。从LBS生源地图到精准的财务流水，我们要做的，是让你从繁琐的表格中彻底解放。',
+    ctaBtn: '立即体验演示',
+    features: {
+      mapTitle: 'LBS 智能地图',
+      mapDesc: '集成高德地图 SDK，可视化生源分布，辅助市场决策。',
+      checkinTitle: '一键消课签到',
+      checkinDesc: '3秒完成学员签到，系统自动扣除课时并计算有效期。',
+      financeTitle: '严谨财务闭环',
+      financeDesc: '独创负数订单逻辑，完美处理退费、转课等复杂场景。'
+    },
+    contact: '联系我们',
+    phone: '手机 / 微信',
+    email: '电子邮箱',
+    dialogTitle: '欢迎回来',
+    dialogSub: '请登录您的账号以继续管理',
+    visitor: '访客快捷通道',
+    usernamePlaceholder: '请输入账号',
+    passwordPlaceholder: '请输入密码',
+    loginBtn: '登 录'
+  }
+}
