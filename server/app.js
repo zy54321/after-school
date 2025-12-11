@@ -68,7 +68,7 @@ app.use('/api/dashboard', checkAuth, dashboardRoutes);
 // 🔒 管理员专属路由 (加双重锁：先登录，再查权限)
 app.use('/api/users', checkAuth, checkAdmin, userRoutes);
 
-// 启动服务!
+// 启动服务
 app.listen(port, () => {
   console.log(`Backend Server running on http://localhost:${port}`);
 });
