@@ -1,122 +1,160 @@
 <template>
   <div class="map-analysis-container">
-    <div id="ol-map" class="map-view"></div>
-    
+    <div id="mapbox-heat" class="map-view"></div>
+
     <div class="control-panel">
       <h3>{{ $t('map.title') }}</h3>
       <div class="stat-item">
         <span class="label">{{ $t('map.totalPoints') }}:</span>
         <span class="value">{{ pointCount }}</span>
       </div>
-      <div class="slider-item">
-        <span class="label">{{ $t('map.blur') }}:</span>
-        <el-slider v-model="blur" :min="1" :max="50" size="small" @input="updateHeatmap" />
-      </div>
-      <div class="slider-item">
-        <span class="label">{{ $t('map.radius') }}:</span>
-        <el-slider v-model="radius" :min="1" :max="50" size="small" @input="updateHeatmap" />
+
+      <div class="tip-box">
+        <small v-if="currentLang === 'zh'">📍 中文模式：已校准火星坐标偏移</small>
+        <small v-else>🌍 EN Mode: 3D Buildings Enabled</small>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
 import axios from 'axios';
-import { ElMessage } from 'element-plus';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import gcoord from 'gcoord';
+import { useI18n } from 'vue-i18n';
+import { MAPBOX_TOKEN, MAP_STYLES } from '../config/mapStyles';
 
-// OpenLayers 核心模块
-import 'ol/ol.css';
-import Map from 'ol/Map';
-import View from 'ol/View';
-import { Tile as TileLayer, Heatmap as HeatmapLayer } from 'ol/layer';
-import { OSM } from 'ol/source';
-import VectorSource from 'ol/source/Vector';
-import GeoJSON from 'ol/format/GeoJSON';
-import { fromLonLat } from 'ol/proj';
+// 设置 Token
+mapboxgl.accessToken = MAPBOX_TOKEN;
 
+const { locale } = useI18n();
+const currentLang = computed(() => locale.value);
 const map = ref(null);
-const heatmapLayer = ref(null);
 const pointCount = ref(0);
-const blur = ref(15);
-const radius = ref(10);
 
 // 初始化地图
 const initMap = () => {
-  // 1. 创建底图图层 (使用 OpenStreetMap，完全免费且国际化)
-  const raster = new TileLayer({
-    source: new OSM()
+  const style = currentLang.value === 'zh' ? MAP_STYLES.zh : MAP_STYLES.en;
+
+  // 防止重复初始化
+  if (map.value) map.value.remove();
+
+  map.value = new mapboxgl.Map({
+    container: 'mapbox-heat',
+    style: style,
+    center: [116.3974, 39.9093], // 默认北京
+    zoom: 10,
+    // 英文模式开启 45度倾斜视角 (看3D建筑)，中文模式平面视角
+    pitch: currentLang.value === 'en' ? 45 : 0,
+    bearing: currentLang.value === 'en' ? -17.6 : 0,
+    maxZoom: currentLang.value === 'zh' ? 18 : 22,
+    antialias: true
   });
 
-  // 2. 创建热力图数据源 (暂时为空，稍后填入)
-  const vectorSource = new VectorSource({
-    features: [] 
-  });
+  map.value.on('load', () => {
+    fetchDataAndRender();
 
-  // 3. 创建热力图层
-  heatmapLayer.value = new HeatmapLayer({
-    source: vectorSource,
-    blur: blur.value,
-    radius: radius.value,
-    weight: function (feature) {
-      // 这里可以根据 properties.weight 动态调整热力权重
-      // 目前默认都是 1，未来可以改成"剩余课时越多，热力越强"
-      return feature.get('weight') || 1;
+    // 如果是英文模式，额外加载 3D 建筑层
+    if (currentLang.value === 'en') {
+      add3DBuildings();
     }
-  });
-
-  // 4. 实例化地图
-  map.value = new Map({
-    target: 'ol-map',
-    layers: [raster, heatmapLayer.value],
-    view: new View({
-      center: fromLonLat([116.3974, 39.9093]), // 默认中心：北京 (稍后会自动跳转到数据中心)
-      zoom: 4
-    })
   });
 };
 
-// 获取数据并渲染
-const fetchData = async () => {
+// 添加 3D 建筑 (仅英文模式)
+const add3DBuildings = () => {
+  const layers = map.value.getStyle().layers;
+  const labelLayerId = layers.find(l => l.type === 'symbol' && l.layout['text-field'])?.id;
+
+  map.value.addLayer({
+    'id': '3d-buildings',
+    'source': 'composite',
+    'source-layer': 'building',
+    'filter': ['==', 'extrude', 'true'],
+    'type': 'fill-extrusion',
+    'minzoom': 14,
+    'paint': {
+      'fill-extrusion-color': '#aaa',
+      'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 14, 0, 14.05, ['get', 'height']],
+      'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 14, 0, 14.05, ['get', 'min_height']],
+      'fill-extrusion-opacity': 0.6
+    }
+  }, labelLayerId);
+};
+
+// 获取数据并渲染热力图
+const fetchDataAndRender = async () => {
   try {
     const res = await axios.get('/api/students/locations');
     if (res.data.code === 200) {
-      const geoJsonData = res.data.data;
-      pointCount.value = geoJsonData.features.length;
+      let geojson = res.data.data;
+      pointCount.value = geojson.features.length;
 
-      // 解析 GeoJSON 并转换坐标系 (WGS84 -> Web Mercator)
-      const features = new GeoJSON().readFeatures(geoJsonData, {
-        featureProjection: 'EPSG:3857' // OpenLayers 默认投影
+      // 🔄 核心转换逻辑：数据库(WGS84) -> 显示
+      if (currentLang.value === 'zh') {
+        // 中文模式：底图是高德(GCJ02)，所以要把点从 WGS84 转成 GCJ02 才能对齐
+        geojson.features = geojson.features.map(f => {
+          const converted = gcoord.transform(f.geometry.coordinates, gcoord.WGS84, gcoord.GCJ02);
+          return { ...f, geometry: { ...f.geometry, coordinates: converted } };
+        });
+      }
+
+      // 添加数据源
+      map.value.addSource('students', {
+        type: 'geojson',
+        data: geojson
       });
 
-      // 更新数据源
-      const source = heatmapLayer.value.getSource();
-      source.clear();
-      source.addFeatures(features);
+      // 添加热力图层
+      map.value.addLayer({
+        id: 'student-heat',
+        type: 'heatmap',
+        source: 'students',
+        paint: {
+          'heatmap-weight': 1,
+          'heatmap-intensity': 1,
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0, 'rgba(33,102,172,0)',
+            0.2, 'rgb(103,169,207)', 0.6, 'rgb(253,219,199)', 1, 'rgb(178,24,43)'
+          ],
+          'heatmap-radius': 20,
+          'heatmap-opacity': 0.8
+        }
+      });
 
-      // 自动缩放地图以适应所有点
-      if (features.length > 0) {
-        const extent = source.getExtent();
-        map.value.getView().fit(extent, { padding: [50, 50, 50, 50], maxZoom: 16 });
-      }
+      // 添加一个圆点层 (作为辅助，显示具体位置)
+      map.value.addLayer({
+        id: 'student-point',
+        type: 'circle',
+        source: 'students',
+        minzoom: 12,
+        paint: {
+          'circle-radius': 4,
+          'circle-color': 'white',
+          'circle-stroke-color': '#409EFF',
+          'circle-stroke-width': 2
+        }
+      });
     }
   } catch (err) {
     console.error(err);
-    ElMessage.error('加载热力图数据失败');
   }
 };
 
-// 实时更新热力图参数
-const updateHeatmap = () => {
-  if (heatmapLayer.value) {
-    heatmapLayer.value.setBlur(parseInt(blur.value));
-    heatmapLayer.value.setRadius(parseInt(radius.value));
-  }
-};
+// 监听语言变化，重新初始化地图
+watch(currentLang, () => {
+  initMap();
+});
 
 onMounted(() => {
   initMap();
-  fetchData();
+});
+
+onUnmounted(() => {
+  if (map.value) map.value.remove();
 });
 </script>
 
@@ -124,9 +162,9 @@ onMounted(() => {
 .map-analysis-container {
   position: relative;
   width: 100%;
-  height: calc(100vh - 80px); /* 减去顶部导航高度 */
-  overflow: hidden;
+  height: calc(100vh - 80px);
   border-radius: 8px;
+  overflow: hidden;
   border: 1px solid #dcdfe6;
 }
 
@@ -140,41 +178,29 @@ onMounted(() => {
   top: 20px;
   right: 20px;
   background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(5px);
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  width: 250px;
-  z-index: 1000;
-}
-
-.control-panel h3 {
-  margin: 0 0 15px 0;
-  font-size: 16px;
-  color: #303133;
-  border-bottom: 1px solid #ebeef5;
-  padding-bottom: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
 }
 
 .stat-item {
-  margin-bottom: 15px;
-  font-size: 14px;
-  color: #606266;
   display: flex;
   justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 14px;
 }
-.stat-item .value {
+
+.value {
   font-weight: bold;
   color: #409EFF;
 }
 
-.slider-item {
-  margin-bottom: 10px;
-}
-.slider-item .label {
-  font-size: 12px;
+.tip-box {
+  margin-top: 10px;
   color: #909399;
-  display: block;
-  margin-bottom: 5px;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
 }
 </style>
