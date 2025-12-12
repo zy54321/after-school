@@ -23,6 +23,7 @@ const attendanceRoutes = require('./src/routes/attendanceRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const amapRoutes = require('./src/routes/amapRoutes');
+const mapboxRoutes = require('./src/routes/mapboxRoutes');
 
 // 中间件
 app.use(cors({
@@ -68,6 +69,8 @@ app.use('/api/dashboard', checkAuth, dashboardRoutes);
 
 // 🗺️ 高德代理路由
 app.use('/api/amap', checkAuth, amapRoutes);
+// 🗺️ Mapbox 代理路由
+app.use('/api/mapbox', checkAuth, mapboxRoutes);
 
 // 🔒 管理员专属路由 (加双重锁：先登录，再查权限)
 app.use('/api/users', checkAuth, checkAdmin, userRoutes);

@@ -10,7 +10,7 @@
       </div>
 
       <div class="tip-box">
-        <small v-if="currentLang === 'zh'">📍 中文模式：已校准火星坐标偏移</small>
+        <small v-if="currentLang === 'zh'">📍 中文模式：天地图 (WGS-84)</small>
         <small v-else>🌍 EN Mode: 3D Buildings Enabled</small>
       </div>
     </div>
@@ -21,10 +21,8 @@
 import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
 import axios from 'axios';
 import mapboxgl from 'mapbox-gl';
-// 🆕 引入 LngLatBounds
-import { LngLatBounds } from 'mapbox-gl';
+import { LngLatBounds } from 'mapbox-gl'; // 引入边界计算工具
 import 'mapbox-gl/dist/mapbox-gl.css';
-import gcoord from 'gcoord';
 import { useI18n } from 'vue-i18n';
 import { MAPBOX_TOKEN, MAP_STYLES } from '../config/mapStyles';
 
@@ -40,26 +38,23 @@ const pointCount = ref(0);
 const initMap = () => {
   const style = currentLang.value === 'zh' ? MAP_STYLES.zh : MAP_STYLES.en;
 
-  // 防止重复初始化
   if (map.value) map.value.remove();
 
   map.value = new mapboxgl.Map({
     container: 'mapbox-heat',
     style: style,
-    center: [116.3974, 39.9093],
+    center: [116.3974, 39.9093], // 默认北京
     zoom: 10,
     pitch: currentLang.value === 'en' ? 45 : 0,
     bearing: currentLang.value === 'en' ? -17.6 : 0,
-    // ⭐ 关键优化 3：统一放开最大缩放限制到 22
-    // 之前中文模式锁死 18，现在放开，用户体验会更丝滑
-    maxZoom: 22, 
+    maxZoom: 22, // 允许最大缩放
     antialias: true
   });
 
   map.value.on('load', () => {
     fetchDataAndRender();
 
-    // 如果是英文模式，额外加载 3D 建筑层
+    // 英文模式下添加 3D 建筑
     if (currentLang.value === 'en') {
       add3DBuildings();
     }
@@ -87,7 +82,7 @@ const add3DBuildings = () => {
   }, labelLayerId);
 };
 
-// 获取数据并渲染热力图
+// 获取数据并渲染
 const fetchDataAndRender = async () => {
   try {
     const res = await axios.get('/api/students/locations');
@@ -95,29 +90,67 @@ const fetchDataAndRender = async () => {
       let geojson = res.data.data;
       pointCount.value = geojson.features.length;
 
-      // 🔄 坐标转换逻辑 (保持不变)
-      // if (currentLang.value === 'zh') {
-      //   geojson.features = geojson.features.map(f => {
-      //     const converted = gcoord.transform(f.geometry.coordinates, gcoord.WGS84, gcoord.GCJ02);
-      //     return { ...f, geometry: { ...f.geometry, coordinates: converted } };
-      //   });
-      // }
-      
-      // ⭐ 新增：自动聚焦逻辑
-      if (geojson.features.length > 0) {
-        // 1. 创建一个空的边界对象
-        const bounds = new LngLatBounds();
+      // 🛑 核心修改：删除了 gcoord 转换逻辑！
+      // 因为现在中文底图是天地图 (WGS-84)，数据库也是 WGS-84，直接显示即可，不需要转换。
 
-        // 2. 把所有点都塞进去
+      // 添加数据源
+      if (map.value.getSource('students')) {
+         map.value.getSource('students').setData(geojson);
+      } else {
+         map.value.addSource('students', { type: 'geojson', data: geojson });
+      }
+
+      // 添加热力图层
+      if (!map.value.getLayer('student-heat')) {
+        map.value.addLayer({
+          id: 'student-heat',
+          type: 'heatmap',
+          source: 'students',
+          // ✅ 关键修复：允许热力图一直显示到 22 级 (之前是 15，导致自动聚焦后消失)
+          maxzoom: 22,
+          paint: {
+            'heatmap-weight': 1,
+            'heatmap-intensity': 1,
+            'heatmap-color': [
+              'interpolate', ['linear'], ['heatmap-density'],
+              0, 'rgba(33,102,172,0)',
+              0.2, 'rgb(103,169,207)',
+              0.6, 'rgb(253,219,199)',
+              1, 'rgb(178,24,43)'
+            ],
+            'heatmap-radius': 20,
+            'heatmap-opacity': 0.8
+          }
+        });
+      }
+
+      // 添加圆点层 (辅助显示具体位置)
+      if (!map.value.getLayer('student-point')) {
+        map.value.addLayer({
+          id: 'student-point',
+          type: 'circle',
+          source: 'students',
+          minzoom: 14, // 放大到 14 级才显示具体点
+          paint: {
+            'circle-radius': 5,
+            'circle-color': 'white',
+            'circle-stroke-color': '#409EFF',
+            'circle-stroke-width': 2
+          }
+        });
+      }
+
+      // ✨ 自动聚焦：地图飞过去适应所有点
+      if (geojson.features.length > 0) {
+        const bounds = new LngLatBounds();
         geojson.features.forEach(feature => {
           bounds.extend(feature.geometry.coordinates);
         });
 
-        // 3. 让地图飞过去适应这个边界 (留点 padding 边距)
         map.value.fitBounds(bounds, {
-          padding: 50,
-          maxZoom: 15, // 防止只有一个点时缩放太大
-          duration: 1000 // 动画时长
+          padding: 100, // 留白多一点，好看
+          maxZoom: 15,  // 自动缩放最大不超过 15 (防止单点时放太大)
+          duration: 1500 // 慢一点飞过去，更有质感
         });
       }
     }
@@ -126,7 +159,6 @@ const fetchDataAndRender = async () => {
   }
 };
 
-// 监听语言变化，重新初始化地图
 watch(currentLang, () => {
   initMap();
 });

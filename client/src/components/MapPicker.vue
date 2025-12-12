@@ -5,7 +5,6 @@
       <div class="search-box" v-if="!readonly">
         <el-input v-if="currentLang === 'zh'" v-model="searchCity" placeholder="城市(选填)"
           style="width: 100px; margin-right: 5px;" clearable />
-
         <el-select v-model="searchResult" filterable remote reserve-keyword
           :placeholder="currentLang === 'zh' ? '输入关键词 (如: 小区名)' : 'Search Places'" :remote-method="handleSearch"
           :loading="searching" @change="onSelectLocation" style="flex: 1;" clearable value-key="id">
@@ -19,7 +18,6 @@
       </div>
 
       <div id="picker-map-container" class="map-view"></div>
-
       <div class="map-tip">
         {{ currentLang === 'zh' ? '点击地图任意位置选点' : 'Click map to select location' }}
       </div>
@@ -30,12 +28,12 @@
         <div class="coords-info" v-if="selectedCoord">
           <el-tag size="small" type="info">Lng: {{ Number(selectedCoord[0]).toFixed(6) }}</el-tag>
           <el-tag size="small" type="info" style="margin-left: 5px;">Lat: {{ Number(selectedCoord[1]).toFixed(6)
-            }}</el-tag>
+          }}</el-tag>
         </div>
         <div>
           <el-button @click="handleClose">{{ $t('common.cancel') }}</el-button>
           <el-button type="primary" @click="handleConfirm" :disabled="!selectedCoord">{{ $t('common.confirm')
-            }}</el-button>
+          }}</el-button>
         </div>
       </div>
     </template>
@@ -60,26 +58,20 @@ mapboxgl.accessToken = MAPBOX_TOKEN;
 let map = null;
 let marker = null;
 const selectedCoord = ref(null);
-
-// 搜索相关状态
 const searching = ref(false);
 const options = ref([]);
 const searchResult = ref(null);
 const searchCity = ref('');
 
+// 🔍 搜索逻辑 (保持不变)
 const handleSearch = async (query) => {
   if (!query) return;
   searching.value = true;
-
   try {
     if (currentLang.value === 'zh') {
       let url = `/api/amap/tips?keywords=${query}`;
-      if (searchCity.value) {
-        url += `&city=${searchCity.value}`;
-      }
-
+      if (searchCity.value) url += `&city=${searchCity.value}`;
       const res = await axios.get(url);
-
       if (res.data.code === 200) {
         options.value = res.data.data
           .filter(tip => tip.location && tip.location.length > 0)
@@ -91,15 +83,15 @@ const handleSearch = async (query) => {
           }));
       }
     } else {
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&autocomplete=true&limit=5`;
+      // ✅ 请求自己的后端接口
+      const url = `/api/mapbox/places?query=${encodeURIComponent(query)}`;
       const res = await axios.get(url);
-
-      if (res.data.features) {
-        options.value = res.data.features.map(f => ({
+      if (res.data.code === 200 && res.data.data.features) {
+        options.value = res.data.data.features.map(f => ({
           id: f.id,
-          name: f.text,
-          district: f.place_name,
-          center: f.center
+          name: f.text, // 地点名
+          district: f.place_name, // 完整地址
+          center: f.center // [lng, lat]
         }));
       }
     }
@@ -110,59 +102,37 @@ const handleSearch = async (query) => {
   }
 };
 
+// 🎯 选中搜索结果 (⭐ 唯一需要转换的地方)
 const onSelectLocation = (item) => {
   if (!item || !item.center) return;
 
   let [lng, lat] = item.center;
 
+  // 如果是高德搜索结果(GCJ02)，必须转回 WGS84 才能在天地图上显示正确
   if (currentLang.value === 'zh') {
-    // 中文搜索结果(GCJ02) -> 转换成 WGS84 存下来
-    // 注意：这里我们存 selectedCoord 是 WGS84，但是地图显示要飞到 GCJ02 (因为底图是高德)
-    // 所以：
-    // 1. 存: 转换后的 WGS84
-    // 2. 显: 原始的 GCJ02 (飞过去)
-
-    // 先存 WGS84
-    const wgs84 = gcoord.transform([lng, lat], gcoord.GCJ02, gcoord.WGS84);
-    selectedCoord.value = wgs84;
-
-    // 再飞 GCJ02 (因为底图是歪的，所以我们要飞到歪的坐标去)
-    map.flyTo({ center: [lng, lat], zoom: 14 });
-    marker.setLngLat([lng, lat]);
-  } else {
-    // 英文模式：全是 WGS84
-    map.flyTo({ center: [lng, lat], zoom: 14 });
-    marker.setLngLat([lng, lat]);
-    selectedCoord.value = [lng, lat];
+    const result = gcoord.transform([lng, lat], gcoord.GCJ02, gcoord.WGS84);
+    lng = result[0];
+    lat = result[1];
   }
+
+  map.flyTo({ center: [lng, lat], zoom: 14 });
+  marker.setLngLat([lng, lat]);
+  selectedCoord.value = [lng, lat];
 };
 
+// 🗺️ 初始化地图 (⭐ 移除所有转换)
 const initMap = () => {
   const isZh = currentLang.value === 'zh';
-
-  // ✅ 修复点2：强制转 Number，防止字符串导致的计算错误
   let center = [116.3974, 39.9093];
+
   if (props.initialLng && props.initialLat) {
     let rawLng = Number(props.initialLng);
     let rawLat = Number(props.initialLat);
-
-    // selectedCoord 永远存 WGS84 (数据库里的值)
-    selectedCoord.value = [rawLng, rawLat];
-
-    // center 用来控制地图显示
-    // 如果是中文高德底图，要把 WGS84 -> GCJ02 才能对齐显示
-    if (isZh) {
-      center = gcoord.transform([rawLng, rawLat], gcoord.WGS84, gcoord.GCJ02);
-    } else {
-      center = [rawLng, rawLat];
-    }
+    center = [rawLng, rawLat]; // 数据库是 WGS84，天地图也是 WGS84，直接用！
+    selectedCoord.value = center;
   }
 
-  // ✅ 修复点3：销毁旧实例，防止内存泄漏
-  if (map) {
-    map.remove();
-    map = null;
-  }
+  if (map) { map.remove(); map = null; }
 
   map = new mapboxgl.Map({
     container: 'picker-map-container',
@@ -179,42 +149,25 @@ const initMap = () => {
     map.on('click', (e) => {
       const { lng, lat } = e.lngLat;
       marker.setLngLat([lng, lat]);
-
-      // 地图上点哪就是哪 (Mapbox 坐标)
-      // 如果是中文模式，这个 [lng, lat] 其实是 GCJ02
-      // 如果是英文模式，这个 [lng, lat] 是 WGS84
-      // 我们统一在 handleConfirm 里做最终转换，这里先存原始点击坐标，方便 Marker 显示
-
-      // 修正逻辑：selectedCoord 还是存 WGS84 比较好，保持统一
-      if (isZh) {
-        const wgs84 = gcoord.transform([lng, lat], gcoord.GCJ02, gcoord.WGS84);
-        selectedCoord.value = wgs84;
-      } else {
-        selectedCoord.value = [lng, lat];
-      }
+      selectedCoord.value = [lng, lat]; // 点击得到的直接就是 WGS84
     });
-
     marker.on('dragend', () => {
-      const { lng, lat } = marker.getLngLat();
-      if (isZh) {
-        const wgs84 = gcoord.transform([lng, lat], gcoord.GCJ02, gcoord.WGS84);
-        selectedCoord.value = wgs84;
-      } else {
-        selectedCoord.value = [lng, lat];
-      }
+      const lngLat = marker.getLngLat();
+      selectedCoord.value = [lngLat.lng, lngLat.lat];
     });
   }
 };
 
+// 💾 确认保存 (⭐ 移除所有转换)
 const handleConfirm = () => {
   if (!selectedCoord.value) return;
 
-  // selectedCoord 已经是 WGS84 了 (在 click/dragend/onSelect 里都转过了)
-  // 直接保存！
+  // 地图上的点已经是 WGS84 了，直接保存
+  const finalCoord = selectedCoord.value;
 
   emit('confirm', {
-    lng: selectedCoord.value[0],
-    lat: selectedCoord.value[1],
+    lng: finalCoord[0],
+    lat: finalCoord[1],
     address: searchResult.value?.name || (currentLang.value === 'zh' ? '地图选点' : 'Map Location')
   });
   handleClose();
@@ -226,11 +179,7 @@ watch(() => props.modelValue, (val) => {
   if (val) {
     nextTick(() => initMap());
   } else {
-    // ✅ 修复点4：弹窗关闭时，彻底清理 map
-    if (map) {
-      map.remove();
-      map = null;
-    }
+    if (map) { map.remove(); map = null; }
     selectedCoord.value = null;
     searchResult.value = null;
     options.value = [];
