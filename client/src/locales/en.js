@@ -9,7 +9,8 @@ export default {
     attendance: 'Attendance',
     orders: 'Orders',
     classes: 'Classes',
-    users: 'Staff'
+    users: 'Staff',
+    map: 'Heatmap Analysis'
   },
   header: {
     welcome: 'Welcome back, Admin',
@@ -171,5 +172,11 @@ export default {
     usernamePlaceholder: 'Username',
     passwordPlaceholder: 'Password',
     loginBtn: 'Login'
+  },
+  map: {
+    title: 'Student Distribution',
+    totalPoints: 'Total Points',
+    blur: 'Blur',
+    radius: 'Radius'
   }
 }

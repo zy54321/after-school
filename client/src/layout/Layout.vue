@@ -15,6 +15,11 @@
             <span>{{ $t('menu.students') }}</span>
           </el-menu-item>
 
+          <el-menu-item index="/map">
+            <el-icon><MapLocation /></el-icon>
+            <span>{{ $t('menu.map') }}</span>
+          </el-menu-item>
+
           <el-menu-item index="/attendance">
             <el-icon><Calendar /></el-icon>
             <span>{{ $t('menu.attendance') }}</span>
@@ -65,7 +70,7 @@
 </template>
 
 <script setup>
-import { Odometer, User, Calendar, Money, School, Tools } from '@element-plus/icons-vue';
+import { Odometer, User, Calendar, Money, School, Tools, MapLocation } from '@element-plus/icons-vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { ref } from 'vue';

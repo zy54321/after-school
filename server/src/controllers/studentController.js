@@ -315,11 +315,54 @@ const dropClass = async (req, res) => {
   }
 };
 
+// ⭐ 获取学员位置数据 (GeoJSON 格式)
+const getStudentLocations = async (req, res) => {
+  try {
+    // 只查询状态正常且有坐标的学员
+    const query = `
+      SELECT id, name, longitude, latitude 
+      FROM students 
+      WHERE status = 1 
+      AND longitude IS NOT NULL 
+      AND latitude IS NOT NULL
+    `;
+    const result = await pool.query(query);
+
+    // 转换为 GeoJSON FeatureCollection 格式
+    // 这是 GIS 地图库（OpenLayers/Mapbox/Leaflet）通用的数据格式
+    const geoJsonData = {
+      type: 'FeatureCollection',
+      features: result.rows.map(student => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [parseFloat(student.longitude), parseFloat(student.latitude)] // 注意：GeoJSON 是 [经度, 纬度]
+        },
+        properties: {
+          id: student.id,
+          name: student.name,
+          weight: 1 // 权重，未来可以根据"剩余课时"或"消费金额"来调整热力权重
+        }
+      }))
+    };
+
+    res.json({
+      code: 200,
+      msg: 'success',
+      data: geoJsonData
+    });
+  } catch (err) {
+    console.error('获取热力图数据失败:', err);
+    res.status(500).json({ code: 500, msg: '获取数据失败' });
+  }
+};
+
 module.exports = {
   getStudents,
   createStudent,
   updateStudent,
   deleteStudent,
   getStudentDetail,
-  dropClass
+  dropClass,
+  getStudentLocations
 };

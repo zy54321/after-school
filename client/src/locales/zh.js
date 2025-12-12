@@ -9,7 +9,8 @@ export default {
     attendance: '签到消课',
     orders: '订单流水',
     classes: '课程/班级',
-    users: '员工管理'
+    users: '员工管理',
+    map: '生源热力图'
   },
   header: {
     welcome: '欢迎回来，管理员',
@@ -180,5 +181,11 @@ export default {
     usernamePlaceholder: '请输入账号',
     passwordPlaceholder: '请输入密码',
     loginBtn: '登 录'
+  },
+  map: {
+    title: '生源分布热力分析',
+    totalPoints: '样本点数量',
+    blur: '模糊度',
+    radius: '热力半径'
   }
 }

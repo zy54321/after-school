@@ -8,6 +8,7 @@ const checkAdmin = require('../middleware/adminMiddleware');
 // 定义路径
 router.get('/', studentController.getStudents);   // GET /api/students
 router.post('/', studentController.createStudent); // POST /api/students
+router.get('/locations', studentController.getStudentLocations); // 必须在 /:id 之前，否则会被当成 ID 拦截
 router.put('/:id', studentController.updateStudent); // PUT /api/students/:id
 router.get('/:id', studentController.getStudentDetail);
 
