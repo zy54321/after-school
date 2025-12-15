@@ -356,6 +356,56 @@ const getStudentLocations = async (req, res) => {
     res.status(500).json({ code: 500, msg: '获取数据失败' });
   }
 };
+// 获取周边生源 (PostGIS 核心功能)
+const getNearbyStudents = async (req, res) => {
+  const { lng, lat, radius } = req.query;
+
+  // 1. 参数校验
+  if (!lng || !lat || !radius) {
+    return res.status(400).json({ code: 400, msg: '缺少必要参数 (lng, lat, radius)' });
+  }
+
+  try {
+    // 2. PostGIS 查询 SQL
+    // ST_MakePoint(longitude, latitude): 把经纬度字段变成一个"点"
+    // ST_DistanceSphere(A, B): 计算 A 点和 B 点在地球表面的距离(米)
+    const query = `
+      SELECT 
+        id, name, gender, parent_name, parent_phone, address, longitude, latitude,
+        ROUND(ST_DistanceSphere(
+          ST_MakePoint($1, $2),          -- 中心点 (用户选的点)
+          ST_MakePoint(longitude, latitude) -- 目标点 (学生的位置)
+        )) as distance
+      FROM students
+      WHERE status = 1 
+        AND longitude IS NOT NULL 
+        AND latitude IS NOT NULL
+        AND ST_DistanceSphere(
+          ST_MakePoint($1, $2),
+          ST_MakePoint(longitude, latitude)
+        ) <= $3 -- 筛选半径内的
+      ORDER BY distance ASC; -- 按距离由近到远排序
+    `;
+
+    const values = [parseFloat(lng), parseFloat(lat), parseFloat(radius)];
+    const result = await pool.query(query, values);
+
+    res.json({
+      code: 200,
+      msg: 'success',
+      data: result.rows, // 返回的数据里会多一个 distance 字段
+      meta: {
+        center: { lng, lat },
+        radius: radius,
+        count: result.rowCount
+      }
+    });
+
+  } catch (err) {
+    console.error('周边搜索失败:', err);
+    res.status(500).json({ code: 500, msg: '搜索失败', error: err.message });
+  }
+};
 
 module.exports = {
   getStudents,
@@ -364,5 +414,6 @@ module.exports = {
   deleteStudent,
   getStudentDetail,
   dropClass,
-  getStudentLocations
+  getStudentLocations,
+  getNearbyStudents
 };
