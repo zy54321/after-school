@@ -6,7 +6,7 @@
       <div class="hud-left">
         <el-button circle plain :icon="Back" class="back-btn" @click="$router.push('/')" />
         <span class="system-title">{{ t('strategy.title') }} <span class="highlight">{{ t('strategy.subTitle')
-        }}</span></span>
+            }}</span></span>
       </div>
       <div class="hud-center">
       </div>
@@ -31,8 +31,7 @@
         <el-button size="small" class="tool-btn" @click="startDraw('polygon')">
           <span class="tool-icon">⬡</span> {{ t('strategy.actions.polygon') }}
         </el-button>
-        <el-button size="small" class="tool-btn delete-btn" type="danger" @click="deleteSelected"
-          :disabled="!drawSelectedId">
+        <el-button size="small" class="tool-btn delete-btn" type="danger" @click="handleDelete" :disabled="!canDelete">
           <span class="tool-icon">🗑️</span> {{ t('strategy.actions.delete') }}
         </el-button>
       </div>
@@ -124,7 +123,7 @@ import mapboxgl from 'mapbox-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import { Back } from '@element-plus/icons-vue';
 import axios from 'axios';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 const router = useRouter();
 
@@ -407,6 +406,13 @@ const initMap = () => {
     // 4. 只取第一个（也就是最上面的那个）
     const feature = features[0];
 
+    // 如果点击了已存数据，强制取消 Mapbox Draw 的选中状态
+    // 避免"既选中了草稿框，又打开了详情面板"的歧义
+    if (draw.value.getMode() === 'simple_select') {
+      draw.value.changeMode('simple_select', { featureIds: [] });
+      drawSelectedId.value = null;
+    }
+
     // 5. 执行原有的详情展示逻辑
     viewModeFeature.value = feature;
 
@@ -452,14 +458,57 @@ const initMap = () => {
 
 // === 绘制逻辑 ===
 const startDraw = (type) => {
+  viewModeFeature.value = null; // 开始画图时，关闭详情面板
   if (type === 'point') draw.value.changeMode('draw_point');
   if (type === 'line') draw.value.changeMode('draw_line_string');
   if (type === 'polygon') draw.value.changeMode('draw_polygon');
 };
 
-const deleteSelected = () => {
-  draw.value.trash();
-  drawSelectedId.value = null;
+const canDelete = computed(() => {
+  // 只要选中了草稿(drawSelectedId) 或者 正在查看详情(viewModeFeature)，按钮就可用
+  return !!drawSelectedId.value || !!viewModeFeature.value;
+});
+const handleDelete = async () => {
+  // 场景 1: 删除正在绘制/选中的草稿 (Mapbox Draw)
+  if (drawSelectedId.value) {
+    draw.value.trash();
+    drawSelectedId.value = null;
+    // 如果此时也打开了详情面板，顺手关掉，避免混淆
+    viewModeFeature.value = null;
+    return;
+  }
+
+  // 场景 2: 删除已入库的真实数据 (Database)
+  if (viewModeFeature.value) {
+    const { id, name } = viewModeFeature.value.properties;
+
+    try {
+      // 二次确认
+      await ElMessageBox.confirm(
+        `确定要从数据库中永久删除 "${name || '该数据'}" 吗?`,
+        '警告',
+        {
+          confirmButtonText: '确定删除',
+          cancelButtonText: '取消',
+          type: 'warning',
+        }
+      );
+
+      // 调用后端删除接口
+      const res = await axios.delete(`/api/mapbox/features/${id}`);
+
+      if (res.data.code === 200) {
+        ElMessage.success('数据已销毁');
+        viewModeFeature.value = null; // 关闭详情面板
+        fetchFeatures(); // 🔄 刷新地图，让它从屏幕上消失
+      }
+    } catch (err) {
+      if (err !== 'cancel') {
+        console.error(err);
+        ElMessage.error('删除操作失败');
+      }
+    }
+  }
 };
 
 const handleSelectionChange = (e) => {
@@ -518,7 +567,7 @@ const saveFeature = async () => {
     const res = await axios.post('/api/mapbox/features', payload);
 
     if (res.data.code === 200) {
-      ElMessage.success('情报已入库');
+      ElMessage.success('数据已入库');
       formVisible.value = false;
 
       // 4. 清理绘制图层，重新加载所有数据 (让新数据变成不可编辑的图层)

@@ -11,4 +11,7 @@ router.get('/features', mapboxController.getFeatures);
 // 3. 保存新要素
 router.post('/features', mapboxController.createFeature);
 
+// 4. 删除要素
+router.delete('/features/:id', mapboxController.deleteFeature);
+
 module.exports = router;

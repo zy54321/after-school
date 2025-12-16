@@ -212,8 +212,8 @@ export default {
     subTitle: 'V1.0',
     layers: '图层控制',
     arsenal: '工具箱',
-    details: '情报详情',
-    dialogTitle: '情报录入',
+    details: '数据详情',
+    dialogTitle: '数据录入',
     // 字段映射字典
     fields: {
       // 竞争对手
@@ -252,8 +252,8 @@ export default {
       hotzone: '辐射热区'
     },
     actions: {
-      cancel: '放弃 (Cancel)',
-      save: '保存情报 (Save)',
+      cancel: '放弃',
+      save: '保存数据',
       point: '标记点位',
       line: '规划路线',
       polygon: '圈定区域',

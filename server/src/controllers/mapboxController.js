@@ -108,4 +108,28 @@ const createFeature = async (req, res) => {
   }
 };
 
-module.exports = { searchPlaces, getFeatures, createFeature };
+const deleteFeature = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 这里的表名 'market_features' 必须和你 createFeature 里用的一致
+    const query = 'DELETE FROM market_features WHERE id = $1 RETURNING id';
+    
+    const result = await pool.query(query, [id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ code: 404, msg: '未找到该记录，可能已被删除' });
+    }
+
+    res.json({
+      code: 200,
+      msg: '删除成功',
+      data: { id: id }
+    });
+  } catch (err) {
+    console.error('Delete error:', err);
+    res.status(500).json({ code: 500, msg: '删除失败，服务器内部错误' });
+  }
+};
+
+module.exports = { searchPlaces, getFeatures, createFeature, deleteFeature };
