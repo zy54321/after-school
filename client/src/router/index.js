@@ -82,7 +82,7 @@ const routes = [
   {
     path: '/strategy',
     component: StrategyLayout,
-    meta: { requiresAuth: true },
+    // meta: { requiresAuth: true },
     children: [
       { 
         path: 'map', 

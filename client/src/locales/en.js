@@ -1,7 +1,7 @@
 export default {
   app: {
     name: 'SmartCare',
-    systemName: 'Management System'
+    systemName: 'Management System',
   },
   menu: {
     dashboard: 'Dashboard',
@@ -10,11 +10,12 @@ export default {
     orders: 'Orders',
     classes: 'Classes',
     users: 'Staff',
-    map: 'Heatmap Analysis'
+    map: 'Heatmap Analysis',
+    portal: 'Return to Portal',
   },
   header: {
     welcome: 'Welcome back, Admin',
-    logout: 'Logout'
+    logout: 'Logout',
   },
   common: {
     action: 'Action',
@@ -30,7 +31,7 @@ export default {
     failed: 'Failed',
     loading: 'Loading...',
     placeholderSelect: 'Select',
-    placeholderInput: 'Enter'
+    placeholderInput: 'Enter',
   },
   dashboard: {
     totalStudents: 'Total Students',
@@ -47,7 +48,7 @@ export default {
     colName: 'Name',
     colClass: 'Class',
     colExpiry: 'Expires',
-    btnRemind: 'Remind'
+    btnRemind: 'Remind',
   },
   student: {
     title: 'Student List',
@@ -78,7 +79,7 @@ export default {
     placeholderParent: 'e.g. John Doe',
     placeholderPhone: 'Phone Number',
     placeholderAddress: 'Click button to select',
-    unitYuan: 'CNY'
+    unitYuan: 'CNY',
   },
   attendance: {
     title: 'Check-in',
@@ -88,7 +89,7 @@ export default {
     validUntil: 'Valid until',
     noExpiry: 'No Expiry',
     empty: 'No active students found',
-    msgSuccess: 'Check-in Successful'
+    msgSuccess: 'Check-in Successful',
   },
   order: {
     title: 'Order History',
@@ -102,7 +103,7 @@ export default {
     typeTime: 'Term',
     typeCount: 'Lessons',
     unitMonth: 'Mons',
-    unitLesson: 'Lessons'
+    unitLesson: 'Lessons',
   },
   class: {
     title: 'Class Management',
@@ -127,8 +128,16 @@ export default {
     labelEndDate: 'End Date',
     labelFee: 'Tuition Fee',
     labelDesc: 'Description',
-    week: { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 0: 'Sun' },
-    hintAutoCalc: 'Auto-calculated by system'
+    week: {
+      1: 'Mon',
+      2: 'Tue',
+      3: 'Wed',
+      4: 'Thu',
+      5: 'Fri',
+      6: 'Sat',
+      0: 'Sun',
+    },
+    hintAutoCalc: 'Auto-calculated by system',
   },
   user: {
     title: 'Staff & Permissions',
@@ -148,20 +157,24 @@ export default {
     labelPassword: 'Initial Password',
     labelRole: 'Role',
     dialogResetTitle: 'Reset Password',
-    msgResetSuccess: 'Password reset successful'
+    msgResetSuccess: 'Password reset successful',
   },
   login: {
     navBtn: 'Login',
     slogan: 'Make Education Management Simple & Pure',
-    subSlogan: 'The intelligent housekeeper for after-school institutions. From LBS maps to precise financial flows, we liberate you from tedious spreadsheets.',
+    subSlogan:
+      'The intelligent housekeeper for after-school institutions. From LBS maps to precise financial flows, we liberate you from tedious spreadsheets.',
     ctaBtn: 'Try Demo Now',
     features: {
       mapTitle: 'LBS Smart Map',
-      mapDesc: 'Integrated with AMAP SDK to visualize student distribution and assist market decisions.',
+      mapDesc:
+        'Integrated with AMAP SDK to visualize student distribution and assist market decisions.',
       checkinTitle: 'One-Click Check-in',
-      checkinDesc: 'Complete check-in in 3 seconds. Automatically deduct lessons and calculate validity.',
+      checkinDesc:
+        'Complete check-in in 3 seconds. Automatically deduct lessons and calculate validity.',
       financeTitle: 'Strict Financial Loop',
-      financeDesc: 'Unique negative order logic perfectly handles complex scenarios like refunds and transfers.'
+      financeDesc:
+        'Unique negative order logic perfectly handles complex scenarios like refunds and transfers.',
     },
     contact: 'Contact Us',
     phone: 'Mobile / WeChat',
@@ -171,12 +184,43 @@ export default {
     visitor: 'Visitor Access',
     usernamePlaceholder: 'Username',
     passwordPlaceholder: 'Password',
-    loginBtn: 'Login'
+    loginBtn: 'Login',
+    navEnter: 'Enter System',
+    welcomeBackAction: 'Welcome Back, Enter',
+    identityTitle: 'Identity Confirmation',
+    accessing: 'Accessing',
+    systemStrategy: 'Strategic War Room',
+    systemEdu: 'Edu Management System',
+    enterNow: 'Enter Now',
+    switchAccount: 'Switch Account',
+    backHome: 'Home',
   },
   map: {
     title: 'Student Distribution',
     totalPoints: 'Total Points',
     blur: 'Blur',
-    radius: 'Radius'
-  }
-}
+    radius: 'Radius',
+  },
+  // New Portal translations
+  portal: {
+    title: 'Digital Platform',
+    hero: {
+      greeting: 'Smart Operations & BI Platform',
+      role: 'Data-Driven · Spatial Intelligence · Synergy',
+      desc: 'Integrating full-stack architecture with advanced GIS technology. A one-stop digital solution empowering businesses from daily operations to strategic market analysis.',
+    },
+    systemCard: {
+      title: 'Edu Management System',
+      desc: 'Full-stack CRM based on Vue3 + Node.js. Student management, Finance, Attendance.',
+      tag: 'Private',
+      btn: 'Enter Workbench',
+    },
+    strategyCard: {
+      title: 'Strategic War Map',
+      desc: 'BI System based on Mapbox GL. 3D Site selection, Heatmap, Competitor analysis.',
+      tag: 'Public',
+      btn: 'Enter War Room',
+    },
+    copyright: '© 2025 Digital Platform. Designed by Developer.',
+  },
+};

@@ -53,7 +53,7 @@
             <el-icon>
               <HomeFilled />
             </el-icon>
-            <span>返回门户首页</span>
+            <span>{{ $t('menu.portal') }}</span>
           </el-menu-item>
         </el-menu>
       </el-aside>

@@ -1,7 +1,7 @@
 export default {
   app: {
     name: '智托管',
-    systemName: '教务管理系统'
+    systemName: '教务管理系统',
   },
   menu: {
     dashboard: '仪表盘',
@@ -10,11 +10,12 @@ export default {
     orders: '订单流水',
     classes: '课程/班级',
     users: '员工管理',
-    map: '生源热力图'
+    map: '生源热力图',
+    portal: '返回门户首页',
   },
   header: {
     welcome: '欢迎回来，管理员',
-    logout: '退出'
+    logout: '退出',
   },
   common: {
     action: '操作',
@@ -30,7 +31,7 @@ export default {
     failed: '操作失败',
     loading: '加载中...',
     placeholderSelect: '请选择',
-    placeholderInput: '请输入'
+    placeholderInput: '请输入',
   },
   // 1. 仪表盘
   dashboard: {
@@ -48,7 +49,7 @@ export default {
     colName: '姓名',
     colClass: '课程',
     colExpiry: '有效期至',
-    btnRemind: '催费'
+    btnRemind: '催费',
   },
   // 2. 学员管理
   student: {
@@ -81,7 +82,7 @@ export default {
     placeholderParent: '例如：张爸爸',
     placeholderPhone: '11位手机号',
     placeholderAddress: '请点击右侧按钮选择',
-    unitYuan: '元'
+    unitYuan: '元',
   },
   // 3. 签到消课
   attendance: {
@@ -92,7 +93,7 @@ export default {
     validUntil: '有效期至',
     noExpiry: '未设置有效期',
     empty: '暂无在读学员数据',
-    msgSuccess: '签到成功'
+    msgSuccess: '签到成功',
   },
   // 4. 订单流水
   order: {
@@ -107,7 +108,7 @@ export default {
     typeTime: '包期',
     typeCount: '课时',
     unitMonth: '个月',
-    unitLesson: '节'
+    unitLesson: '节',
   },
   // 5. 课程/班级
   class: {
@@ -134,8 +135,16 @@ export default {
     labelEndDate: '结课日期',
     labelFee: '学费金额',
     labelDesc: '备注/描述',
-    week: { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 0: '周日' },
-    hintAutoCalc: '系统根据周期自动计算'
+    week: {
+      1: '周一',
+      2: '周二',
+      3: '周三',
+      4: '周四',
+      5: '周五',
+      6: '周六',
+      0: '周日',
+    },
+    hintAutoCalc: '系统根据周期自动计算',
   },
   // 6. 员工管理
   user: {
@@ -156,13 +165,14 @@ export default {
     labelPassword: '初始密码',
     labelRole: '角色权限',
     dialogResetTitle: '重置密码',
-    msgResetSuccess: '密码重置成功'
+    msgResetSuccess: '密码重置成功',
   },
   // 登录页 (之前的)
   login: {
     navBtn: '登录系统',
     slogan: '让教务管理回归简单与纯粹',
-    subSlogan: '专为中小托管机构打造的智能管家。从LBS生源地图到精准的财务流水，我们要做的，是让你从繁琐的表格中彻底解放。',
+    subSlogan:
+      '专为中小托管机构打造的智能管家。从LBS生源地图到精准的财务流水，我们要做的，是让你从繁琐的表格中彻底解放。',
     ctaBtn: '立即体验演示',
     features: {
       mapTitle: 'LBS 智能地图',
@@ -170,7 +180,7 @@ export default {
       checkinTitle: '一键消课签到',
       checkinDesc: '3秒完成学员签到，系统自动扣除课时并计算有效期。',
       financeTitle: '严谨财务闭环',
-      financeDesc: '独创负数订单逻辑，完美处理退费、转课等复杂场景。'
+      financeDesc: '独创负数订单逻辑，完美处理退费、转课等复杂场景。',
     },
     contact: '联系我们',
     phone: '手机 / 微信',
@@ -180,12 +190,43 @@ export default {
     visitor: '访客快捷通道',
     usernamePlaceholder: '请输入账号',
     passwordPlaceholder: '请输入密码',
-    loginBtn: '登 录'
+    loginBtn: '登 录',
+    navEnter: '进入系统', // 右上角按钮 (已登录状态)
+    welcomeBackAction: '欢迎回来，进入系统', // 中间大按钮 (已登录状态)
+    identityTitle: '身份确认', // 弹窗标题
+    accessing: '正在访问', // 弹窗内提示
+    systemStrategy: '战略作战指挥室', // 系统名称
+    systemEdu: '教务管理系统', // 系统名称
+    enterNow: '立即进入', // 弹窗内大按钮
+    switchAccount: '切换账号', // 弹窗内小按钮
+    backHome: '返回首页', // 顶部返回按钮
   },
   map: {
     title: '生源分布热力分析',
     totalPoints: '样本点数量',
     blur: '模糊度',
-    radius: '热力半径'
-  }
-}
+    radius: '热力半径',
+  },
+  // 新增门户首页翻译
+  portal: {
+    title: '数字化中台',
+    hero: {
+      greeting: '智能运营与商业决策中台',
+      role: '数据驱动 · 空间感知 · 高效协同',
+      desc: '深度融合全栈架构与 GIS 地理信息技术，打破数据孤岛。为垂直行业提供从日常运营管理到市场战略分析的一站式数字化解决方案。',
+    },
+    systemCard: {
+      title: '教务管理系统',
+      desc: '基于 Vue3 + Node.js 的全栈 CRM。支持学员管理、财务流水、考勤消课。',
+      tag: '私有部署',
+      btn: '进入工作台',
+    },
+    strategyCard: {
+      title: '战略作战地图',
+      desc: '基于 Mapbox GL 的商业智能系统。支持 3D 选址、热力分析、竞对透视。',
+      tag: '公开演示',
+      btn: '进入指挥室',
+    },
+    copyright: '© 2025 托管班数字化中台. Designed by Developer.',
+  },
+};
