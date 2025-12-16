@@ -6,7 +6,7 @@
       <div class="hud-left">
         <el-button circle plain :icon="Back" class="back-btn" @click="$router.push('/')" />
         <span class="system-title">{{ t('strategy.title') }} <span class="highlight">{{ t('strategy.subTitle')
-        }}</span></span>
+            }}</span></span>
       </div>
       <div class="hud-center">
       </div>
@@ -210,44 +210,43 @@ const formSchema = {
 
 // 核心过滤逻辑
 watch(layers, (newVal) => {
-  // 防御性检查：地图未加载完成时不执行
   if (!map.value || !map.value.getSource('market-data')) return;
 
   // 1. 找出所有“开启”的分类
   const activeCategories = Object.keys(newVal).filter(key => newVal[key]);
 
-  // 2. 构造分类过滤器 (Common Filter)
-  // 语法解释：判断 'category' 字段的值 是否存在于 activeCategories 数组中
+  // 2. 构造分类过滤器
   const categoryFilter = ['in', ['get', 'category'], ['literal', activeCategories]];
 
-  // 3. 应用过滤器 (统一使用 'geometry-type' 代替 '$type')
+  // 3. 应用过滤器 (注意：要同时处理 本体图层 和 Label图层)
 
-  // 点图层 (Point)
+  // === 点 ===
+  const pointFilter = ['all', ['==', ['geometry-type'], 'Point'], categoryFilter];
   if (map.value.getLayer('market-points')) {
-    map.value.setFilter('market-points', [
-      'all',
-      ['==', ['geometry-type'], 'Point'], // 🟢 修正：使用新版类型判断
-      categoryFilter
-    ]);
+    map.value.setFilter('market-points', pointFilter);
+  }
+  if (map.value.getLayer('market-points-label')) { // 🟢 同步过滤 label
+    map.value.setFilter('market-points-label', pointFilter);
   }
 
-  // 线图层 (LineString)
+  // === 线 ===
+  const lineFilter = ['all', ['==', ['geometry-type'], 'LineString'], categoryFilter];
   if (map.value.getLayer('market-lines')) {
-    map.value.setFilter('market-lines', [
-      'all',
-      ['==', ['geometry-type'], 'LineString'], // 🟢 修正
-      categoryFilter
-    ]);
+    map.value.setFilter('market-lines', lineFilter);
+  }
+  if (map.value.getLayer('market-lines-label')) { // 🟢 同步过滤 label
+    map.value.setFilter('market-lines-label', lineFilter);
   }
 
-  // 面图层 (Polygon)
+  // === 面 ===
+  const polygonFilter = ['all', ['==', ['geometry-type'], 'Polygon'], categoryFilter];
   if (map.value.getLayer('market-polygons')) {
-    map.value.setFilter('market-polygons', [
-      'all',
-      ['==', ['geometry-type'], 'Polygon'], // 🟢 修正
-      categoryFilter
-    ]);
+    map.value.setFilter('market-polygons', polygonFilter);
   }
+  if (map.value.getLayer('market-polygons-label')) { // 🟢 同步过滤 label
+    map.value.setFilter('market-polygons-label', polygonFilter);
+  }
+
 }, { deep: true });
 
 // 计算属性：当前可用的分类 (根据绘制的图形类型过滤)
@@ -471,34 +470,54 @@ const canDelete = computed(() => {
   return !!drawSelectedId.value || !!viewModeFeature.value;
 });
 const handleDelete = async () => {
-  // ... (删除草稿的逻辑不变) ...
+  // 场景 1: 删除正在绘制/选中的草稿 (Mapbox Draw)
+  if (drawSelectedId.value) {
+    draw.value.trash();
+    drawSelectedId.value = null;
+    viewModeFeature.value = null;
+    return;
+  }
 
   // 场景 2: 删除已入库的真实数据 (Database)
   if (viewModeFeature.value) {
     const { id, name } = viewModeFeature.value.properties;
 
-    try {
-      // 🟢 修改：使用 t() 进行国际化
-      // 1. 获取要显示的名称（如果有 name 就用 name，没有就用 '该数据/this item'）
-      const displayName = name || t('strategy.dialogs.defaultData');
+    // 1. 获取要显示的名称 (支持国际化兜底)
+    const displayName = name || t('strategy.dialogs.defaultData');
 
-      // 2. 弹出确认框
+    try {
+      // 2. 弹出确认框 (完全支持中英文切换)
       await ElMessageBox.confirm(
-        // t('key', { param: value }) 语法用于替换翻译字符串里的 {name}
         t('strategy.dialogs.deleteMsg', { name: displayName }),
-        t('strategy.dialogs.deleteTitle'), // 标题: 警告 / Warning
+        t('strategy.dialogs.deleteTitle'),
         {
-          confirmButtonText: t('strategy.dialogs.confirmDelete'), // 按钮: 确定删除 / Delete
-          cancelButtonText: t('strategy.dialogs.cancel'),         // 按钮: 取消 / Cancel
+          confirmButtonText: t('strategy.dialogs.confirmDelete'),
+          cancelButtonText: t('strategy.dialogs.cancel'),
           type: 'warning',
         }
       );
 
-      // ... (后续调用后端接口的代码保持不变) ...
+      // 3. 调用后端删除接口
       const res = await axios.delete(`/api/mapbox/features/${id}`);
-      // ...
+
+      if (res.data.code === 200) {
+        // 成功提示 (复用 common.success 翻译，或者写死)
+        ElMessage.success(t('common.success') || '删除成功');
+
+        // 关闭详情面板
+        viewModeFeature.value = null;
+
+        // 刷新地图 (非常重要！)
+        fetchFeatures();
+      } else {
+        // 处理后端返回的业务错误
+        ElMessage.error(res.data.msg || '删除失败');
+      }
     } catch (err) {
-      // ...
+      if (err !== 'cancel') {
+        console.error(err);
+        ElMessage.error(t('common.failed') || '操作失败');
+      }
     }
   }
 };
@@ -577,7 +596,8 @@ const saveFeature = async () => {
 // === 加载已保存数据 ===
 const fetchFeatures = async () => {
   try {
-    const res = await axios.get('/api/mapbox/features');
+    // 增加 ?t=... 时间戳，强制浏览器不缓存，每次都从服务器拉取最新数据
+    const res = await axios.get(`/api/mapbox/features?t=${new Date().getTime()}`);
     if (res.data.code === 200) {
       const geojson = res.data.data;
 
@@ -587,7 +607,7 @@ const fetchFeatures = async () => {
       } else {
         map.value.addSource('market-data', { type: 'geojson', data: geojson });
 
-        // 🟢 渲染面
+        // 渲染面
         map.value.addLayer({
           id: 'market-polygons',
           type: 'fill',
@@ -603,8 +623,26 @@ const fetchFeatures = async () => {
             'fill-opacity': 0.3
           }
         });
+        // 面的文字标签
+        map.value.addLayer({
+          id: 'market-polygons-label',
+          type: 'symbol',
+          source: 'market-data',
+          filter: ['==', '$type', 'Polygon'],
+          layout: {
+            'text-field': ['get', 'name'], // 显示 name 字段
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], // 字体
+            'text-size': 12,
+            'text-allow-overlap': false // 避免文字重叠拥挤
+          },
+          paint: {
+            'text-color': '#fff',
+            'text-halo-color': '#000', // 文字描边，确保在深色/浅色背景都看清
+            'text-halo-width': 1
+          }
+        });
 
-        // 🟢 渲染线
+        // 渲染线
         map.value.addLayer({
           id: 'market-lines',
           type: 'line',
@@ -619,6 +657,25 @@ const fetchFeatures = async () => {
               '#888'
             ],
             'line-width': 4
+          }
+        });
+        // 线的文字标签 (沿线显示)
+        map.value.addLayer({
+          id: 'market-lines-label',
+          type: 'symbol',
+          source: 'market-data',
+          filter: ['==', '$type', 'LineString'],
+          layout: {
+            'text-field': ['get', 'name'],
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+            'text-size': 12,
+            'symbol-placement': 'line', // ✨ 关键：让文字沿着线走
+            'text-offset': [0, 1]       // 稍微偏离线一点，不要压住线
+          },
+          paint: {
+            'text-color': '#fff',
+            'text-halo-color': '#000',
+            'text-halo-width': 1
           }
         });
 
@@ -639,6 +696,25 @@ const fetchFeatures = async () => {
               '#ffffff'
             ],
             'circle-stroke-width': 1, 'circle-stroke-color': '#fff'
+          }
+        });
+        // 点的文字标签
+        map.value.addLayer({
+          id: 'market-points-label',
+          type: 'symbol',
+          source: 'market-data',
+          filter: ['==', '$type', 'Point'],
+          layout: {
+            'text-field': ['get', 'name'],
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+            'text-size': 12,
+            'text-anchor': 'top',   // 文字在点下方
+            'text-offset': [0, 0.8] // 向下偏移一点
+          },
+          paint: {
+            'text-color': '#fff',
+            'text-halo-color': '#000',
+            'text-halo-width': 1
           }
         });
 
@@ -986,6 +1062,7 @@ onMounted(() => {
 :deep(.mapboxgl-ctrl-top-right) {
   display: none !important;
 }
+
 :deep(.mapboxgl-ctrl-bottom-left) {
   display: none !important;
 }
