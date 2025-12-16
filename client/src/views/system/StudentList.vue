@@ -158,7 +158,7 @@ import { ref, reactive, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Location } from '@element-plus/icons-vue';
-import MapPicker from '../components/MapPicker.vue';
+import MapPicker from '../../components/MapPicker.vue';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
