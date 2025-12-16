@@ -195,7 +195,7 @@ export default {
     welcomeBackAction: '欢迎回来，进入系统', // 中间大按钮 (已登录状态)
     identityTitle: '身份确认', // 弹窗标题
     accessing: '正在访问', // 弹窗内提示
-    systemStrategy: '战略作战指挥室', // 系统名称
+    systemStrategy: '商业分析地图', // 系统名称
     systemEdu: '教务管理系统', // 系统名称
     enterNow: '立即进入', // 弹窗内大按钮
     switchAccount: '切换账号', // 弹窗内小按钮
@@ -208,10 +208,10 @@ export default {
     radius: '热力半径',
   },
   strategy: {
-    title: '战略作战指挥室',
+    title: '商业分析地图',
     subTitle: 'V1.0',
     layers: '图层控制',
-    arsenal: '工具箱',
+    arsenal: '工具',
     details: '数据详情',
     dialogTitle: '数据录入',
     // 字段映射字典
@@ -282,10 +282,10 @@ export default {
       btn: '进入工作台',
     },
     strategyCard: {
-      title: '战略作战地图',
-      desc: '基于 Mapbox GL 的商业智能系统。支持 3D 选址、热力分析、竞对透视。',
+      title: '商业分析地图',
+      desc: '基于 Mapbox GL 的商业数据分析平台。支持数据采集、POI叠加、选址分析、市场洞察。',
       tag: '公开演示',
-      btn: '进入指挥室',
+      btn: '进入分析地图',
     },
     copyright: '© 2025 托管班数字化中台. Designed by Developer.',
   },

@@ -78,7 +78,7 @@ const routes = [
     ]
   },
 
-  // 4. 战略分析层 (Strategy) - 需鉴权
+  // 4. 商业分析层 (Analytics) - 需鉴权
   {
     path: '/strategy',
     component: StrategyLayout,

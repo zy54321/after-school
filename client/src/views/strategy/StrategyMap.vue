@@ -1,5 +1,5 @@
 <template>
-  <div class="war-room-container">
+  <div class="analytics-map-container">
     <div id="map-container" class="map-container"></div>
 
     <header class="hud-header glass-panel">
@@ -825,7 +825,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.war-room-container {
+.analytics-map-container {
   position: absolute;
   top: 0;
   left: 0;
