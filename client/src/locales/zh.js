@@ -258,6 +258,13 @@ export default {
       line: '规划路线',
       polygon: '圈定区域',
       delete: '删除选中'
+    },
+    dialogs: {
+      deleteTitle: '警告',
+      deleteMsg: '确定要从数据库中永久删除 "{name}" 吗?', // {name} 是动态参数
+      confirmDelete: '确定删除',
+      cancel: '取消',
+      defaultData: '该数据' // 当没有名称时的兜底显示
     }
   },
   // 新增门户首页翻译

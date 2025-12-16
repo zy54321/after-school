@@ -247,6 +247,13 @@ export default {
       line: 'Draw Route',
       polygon: 'Draw Area',
       delete: 'Delete'
+    },
+    dialogs: {
+      deleteTitle: 'Warning',
+      deleteMsg: 'Are you sure you want to permanently delete "{name}"?',
+      confirmDelete: 'Delete',
+      cancel: 'Cancel',
+      defaultData: 'this item'
     }
   },
   // New Portal translations
