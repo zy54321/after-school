@@ -207,6 +207,59 @@ export default {
     blur: '模糊度',
     radius: '热力半径',
   },
+  strategy: {
+    title: '战略作战指挥室',
+    subTitle: 'V1.0',
+    layers: '图层控制',
+    arsenal: '工具箱',
+    details: '情报详情',
+    dialogTitle: '情报录入',
+    // 字段映射字典
+    fields: {
+      // 竞争对手
+      price: '预估客单价',
+      students: '预估学员数',
+      threat: '威胁等级',
+      brand: '品牌归属',
+      // 小区
+      avg_price: '挂牌均价',
+      households: '总户数',
+      age: '建筑年代',
+      is_closed: '是否封闭',
+      // 学校
+      level: '学校等级',
+      // 路线
+      duration: '预计耗时',
+      safety: '安全系数',
+      // 通用
+      name: '名称',
+      address: '地址',
+      remarks: '备注',
+      category: '业务分类',
+      attributes: '扩展属性',
+    },
+    placeholders: {
+      name: '请输入名称 (如: 阳光第一小学)',
+      selectType: '请选择类型'
+    },
+    layerItems: {
+      own: '我方校区',
+      competitor: '竞争对手',
+      school: '公立学校',
+      community: '住宅小区',
+      route: '接送路线',
+      block: '竞对拦截线',
+      hotzone: '辐射热区'
+    },
+    actions: {
+      cancel: '放弃 (Cancel)',
+      save: '保存情报 (Save)',
+      point: '标记点位',
+      line: '规划路线',
+      polygon: '圈定区域',
+      delete: '删除选中'
+    }
+  },
   // 新增门户首页翻译
   portal: {
     title: '数字化中台',

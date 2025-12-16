@@ -201,6 +201,54 @@ export default {
     blur: 'Blur',
     radius: 'Radius',
   },
+  strategy: {
+    title: 'STRATEGY OPS',
+    subTitle: 'V1.0',
+    layers: 'Layers',
+    arsenal: 'Arsenal',
+    details: 'Intelligence',
+    dialogTitle: 'New Intel',
+    // Field Mappings
+    fields: {
+      price: 'Est. Price',
+      students: 'Est. Students',
+      threat: 'Threat Level',
+      brand: 'Brand',
+      avg_price: 'Avg Price',
+      households: 'Households',
+      age: 'Year Built',
+      is_closed: 'Gated',
+      level: 'School Level',
+      duration: 'Duration',
+      safety: 'Safety Score',
+      name: 'Name',
+      address: 'Address',
+      remarks: 'Remarks',
+      category: 'Category',
+      attributes: 'Attributes',
+    },
+    placeholders: {
+      name: 'Enter name (e.g. Sunshine School)',
+      selectType: 'Select Type'
+    },
+    layerItems: {
+      own: 'Our Campus',
+      competitor: 'Competitor',
+      school: 'Public School',
+      community: 'Community',
+      route: 'Pickup Route',
+      block: 'Block Line',
+      hotzone: 'Hot Zone'
+    },
+    actions: {
+      cancel: 'Cancel',
+      save: 'Save Intel',
+      point: 'Mark Point',
+      line: 'Draw Route',
+      polygon: 'Draw Area',
+      delete: 'Delete'
+    }
+  },
   // New Portal translations
   portal: {
     title: 'Digital Platform',

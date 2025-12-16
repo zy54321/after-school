@@ -34,7 +34,7 @@ import { LngLatBounds } from 'mapbox-gl';
 import * as turf from '@turf/turf'; // 🟢 引入 Turf
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useI18n } from 'vue-i18n';
-import { MAPBOX_TOKEN, MAP_STYLES } from '../config/mapStyles';
+import { MAPBOX_TOKEN, MAP_STYLES } from '../../config/mapStyles';
 
 mapboxgl.accessToken = MAPBOX_TOKEN;
 
