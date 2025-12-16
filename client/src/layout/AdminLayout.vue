@@ -2,40 +2,58 @@
   <div class="common-layout">
     <el-container>
       <el-aside width="200px" class="aside-menu">
-        <div class="logo">{{ $t('app.name') }}</div> <el-menu active-text-color="#ffd04b" background-color="#545c64" class="el-menu-vertical-demo"
+        <div class="logo">{{ $t('app.name') }}</div>
+        <el-menu active-text-color="#ffd04b" background-color="#545c64" class="el-menu-vertical-demo"
           :default-active="route.path" text-color="#fff" router>
-          
-          <el-menu-item index="/">
-            <el-icon><Odometer /></el-icon>
+
+          <el-menu-item index="/system/dashboard"> <el-icon>
+              <Odometer />
+            </el-icon>
             <span>{{ $t('menu.dashboard') }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/students">
-            <el-icon><User /></el-icon>
+          <el-menu-item index="/system/students"> <el-icon>
+              <User />
+            </el-icon>
             <span>{{ $t('menu.students') }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/map">
-            <el-icon><MapLocation /></el-icon>
+          <el-menu-item index="/system/grid-map">
+            <el-icon>
+              <MapLocation />
+            </el-icon>
             <span>{{ $t('menu.map') }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/attendance">
-            <el-icon><Calendar /></el-icon>
+          <el-menu-item index="/system/attendance"> <el-icon>
+              <Calendar />
+            </el-icon>
             <span>{{ $t('menu.attendance') }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/orders" v-if="role === 'admin'">
-            <el-icon><Money /></el-icon> <span>{{ $t('menu.orders') }}</span>
+          <el-menu-item index="/system/orders" v-if="role === 'admin'"> <el-icon>
+              <Money />
+            </el-icon>
+            <span>{{ $t('menu.orders') }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/classes">
-            <el-icon><School /></el-icon> <span>{{ $t('menu.classes') }}</span>
+          <el-menu-item index="/system/classes"> <el-icon>
+              <School />
+            </el-icon>
+            <span>{{ $t('menu.classes') }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/users" v-if="role === 'admin'">
-            <el-icon><Tools /></el-icon>
+          <el-menu-item index="/system/users" v-if="role === 'admin'"> <el-icon>
+              <Tools />
+            </el-icon>
             <span>{{ $t('menu.users') }}</span>
+          </el-menu-item>
+
+          <el-menu-item index="PORTAL_LINK" @click="goHome">
+            <el-icon>
+              <HomeFilled />
+            </el-icon>
+            <span>返回门户首页</span>
           </el-menu-item>
         </el-menu>
       </el-aside>
@@ -43,9 +61,9 @@
       <el-container>
         <el-header class="header">
           <span>{{ $t('header.welcome') }}</span>
-          
+
           <div class="header-right">
-             <el-dropdown @command="handleLangCommand" style="margin-right: 20px; cursor: pointer;">
+            <el-dropdown @command="handleLangCommand" style="margin-right: 20px; cursor: pointer;">
               <span class="lang-switch-dark">
                 🌐 {{ currentLang === 'zh' ? '中文' : 'English' }}
               </span>
@@ -70,7 +88,7 @@
 </template>
 
 <script setup>
-import { Odometer, User, Calendar, Money, School, Tools, MapLocation } from '@element-plus/icons-vue';
+import { Odometer, User, Calendar, Money, School, Tools, MapLocation, HomeFilled } from '@element-plus/icons-vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { ref } from 'vue';
@@ -92,6 +110,10 @@ const handleLogout = () => {
   ElMessage.success('Logout success');
 };
 
+const goHome = () => {
+  router.push('/');
+};
+
 // 切换语言
 const handleLangCommand = (command) => {
   locale.value = command;
@@ -106,10 +128,12 @@ const handleLangCommand = (command) => {
 .el-container {
   height: 100vh;
 }
+
 .aside-menu {
   background-color: #545c64;
   color: white;
 }
+
 .logo {
   height: 60px;
   line-height: 60px;
@@ -118,6 +142,7 @@ const handleLangCommand = (command) => {
   font-size: 18px;
   background-color: #434a50;
 }
+
 .header {
   background-color: #fff;
   border-bottom: 1px solid #ddd;
@@ -125,16 +150,26 @@ const handleLangCommand = (command) => {
   justify-content: space-between;
   align-items: center;
 }
+
 .header-right {
   display: flex;
   align-items: center;
 }
+
 .main-content {
   background-color: #f0f2f5;
   padding: 20px;
 }
+
 .lang-switch-dark {
   font-size: 14px;
   color: #606266;
+}
+
+.el-menu-vertical-demo {
+  /* 确保菜单使用 flex 布局 */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 </style>

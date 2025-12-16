@@ -58,7 +58,7 @@
 
         <el-table-column :label="$t('common.action')" width="300">
           <template #default="scope">
-            <el-button size="small" link @click="$router.push(`/students/${scope.row.id}`)">{{ $t('common.detail') }}</el-button>
+            <el-button size="small" link @click="$router.push(`/system/students/${scope.row.id}`)">{{ $t('common.detail') }}</el-button>
             <el-button size="small" type="primary" link @click="openEnrollDialog(scope.row)">{{ $t('student.btnEnroll') }}</el-button>
             <el-button size="small" type="success" link @click="openEditDialog(scope.row)">{{ $t('common.edit') }}</el-button>
             <el-button v-if="role === 'admin'" size="small" type="warning" link @click="openDropDialog(scope.row)">{{ $t('student.btnDrop') }}</el-button>

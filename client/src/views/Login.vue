@@ -18,22 +18,24 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-
-        <el-button round class="nav-login-btn" @click="showLoginModal">{{ $t('login.navBtn') }}</el-button>
+        
+        <el-button v-if="!isLoggedIn" round class="nav-login-btn" @click="showLoginModal">
+          {{ $t('login.navBtn') }}
+        </el-button>
+        <el-button v-else round class="nav-login-btn" type="primary" plain @click="showLoginModal">
+          <el-icon style="margin-right: 5px"><User /></el-icon>
+          {{ userInfo.real_name || userInfo.username }}
+        </el-button>
       </div>
     </header>
 
     <main class="hero-section">
       <div class="hero-content">
-        <h1 class="slogan">
-          {{ $t('login.slogan') }}
-        </h1>
-        <p class="sub-slogan">
-          {{ $t('login.subSlogan') }}
-        </p>
+        <h1 class="slogan">{{ $t('login.slogan') }}</h1>
+        <p class="sub-slogan">{{ $t('login.subSlogan') }}</p>
         <div class="hero-actions">
           <el-button type="primary" size="large" class="cta-btn" @click="showLoginModal">
-            {{ $t('login.ctaBtn') }}
+            {{ isLoggedIn ? `欢迎回来，进入系统` : $t('login.ctaBtn') }}
             <el-icon class="el-icon--right"><Right /></el-icon>
           </el-button>
         </div>
@@ -69,98 +71,117 @@
       </div>
     </section>
 
-    <section class="contact-section">
-      <div class="contact-container">
-        <h2 class="section-title">🤝 {{ $t('login.contact') }}</h2>
-        <div class="contact-grid">
-          <div class="contact-card">
-            <div class="icon-box mobile"><el-icon><Phone /></el-icon></div>
-            <div class="info">
-              <div class="label">{{ $t('login.phone') }}</div>
-              <div class="value">18504254380</div>
-            </div>
-          </div>
-          <div class="contact-card">
-            <div class="icon-box email"><el-icon><Message /></el-icon></div>
-            <div class="info">
-              <div class="label">{{ $t('login.email') }}</div>
-              <div class="value email-text">
-                <div>zy54321game@gmail.com</div>
-                <div>the_zy_email@163.com</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <footer class="footer">
-      <p>© 2025 SmartCare System. Designed for Education.</p>
-    </footer>
-
-    <el-dialog v-model="loginVisible" :title="$t('login.dialogTitle')" width="400px" align-center class="login-dialog">
-      <div class="dialog-header">
-        <p>{{ $t('login.dialogSub') }}</p>
-        <el-tag type="warning" effect="plain" class="visitor-tag" @click="fillVisitor">
-          ⚡️ {{ $t('login.visitor') }}: visitor / 123456
+    <el-dialog 
+      v-model="loginVisible" 
+      :title="dialogTitle" 
+      width="400px" 
+      align-center 
+      class="login-dialog"
+    >
+      <div v-if="isLoggedIn" class="welcome-back-card">
+        <el-avatar :size="80" src="https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png" />
+        <h3>{{ $t('login.dialogTitle') }}, {{ userInfo.real_name || userInfo.username }}</h3>
+        
+        <el-tag type="info" style="margin-bottom: 20px;">
+          {{ targetSystemName }}
         </el-tag>
+        
+        <el-button type="primary" size="large" class="full-width-btn" @click="handleEnterSystem">
+          🚀 立即进入
+        </el-button>
+        
+        <el-button link type="info" style="margin-top: 15px;" @click="handleLogout">
+          切换账号
+        </el-button>
       </div>
 
-      <el-form :model="loginForm" :rules="rules" ref="loginFormRef" size="large" @keyup.enter="handleLogin">
-        <el-form-item prop="username">
-          <el-input v-model="loginForm.username" :placeholder="$t('login.usernamePlaceholder')" :prefix-icon="User" />
-        </el-form-item>
-        <el-form-item prop="password">
-          <el-input v-model="loginForm.password" type="password" :placeholder="$t('login.passwordPlaceholder')" :prefix-icon="Lock" show-password />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" :loading="loading" class="full-width-btn" @click="handleLogin">
-            {{ $t('login.loginBtn') }}
-          </el-button>
-        </el-form-item>
-      </el-form>
+      <div v-else>
+        <div class="dialog-header">
+          <p>{{ $t('login.dialogSub') }}</p>
+          <el-tag type="warning" effect="plain" class="visitor-tag" @click="fillVisitor">
+            ⚡️ {{ $t('login.visitor') }}: visitor / 123456
+          </el-tag>
+        </div>
+
+        <el-form :model="loginForm" :rules="rules" ref="loginFormRef" size="large" @keyup.enter="handleLogin">
+          <el-form-item prop="username">
+            <el-input v-model="loginForm.username" :placeholder="$t('login.usernamePlaceholder')" :prefix-icon="User" />
+          </el-form-item>
+          <el-form-item prop="password">
+            <el-input v-model="loginForm.password" type="password" :placeholder="$t('login.passwordPlaceholder')" :prefix-icon="Lock" show-password />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="loading" class="full-width-btn" @click="handleLogin">
+              {{ $t('login.loginBtn') }}
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </div>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { User, Lock, Right, Phone, Message, ArrowDown } from '@element-plus/icons-vue';
+import { User, Lock, Right, ArrowDown } from '@element-plus/icons-vue';
 import axios from 'axios';
-import { useI18n } from 'vue-i18n'; // 👈 引入 hook
+import { useI18n } from 'vue-i18n';
 
-const { locale, t } = useI18n(); // 👈 获取 i18n 实例
-const currentLang = ref(locale.value); // 当前语言状态
-
-// 切换语言逻辑
-const handleLangCommand = (command) => {
-  locale.value = command;
-  currentLang.value = command;
-  localStorage.setItem('lang', command); // 记住选择
-  ElMessage.success(command === 'zh' ? '已切换至中文' : 'Switched to English');
-};
-
+const { locale, t } = useI18n();
 const router = useRouter();
+const route = useRoute();
+
+const currentLang = ref(locale.value);
+// 🟢 优化 1: 默认不弹窗，除非用户点击
 const loginVisible = ref(false);
 const loginFormRef = ref(null);
 const loading = ref(false);
-
 const loginForm = reactive({ username: '', password: '' });
 
-// 校验规则也建议稍微改下，不过暂时不改也没事，重点是 UI
+// 🟢 状态管理
+const isLoggedIn = ref(false);
+const userInfo = ref({});
+
 const rules = {
   username: [{ required: true, message: 'Required', trigger: 'blur' }],
   password: [{ required: true, message: 'Required', trigger: 'blur' }]
 };
 
+// 🟢 计算属性：判断去向
+const targetPath = computed(() => route.query.redirect || '/system/dashboard');
+const targetSystemName = computed(() => {
+  if (targetPath.value.includes('/strategy')) return '战略作战指挥室';
+  return '教务管理系统';
+});
+// 弹窗标题
+const dialogTitle = computed(() => isLoggedIn.value ? '身份确认' : t('login.loginBtn'));
+
+onMounted(() => {
+  const token = localStorage.getItem('user_token');
+  const infoStr = localStorage.getItem('user_info');
+  
+  if (token && infoStr) {
+    isLoggedIn.value = true;
+    userInfo.value = JSON.parse(infoStr);
+  }
+  
+  // 注意：即使有 redirect 参数，我们也不自动弹窗了，遵守你的"不强制弹窗"约定。
+  // 用户看到 Login 页面介绍后，手动点击按钮才会触发 loginVisible = true
+});
+
 const showLoginModal = () => { loginVisible.value = true; };
+
+const handleLangCommand = (command) => {
+  locale.value = command;
+  currentLang.value = command;
+  localStorage.setItem('lang', command);
+};
 
 const fillVisitor = () => {
   loginForm.username = 'visitor';
   loginForm.password = '123456';
-  ElMessage.success(t('login.visitor') + ' OK');
 };
 
 const handleLogin = async () => {
@@ -171,16 +192,16 @@ const handleLogin = async () => {
       try {
         const res = await axios.post('/api/login', loginForm);
         if (res.data.code === 200) {
-          ElMessage.success(t('login.loginBtn') + ' Success');
           localStorage.setItem('user_token', 'logged_in');
           localStorage.setItem('user_info', JSON.stringify(res.data.data));
-          loginVisible.value = false;
-          router.push('/');
+          
+          ElMessage.success('登录成功');
+          // 登录成功直接跳转
+          router.push(targetPath.value);
         } else {
           ElMessage.error(res.data.msg || 'Login Failed');
         }
       } catch (err) {
-        console.error(err);
         ElMessage.error('Server Error');
       } finally {
         loading.value = false;
@@ -188,10 +209,25 @@ const handleLogin = async () => {
     }
   });
 };
+
+// 已登录状态下，点击进入系统
+const handleEnterSystem = () => {
+  router.push(targetPath.value);
+};
+
+// 切换账号
+const handleLogout = () => {
+  localStorage.removeItem('user_token');
+  localStorage.removeItem('user_info');
+  isLoggedIn.value = false;
+  loginForm.username = '';
+  loginForm.password = '';
+  // 保持弹窗打开，显示表单
+};
 </script>
 
 <style scoped>
-/* 保持原有样式不变，这里省略以节省篇幅 */
+/* 保持原有样式 */
 .landing-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -219,14 +255,25 @@ const handleLogin = async () => {
 }
 .nav-login-btn {
   font-weight: 600;
-  color: #606266;
-  border-color: #dcdfe6;
+  /* color: #606266; */ /* Element Plus type="primary" 会处理颜色 */
+  /* border-color: #dcdfe6; */
 }
-.nav-login-btn:hover {
-  color: #409EFF;
-  border-color: #c6e2ff;
-  background-color: #ecf5ff;
+/* ...其他原有样式... */
+
+.welcome-back-card {
+  text-align: center;
+  padding: 10px 0;
 }
+.welcome-back-card h3 {
+  margin: 15px 0 5px;
+  color: #303133;
+}
+.full-width-btn {
+  width: 100%;
+  font-weight: bold;
+}
+/* 这里省略重复的 hero/feature CSS，请保留原文件中的其他样式 */
+/* ... */
 .hero-section {
   display: flex;
   align-items: center;
@@ -243,11 +290,6 @@ const handleLogin = async () => {
   margin-bottom: 24px;
   font-weight: 900;
   color: #1a1a1a;
-}
-.highlight {
-  background: linear-gradient(120deg, #409EFF 0%, #67C23A 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 .sub-slogan {
   font-size: 18px;
@@ -324,72 +366,6 @@ const handleLogin = async () => {
   color: #909399;
   line-height: 1.6;
 }
-.contact-section {
-  padding: 60px 10%;
-  background: #fdfbfb;
-  border-top: 1px solid #ebeef5;
-}
-.section-title {
-  text-align: center;
-  font-size: 24px;
-  margin-bottom: 40px;
-  color: #303133;
-}
-.contact-grid {
-  display: flex;
-  justify-content: center;
-  gap: 30px;
-  flex-wrap: wrap;
-}
-.contact-card {
-  background: white;
-  padding: 25px 40px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  min-width: 300px;
-  transition: transform 0.2s;
-}
-.contact-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
-}
-.icon-box {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  color: white;
-}
-.icon-box.mobile { background: linear-gradient(135deg, #36d1dc 0%, #5b86e5 100%); }
-.icon-box.email { background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%); }
-.info .label {
-  font-size: 13px;
-  color: #909399;
-  margin-bottom: 5px;
-}
-.info .value {
-  font-size: 16px;
-  font-weight: bold;
-  color: #303133;
-}
-.email-text {
-  font-size: 14px;
-  line-height: 1.4;
-}
-.footer {
-  text-align: center;
-  padding: 40px;
-  color: #909399;
-  font-size: 14px;
-  background: white;
-  border-top: 1px solid #ebeef5;
-}
 .dialog-header {
   text-align: center;
   margin-bottom: 25px;
@@ -404,10 +380,6 @@ const handleLogin = async () => {
 }
 .visitor-tag:hover {
   transform: scale(1.05);
-}
-.full-width-btn {
-  width: 100%;
-  font-weight: bold;
 }
 .lang-switch {
   font-size: 14px;
