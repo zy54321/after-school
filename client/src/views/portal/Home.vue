@@ -1,11 +1,13 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { Location } from '@element-plus/icons-vue';
+import { Location, User, Lock } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import axios from 'axios';
 
 const router = useRouter();
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 
 const currentLang = ref(locale.value);
 
@@ -15,11 +17,122 @@ const handleLangCommand = (command) => {
   localStorage.setItem('lang', command);
 };
 
+// 🟢 登录相关状态
+const loginVisible = ref(false);
+const loginFormRef = ref(null);
+const loading = ref(false);
+const loginForm = reactive({ username: '', password: '' });
+const isLoggedIn = ref(false);
+const userInfo = ref({});
+const shouldRedirectAfterLogin = ref(false); // 标记登录后是否需要跳转
+
+const rules = {
+  username: [{ required: true, message: 'Required', trigger: 'blur' }],
+  password: [{ required: true, message: 'Required', trigger: 'blur' }]
+};
+
+// 🟢 格式化显示用户名：游客账号只显示"游客"
+const displayUserName = computed(() => {
+  if (!userInfo.value) return '';
+  if (userInfo.value.username === 'visitor') {
+    return '游客';
+  }
+  return userInfo.value.real_name || userInfo.value.username;
+});
+
+onMounted(() => {
+  const token = localStorage.getItem('user_token');
+  const infoStr = localStorage.getItem('user_info');
+
+  if (token && infoStr) {
+    isLoggedIn.value = true;
+    userInfo.value = JSON.parse(infoStr);
+  }
+});
+
+const showLoginModal = () => {
+  shouldRedirectAfterLogin.value = false; // 右上角登录按钮，不需要跳转
+  loginVisible.value = true;
+};
+
 const handleSystemClick = () => {
-  router.push({
-    name: 'Login',
-    query: { redirect: '/system/dashboard' }
+  // 如果已登录，直接跳转到系统介绍页
+  if (isLoggedIn.value) {
+    router.push({
+      name: 'Login',
+      query: { redirect: '/system/dashboard' }
+    });
+  } else {
+    // 未登录，提示需要登录
+    ElMessageBox.confirm(
+      '请先登录以访问教务管理系统',
+      '提示',
+      {
+        confirmButtonText: '去登录',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    ).then(() => {
+      shouldRedirectAfterLogin.value = true; // 点击卡片后登录，需要跳转
+      loginVisible.value = true;
+    }).catch(() => {
+      // 用户取消
+    });
+  }
+};
+
+const fillVisitor = () => {
+  loginForm.username = 'visitor';
+  loginForm.password = '123456';
+};
+
+const handleLogin = async () => {
+  if (!loginFormRef.value) return;
+  await loginFormRef.value.validate(async (valid) => {
+    if (valid) {
+      loading.value = true;
+      try {
+        const res = await axios.post('/api/login', loginForm);
+        if (res.data.code === 200) {
+          localStorage.setItem('user_token', 'logged_in');
+          localStorage.setItem('user_info', JSON.stringify(res.data.data));
+
+          // 更新登录状态
+          isLoggedIn.value = true;
+          userInfo.value = res.data.data;
+
+          ElMessage.success('登录成功');
+          loginVisible.value = false;
+          
+          // 根据来源决定是否跳转
+          if (shouldRedirectAfterLogin.value) {
+            // 点击卡片后登录，跳转到系统介绍页
+            router.push({
+              name: 'Login',
+              query: { redirect: '/system/dashboard' }
+            });
+          }
+          // 否则保持当前页面（右上角登录按钮）
+        } else {
+          ElMessage.error(res.data.msg || 'Login Failed');
+        }
+      } catch (err) {
+        ElMessage.error('Server Error');
+      } finally {
+        loading.value = false;
+      }
+    }
   });
+};
+
+// 切换账号
+const handleLogout = () => {
+  localStorage.removeItem('user_token');
+  localStorage.removeItem('user_info');
+  isLoggedIn.value = false;
+  userInfo.value = {};
+  loginForm.username = '';
+  loginForm.password = '';
 };
 </script>
 
@@ -381,6 +494,58 @@ const handleSystemClick = () => {
     max-width: 340px;
   }
 }
+
+/* 🟢 登录对话框样式 */
+.login-dialog {
+  z-index: 2000;
+}
+
+.welcome-back-card {
+  text-align: center;
+  padding: 10px 0;
+}
+
+.welcome-back-card h3 {
+  margin: 15px 0 5px;
+  color: #303133;
+}
+
+.full-width-btn {
+  width: 100%;
+  font-weight: bold;
+}
+
+.dialog-header {
+  text-align: center;
+  margin-bottom: 25px;
+}
+
+.dialog-header p {
+  margin: 0 0 10px 0;
+  color: #606266;
+}
+
+.visitor-tag {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.visitor-tag:hover {
+  transform: scale(1.05);
+}
+
+/* 🟢 导航栏登录按钮样式 */
+.nav-login-btn {
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.nav-login-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
 </style>
 
 <template>
@@ -405,6 +570,19 @@ const handleSystemClick = () => {
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+        <!-- 🟢 登录按钮 -->
+        <el-button v-if="!isLoggedIn" round class="nav-login-btn" @click="showLoginModal" style="margin-left: 15px;">
+          <el-icon style="margin-right: 5px">
+            <User />
+          </el-icon>
+          {{ $t('login.navBtn') }}
+        </el-button>
+        <el-button v-else round class="nav-login-btn" type="primary" plain @click="showLoginModal" style="margin-left: 15px;">
+          <el-icon style="margin-right: 5px">
+            <User />
+          </el-icon>
+          {{ displayUserName }}
+        </el-button>
       </div>
     </header>
 
@@ -467,5 +645,40 @@ const handleSystemClick = () => {
 
     <div class="bg-orb orb-1"></div>
     <div class="bg-orb orb-2"></div>
+
+    <!-- 🟢 登录对话框 -->
+    <el-dialog v-model="loginVisible" :title="$t('login.loginBtn')" width="400px" align-center class="login-dialog">
+      <div v-if="isLoggedIn" class="welcome-back-card">
+        <el-avatar :size="80" src="https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png" />
+        <h3>{{ $t('login.identityTitle') }}, {{ displayUserName }}</h3>
+        <el-button link type="info" style="margin-top: 15px;" @click="handleLogout">
+          {{ $t('login.switchAccount') }}
+        </el-button>
+      </div>
+
+      <div v-else>
+        <div class="dialog-header">
+          <p>{{ $t('login.dialogSub') }}</p>
+          <el-tag type="warning" effect="plain" class="visitor-tag" @click="fillVisitor">
+            ⚡️ {{ $t('login.visitor') }}: visitor / 123456
+          </el-tag>
+        </div>
+
+        <el-form :model="loginForm" :rules="rules" ref="loginFormRef" size="large" @keyup.enter="handleLogin">
+          <el-form-item prop="username">
+            <el-input v-model="loginForm.username" :placeholder="$t('login.usernamePlaceholder')" :prefix-icon="User" />
+          </el-form-item>
+          <el-form-item prop="password">
+            <el-input v-model="loginForm.password" type="password" :placeholder="$t('login.passwordPlaceholder')"
+              :prefix-icon="Lock" show-password />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="loading" class="full-width-btn" @click="handleLogin">
+              {{ $t('login.loginBtn') }}
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </div>
+    </el-dialog>
   </div>
 </template>

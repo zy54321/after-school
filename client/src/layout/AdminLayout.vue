@@ -106,7 +106,7 @@ const role = userInfo.role || 'teacher';
 const handleLogout = () => {
   localStorage.removeItem('user_token');
   localStorage.removeItem('user_info');
-  router.push('/login');
+  router.push('/');
   ElMessage.success('Logout success');
 };
 

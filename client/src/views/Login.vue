@@ -35,7 +35,7 @@
           <el-icon style="margin-right: 5px">
             <User />
           </el-icon>
-          {{ userInfo.real_name || userInfo.username }}
+          {{ displayUserName }}
         </el-button>
       </div>
     </header>
@@ -45,8 +45,14 @@
         <h1 class="slogan">{{ $t('login.slogan') }}</h1>
         <p class="sub-slogan">{{ $t('login.subSlogan') }}</p>
         <div class="hero-actions">
-          <el-button type="primary" size="large" class="cta-btn" @click="showLoginModal">
-            {{ isLoggedIn ? `🚀 ${$t('login.welcomeBackAction')}` : $t('login.ctaBtn') }}
+          <el-button v-if="!isLoggedIn" type="primary" size="large" class="cta-btn" @click="showLoginModal">
+            {{ $t('login.ctaBtn') }}
+            <el-icon class="el-icon--right">
+              <Right />
+            </el-icon>
+          </el-button>
+          <el-button v-else type="primary" size="large" class="cta-btn" @click="handleEnterSystem">
+            🚀 {{ $t('login.enterNow') }}
             <el-icon class="el-icon--right">
               <Right />
             </el-icon>
@@ -133,7 +139,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { User, Lock, Right, ArrowDown } from '@element-plus/icons-vue';
+import { User, Lock, Right, ArrowDown, HomeFilled } from '@element-plus/icons-vue';
 import axios from 'axios';
 import { useI18n } from 'vue-i18n';
 
@@ -156,6 +162,15 @@ const rules = {
   username: [{ required: true, message: 'Required', trigger: 'blur' }],
   password: [{ required: true, message: 'Required', trigger: 'blur' }]
 };
+
+// 🟢 格式化显示用户名：游客账号只显示"游客"
+const displayUserName = computed(() => {
+  if (!userInfo.value) return '';
+  if (userInfo.value.username === 'visitor') {
+    return '游客';
+  }
+  return userInfo.value.real_name || userInfo.value.username;
+});
 
 // 🟢 计算属性：判断去向
 const targetPath = computed(() => route.query.redirect || '/system/dashboard');
@@ -203,9 +218,13 @@ const handleLogin = async () => {
           localStorage.setItem('user_token', 'logged_in');
           localStorage.setItem('user_info', JSON.stringify(res.data.data));
 
+          // 更新登录状态
+          isLoggedIn.value = true;
+          userInfo.value = res.data.data;
+
           ElMessage.success('登录成功');
-          // 登录成功直接跳转
-          router.push(targetPath.value);
+          // 登录成功后保持对话框打开，显示"进入系统"按钮
+          // loginVisible.value = false; // 注释掉，让对话框保持打开
         } else {
           ElMessage.error(res.data.msg || 'Login Failed');
         }

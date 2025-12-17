@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Login from '../views/Login.vue'
 
 // 引入新的布局组件
 // 注意：原 Layout.vue 已重命名为 AdminLayout.vue
@@ -21,11 +20,11 @@ const routes = [
     ]
   },
 
-  // 2. 登录页 - 独立
+  // 2. 登录页 - 独立页面（保留原有功能）
   {
     path: '/login',
     name: 'Login',
-    component: Login
+    component: () => import('../views/Login.vue')
   },
 
   // 3. 教务系统层 (System) - 需鉴权
@@ -102,14 +101,14 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('user_token')
 
-  // 1. 需要登录，但没 Token -> 踢回登录页，并带上目标路径
+  // 1. 需要登录，但没 Token -> 跳转到登录页，并带上目标路径
   if (to.meta.requiresAuth && !token) {
     next({ 
       path: '/login', 
       query: { redirect: to.fullPath } 
     });
   } 
-  // 2. [修改点] 已登录，还想去登录页 -> 放行 (允许用户看到"欢迎回来"页面)
+  // 2. 已登录，还想去登录页 -> 允许访问（用户可能想查看介绍或切换账号）
   else if (to.path === '/login' && token) {
     next(); 
   }

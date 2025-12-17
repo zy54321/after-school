@@ -22,16 +22,16 @@
     <aside class="hud-panel left-panel glass-panel">
       <div class="panel-title">{{ t('strategy.arsenal') }}</div>
       <div class="tool-grid">
-        <el-button size="small" class="tool-btn" @click="startDraw('point')">
+        <el-button size="small" class="tool-btn" @click="startDraw('point')" :disabled="!isAdmin">
           <span class="tool-icon">📍</span> {{ t('strategy.actions.point') }}
         </el-button>
-        <el-button size="small" class="tool-btn" @click="startDraw('line')">
+        <el-button size="small" class="tool-btn" @click="startDraw('line')" :disabled="!isAdmin">
           <span class="tool-icon">〰️</span> {{ t('strategy.actions.line') }}
         </el-button>
-        <el-button size="small" class="tool-btn" @click="startDraw('polygon')">
+        <el-button size="small" class="tool-btn" @click="startDraw('polygon')" :disabled="!isAdmin">
           <span class="tool-icon">⬡</span> {{ t('strategy.actions.polygon') }}
         </el-button>
-        <el-button size="small" class="tool-btn delete-btn" type="danger" @click="handleDelete" :disabled="!canDelete">
+        <el-button size="small" class="tool-btn delete-btn" type="danger" @click="handleDelete" :disabled="!canDelete || !isAdmin">
           <span class="tool-icon">🗑️</span> {{ t('strategy.actions.delete') }}
         </el-button>
       </div>
@@ -132,6 +132,12 @@ const toggleLang = () => {
   locale.value = locale.value === 'zh' ? 'en' : 'zh';
   ElMessage.success(`Language switched to ${locale.value.toUpperCase()}`);
 };
+
+// 🟢 权限控制：获取用户角色
+const userInfoStr = localStorage.getItem('user_info');
+const userInfo = userInfoStr ? JSON.parse(userInfoStr) : {};
+const userRole = userInfo.role || 'visitor'; // 默认为游客
+const isAdmin = computed(() => userRole === 'admin'); // 只有 admin 可以添加和删除
 
 const saving = ref(false);
 const isCanceling = ref(false);
@@ -281,14 +287,14 @@ const initMap = () => {
     // pitch: 90
   });
 
-  // 🟢 初始化绘图控件
+  // 🟢 初始化绘图控件（只有 admin 才启用）
   draw.value = new MapboxDraw({
     displayControlsDefault: false,
     controls: {
-      point: true,
-      line_string: true,
-      polygon: true,
-      trash: true
+      point: isAdmin.value,
+      line_string: isAdmin.value,
+      polygon: isAdmin.value,
+      trash: isAdmin.value
     },
     // 👇 请完全覆盖 styles 数组
     styles: [
@@ -459,6 +465,11 @@ const initMap = () => {
 
 // === 绘制逻辑 ===
 const startDraw = (type) => {
+  // 🟢 权限检查：只有 admin 可以绘制
+  if (!isAdmin.value) {
+    ElMessage.warning('游客权限仅可查看，无法添加数据');
+    return;
+  }
   viewModeFeature.value = null; // 开始画图时，关闭详情面板
   if (type === 'point') draw.value.changeMode('draw_point');
   if (type === 'line') draw.value.changeMode('draw_line_string');
@@ -470,6 +481,12 @@ const canDelete = computed(() => {
   return !!drawSelectedId.value || !!viewModeFeature.value;
 });
 const handleDelete = async () => {
+  // 🟢 权限检查：只有 admin 可以删除
+  if (!isAdmin.value) {
+    ElMessage.warning('游客权限仅可查看，无法删除数据');
+    return;
+  }
+
   // 场景 1: 删除正在绘制/选中的草稿 (Mapbox Draw)
   if (drawSelectedId.value) {
     draw.value.trash();
