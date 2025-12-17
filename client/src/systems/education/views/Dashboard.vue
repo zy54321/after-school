@@ -106,10 +106,9 @@
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
-import { useI18n } from 'vue-i18n'; // 引入 i18n
+import { useI18n } from 'vue-i18n';
 const { t } = useI18n();
 
-// 响应式数据
 const stats = ref({
   totalStudents: 0,
   todayCheckins: 0,
@@ -124,7 +123,6 @@ const loading = ref(false);
 const userInfoStr = localStorage.getItem('user_info');
 const role = userInfoStr ? JSON.parse(userInfoStr).role : 'teacher';
 
-// 格式化时间的小工具
 const formatTime = (isoString) => {
   const date = new Date(isoString);
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -154,7 +152,7 @@ const fetchDashboardData = async () => {
     }
   } catch (error) {
     console.error('Failed to fetch dashboard data', error);
-    ElMessage.error(t('common.failed')); // 使用翻译
+    ElMessage.error(t('common.failed'));
   } finally {
     loading.value = false;
   }
@@ -185,3 +183,4 @@ onMounted(() => {
   margin-top: 20px;
 }
 </style>
+

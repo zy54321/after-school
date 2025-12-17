@@ -118,7 +118,7 @@ import { useI18n } from 'vue-i18n';
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'; // 🟢 引入绘图样式
+import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import mapboxgl from 'mapbox-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import { Back } from '@element-plus/icons-vue';
@@ -133,28 +133,26 @@ const toggleLang = () => {
   ElMessage.success(`Language switched to ${locale.value.toUpperCase()}`);
 };
 
-// 🟢 权限控制：获取用户角色
+const token = localStorage.getItem('user_token');
 const userInfoStr = localStorage.getItem('user_info');
+
 const userInfo = userInfoStr ? JSON.parse(userInfoStr) : {};
-const userRole = userInfo.role || 'visitor'; // 默认为游客
-const isAdmin = computed(() => userRole === 'admin'); // 只有 admin 可以添加和删除
+const userRole = userInfo.role || 'visitor';
+const isAdmin = computed(() => userRole === 'admin');
+const isVisitor = computed(() => userRole === 'visitor' || userInfo.username === 'visitor');
 
 const saving = ref(false);
 const isCanceling = ref(false);
 
-// 🟢 修改：formatKey 函数，使用 i18n 翻译
 const formatKey = (key) => {
-  // 尝试去 strategy.fields 下找翻译，找不到就显示原 key
   return t(`strategy.fields.${key}`, key);
 };
 
-// === 状态管理 ===
 const currentTime = ref('');
 const map = ref(null);
 const draw = ref(null);
-const drawSelectedId = ref(null); // 当前选中的绘制图形ID
+const drawSelectedId = ref(null);
 
-// 图层开关
 const layers = reactive({
   own: true,
   competitor: true,
@@ -165,34 +163,27 @@ const layers = reactive({
   hotzone: true
 });
 
-// 详情查看模式
 const viewModeFeature = ref(null);
 
-// 表单模式
 const formVisible = ref(false);
 const formData = reactive({
   name: '',
   category: '',
-  featureType: '', // Point, LineString, Polygon
-  properties: {}   // 动态属性
+  featureType: '',
+  properties: {}
 });
 const currentDrawFeatureId = ref(null);
 
-// === 配置：业务分类与颜色 ===
 const categoryConfig = [
-  // 点
   { value: 'own', label: 'strategy.layerItems.own', color: '#409EFF', type: 'Point' },
   { value: 'competitor', label: 'strategy.layerItems.competitor', color: '#F56C6C', type: 'Point' },
   { value: 'school', label: 'strategy.layerItems.school', color: '#67C23A', type: 'Point' },
   { value: 'community', label: 'strategy.layerItems.community', color: '#E6A23C', type: 'Point' },
-  // 线
   { value: 'route', label: 'strategy.layerItems.route', color: '#00FFFF', type: 'LineString' },
   { value: 'block', label: 'strategy.layerItems.block', color: '#FF00FF', type: 'LineString' },
-  // 面
   { value: 'hotzone', label: 'strategy.layerItems.hotzone', color: '#FFFF00', type: 'Polygon' }
 ];
 
-// === 配置：动态表单字段 ===
 const formSchema = {
   competitor: [
     { key: 'price', label: '预估客单价', type: 'number', suffix: '元' },
@@ -214,51 +205,40 @@ const formSchema = {
   ]
 };
 
-// 核心过滤逻辑
 watch(layers, (newVal) => {
   if (!map.value || !map.value.getSource('market-data')) return;
 
-  // 1. 找出所有“开启”的分类
   const activeCategories = Object.keys(newVal).filter(key => newVal[key]);
-
-  // 2. 构造分类过滤器
   const categoryFilter = ['in', ['get', 'category'], ['literal', activeCategories]];
 
-  // 3. 应用过滤器 (注意：要同时处理 本体图层 和 Label图层)
-
-  // === 点 ===
   const pointFilter = ['all', ['==', ['geometry-type'], 'Point'], categoryFilter];
   if (map.value.getLayer('market-points')) {
     map.value.setFilter('market-points', pointFilter);
   }
-  if (map.value.getLayer('market-points-label')) { // 🟢 同步过滤 label
+  if (map.value.getLayer('market-points-label')) {
     map.value.setFilter('market-points-label', pointFilter);
   }
 
-  // === 线 ===
   const lineFilter = ['all', ['==', ['geometry-type'], 'LineString'], categoryFilter];
   if (map.value.getLayer('market-lines')) {
     map.value.setFilter('market-lines', lineFilter);
   }
-  if (map.value.getLayer('market-lines-label')) { // 🟢 同步过滤 label
+  if (map.value.getLayer('market-lines-label')) {
     map.value.setFilter('market-lines-label', lineFilter);
   }
 
-  // === 面 ===
   const polygonFilter = ['all', ['==', ['geometry-type'], 'Polygon'], categoryFilter];
   if (map.value.getLayer('market-polygons')) {
     map.value.setFilter('market-polygons', polygonFilter);
   }
-  if (map.value.getLayer('market-polygons-label')) { // 🟢 同步过滤 label
+  if (map.value.getLayer('market-polygons-label')) {
     map.value.setFilter('market-polygons-label', polygonFilter);
   }
 
 }, { deep: true });
 
-// 计算属性：当前可用的分类 (根据绘制的图形类型过滤)
 const availableCategories = computed(() => {
   if (!formData.featureType) return [];
-  // 简单的类型映射逻辑
   if (formData.featureType === 'Point') {
     return categoryConfig.filter(c => ['own', 'competitor', 'school', 'community'].includes(c.value));
   } else if (formData.featureType === 'LineString') {
@@ -268,12 +248,10 @@ const availableCategories = computed(() => {
   }
 });
 
-// 计算属性：当前表单字段
 const currentFormFields = computed(() => {
   return formSchema[formData.category] || [];
 });
 
-// === 地图初始化 ===
 const initMap = () => {
   const token = import.meta.env.VITE_MAPBOX_TOKEN;
   if (!token) return ElMessage.error('Mapbox Token Missing');
@@ -284,10 +262,8 @@ const initMap = () => {
     style: 'mapbox://styles/mapbox/dark-v11',
     center: [116.397, 39.918],
     zoom: 13,
-    // pitch: 90
   });
 
-  // 🟢 初始化绘图控件（只有 admin 才启用）
   draw.value = new MapboxDraw({
     displayControlsDefault: false,
     controls: {
@@ -296,31 +272,27 @@ const initMap = () => {
       polygon: isAdmin.value,
       trash: isAdmin.value
     },
-    // 👇 请完全覆盖 styles 数组
     styles: [
-      // 1. 线条样式 (只针对 LineString)
       {
         'id': 'gl-draw-line',
         'type': 'line',
         'filter': ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static']],
         'layout': { 'line-cap': 'round', 'line-join': 'round' },
         'paint': {
-          'line-color': '#409EFF', // 科技蓝
-          'line-dasharray': [0.2, 2], // 绘制时显示虚线，更有科技感
+          'line-color': '#409EFF',
+          'line-dasharray': [0.2, 2],
           'line-width': 4
         }
       },
-      // 2. 多边形填充 (只针对 Polygon)
       {
         'id': 'gl-draw-polygon-fill',
         'type': 'fill',
         'filter': ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
         'paint': {
           'fill-color': '#409EFF',
-          'fill-opacity': 0.1 // 淡淡的填充
+          'fill-opacity': 0.1
         }
       },
-      // 3. 多边形轮廓 (只针对 Polygon)
       {
         'id': 'gl-draw-polygon-stroke-active',
         'type': 'line',
@@ -332,7 +304,6 @@ const initMap = () => {
           'line-width': 2
         }
       },
-      // 4. 点位样式 (只针对 Point)
       {
         'id': 'gl-draw-point-active',
         'type': 'circle',
@@ -342,15 +313,13 @@ const initMap = () => {
           'circle-color': '#fff'
         }
       },
-      // 5. 🟢 关键补充：控制点样式 (Vertex)
-      // 如果缺少这个，你在拖拽修改图形时看不到白色的控制点
       {
         'id': 'gl-draw-polygon-and-line-vertex-active',
         'type': 'circle',
         'filter': ['all', ['==', 'meta', 'vertex'], ['!=', 'mode', 'static']],
         'paint': {
           'circle-radius': 5,
-          'circle-color': '#fbb03b' // 橙色控制点，显眼
+          'circle-color': '#fbb03b'
         }
       }
     ]
@@ -359,71 +328,54 @@ const initMap = () => {
 
   map.value.on('load', () => {
     add3DBuildings();
-    fetchFeatures(); // 加载已保存的数据
+    fetchFeatures();
 
-    // 🟢 新增：右键取消绘制
     map.value.on('contextmenu', (e) => {
       const mode = draw.value.getMode();
 
-      // 如果当前是绘图模式 (draw_line_string, draw_polygon, draw_point)
       if (mode.startsWith('draw_')) {
-        // 1. 阻止浏览器默认右键菜单
         e.originalEvent.preventDefault();
 
-        // 2. 标记正在取消
         isCanceling.value = true;
 
-        // 3. 尝试删除当前正在画的要素
         draw.value.trash();
 
-        // 4. 强制退出到选择模式
         draw.value.changeMode('simple_select');
 
-        // 5. 延迟重置标志位 (确保 handleDrawCreate 能读到 true)
         setTimeout(() => {
           isCanceling.value = false;
         }, 200);
       }
     });
 
-    // 🟢 监听绘制事件
     map.value.on('draw.create', handleDrawCreate);
     map.value.on('draw.selectionchange', handleSelectionChange);
   });
 
   map.value.on('click', (e) => {
-    // 1. 如果正在绘图模式，不要触发查看详情 (防止画图时误触)
     if (draw.value.getMode() !== 'simple_select' && draw.value.getMode() !== 'direct_select') {
       return;
     }
 
-    // 2. 查询鼠标点击位置的所有目标图层
     const interactLayers = ['market-points', 'market-lines', 'market-polygons'];
-    // queryRenderedFeatures 会自动按照图层层级排序，最上面的图层在数组第 0 位
     const features = map.value.queryRenderedFeatures(e.point, {
       layers: interactLayers
     });
 
-    // 3. 如果没点到任何东西，直接返回
     if (!features.length) {
-      viewModeFeature.value = null; // ✨ 点击空白处，关闭窗口
+      viewModeFeature.value = null;
       return;
     }
 
-    // 4. 只取第一个（也就是最上面的那个）
     const feature = features[0];
 
-    // 如果点击了已存数据，强制取消 Mapbox Draw 的选中状态
-    // 避免"既选中了草稿框，又打开了详情面板"的歧义
     if (draw.value.getMode() === 'simple_select') {
       draw.value.changeMode('simple_select', { featureIds: [] });
       drawSelectedId.value = null;
     }
 
-    // 5. 执行原有的详情展示逻辑
     viewModeFeature.value = feature;
 
-    // 🎯 智能聚焦
     if (feature.geometry.type === 'Point') {
       map.value.flyTo({
         center: feature.geometry.coordinates,
@@ -451,7 +403,6 @@ const initMap = () => {
     }
   });
 
-  // 🟢 鼠标手型样式 (依然可以保留分别绑定，互不影响)
   const interactLayers = ['market-points', 'market-lines', 'market-polygons'];
   interactLayers.forEach(layerId => {
     map.value.on('mouseenter', layerId, () => {
@@ -463,31 +414,26 @@ const initMap = () => {
   });
 };
 
-// === 绘制逻辑 ===
 const startDraw = (type) => {
-  // 🟢 权限检查：只有 admin 可以绘制
   if (!isAdmin.value) {
     ElMessage.warning('游客权限仅可查看，无法添加数据');
     return;
   }
-  viewModeFeature.value = null; // 开始画图时，关闭详情面板
+  viewModeFeature.value = null;
   if (type === 'point') draw.value.changeMode('draw_point');
   if (type === 'line') draw.value.changeMode('draw_line_string');
   if (type === 'polygon') draw.value.changeMode('draw_polygon');
 };
 
 const canDelete = computed(() => {
-  // 只要选中了草稿(drawSelectedId) 或者 正在查看详情(viewModeFeature)，按钮就可用
   return !!drawSelectedId.value || !!viewModeFeature.value;
 });
 const handleDelete = async () => {
-  // 🟢 权限检查：只有 admin 可以删除
   if (!isAdmin.value) {
     ElMessage.warning('游客权限仅可查看，无法删除数据');
     return;
   }
 
-  // 场景 1: 删除正在绘制/选中的草稿 (Mapbox Draw)
   if (drawSelectedId.value) {
     draw.value.trash();
     drawSelectedId.value = null;
@@ -495,15 +441,12 @@ const handleDelete = async () => {
     return;
   }
 
-  // 场景 2: 删除已入库的真实数据 (Database)
   if (viewModeFeature.value) {
     const { id, name } = viewModeFeature.value.properties;
 
-    // 1. 获取要显示的名称 (支持国际化兜底)
     const displayName = name || t('strategy.dialogs.defaultData');
 
     try {
-      // 2. 弹出确认框 (完全支持中英文切换)
       await ElMessageBox.confirm(
         t('strategy.dialogs.deleteMsg', { name: displayName }),
         t('strategy.dialogs.deleteTitle'),
@@ -514,20 +457,15 @@ const handleDelete = async () => {
         }
       );
 
-      // 3. 调用后端删除接口
       const res = await axios.delete(`/api/mapbox/features/${id}`);
 
       if (res.data.code === 200) {
-        // 成功提示 (复用 common.success 翻译，或者写死)
         ElMessage.success(t('common.success') || '删除成功');
 
-        // 关闭详情面板
         viewModeFeature.value = null;
 
-        // 刷新地图 (非常重要！)
         fetchFeatures();
       } else {
-        // 处理后端返回的业务错误
         ElMessage.error(res.data.msg || '删除失败');
       }
     } catch (err) {
@@ -543,62 +481,70 @@ const handleSelectionChange = (e) => {
   drawSelectedId.value = e.features.length > 0 ? e.features[0].id : null;
 };
 
-// 🟢 绘制完成 -> 弹出表单
 const handleDrawCreate = (e) => {
-  // 🟢 拦截逻辑：如果是右键取消触发的 create，直接清理掉
+  if (!isAdmin.value) {
+    if (e.features.length > 0) {
+      draw.value.delete(e.features[0].id);
+    }
+    ElMessage.warning('游客权限仅可查看，无法添加数据');
+    return;
+  }
+
   if (isCanceling.value) {
     if (e.features.length > 0) {
-      draw.value.delete(e.features[0].id); // 彻底删除残留图形
+      draw.value.delete(e.features[0].id);
     }
-    return; // 不弹窗，直接结束
+    return;
   }
 
   const feature = e.features[0];
   currentDrawFeatureId.value = feature.id;
 
-  // 初始化表单
   formData.name = '';
   formData.category = '';
-  formData.featureType = feature.geometry.type; // Point, LineString...
+  formData.featureType = feature.geometry.type;
   formData.properties = {};
 
   formVisible.value = true;
 };
 
-// 取消绘制
 const cancelDraw = () => {
   formVisible.value = false;
   if (currentDrawFeatureId.value) {
-    draw.value.delete(currentDrawFeatureId.value); // 删除刚画的那个
+    draw.value.delete(currentDrawFeatureId.value);
   }
 };
 
-// === 🟢 核心：保存数据 ===
 const saveFeature = async () => {
+  if (!isAdmin.value) {
+    ElMessage.warning('游客权限仅可查看，无法添加数据');
+    formVisible.value = false;
+    if (currentDrawFeatureId.value) {
+      draw.value.delete(currentDrawFeatureId.value);
+    }
+    return;
+  }
+
   if (!formData.name || !formData.category) return ElMessage.warning('请填写完整信息');
 
   saving.value = true;
   try {
-    // 1. 获取几何数据
     const feature = draw.value.get(currentDrawFeatureId.value);
 
-    // 2. 构造 Payload
     const payload = {
       name: formData.name,
       feature_type: formData.featureType,
       category: formData.category,
-      properties: formData.properties, // 动态属性
+      properties: formData.properties,
       geometry: feature.geometry
     };
 
-    // 3. 发送给后端
     const res = await axios.post('/api/mapbox/features', payload);
 
     if (res.data.code === 200) {
       ElMessage.success('数据已入库');
       formVisible.value = false;
 
-      // 4. 清理绘制图层，重新加载所有数据 (让新数据变成不可编辑的图层)
       draw.value.delete(currentDrawFeatureId.value);
       fetchFeatures();
     }
@@ -610,21 +556,17 @@ const saveFeature = async () => {
   }
 };
 
-// === 加载已保存数据 ===
 const fetchFeatures = async () => {
   try {
-    // 增加 ?t=... 时间戳，强制浏览器不缓存，每次都从服务器拉取最新数据
     const res = await axios.get(`/api/mapbox/features?t=${new Date().getTime()}`);
     if (res.data.code === 200) {
       const geojson = res.data.data;
 
-      // 更新数据源
       if (map.value.getSource('market-data')) {
         map.value.getSource('market-data').setData(geojson);
       } else {
         map.value.addSource('market-data', { type: 'geojson', data: geojson });
 
-        // 渲染面
         map.value.addLayer({
           id: 'market-polygons',
           type: 'fill',
@@ -640,26 +582,24 @@ const fetchFeatures = async () => {
             'fill-opacity': 0.3
           }
         });
-        // 面的文字标签
         map.value.addLayer({
           id: 'market-polygons-label',
           type: 'symbol',
           source: 'market-data',
           filter: ['==', '$type', 'Polygon'],
           layout: {
-            'text-field': ['get', 'name'], // 显示 name 字段
-            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], // 字体
+            'text-field': ['get', 'name'],
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
             'text-size': 12,
-            'text-allow-overlap': false // 避免文字重叠拥挤
+            'text-allow-overlap': false
           },
           paint: {
             'text-color': '#fff',
-            'text-halo-color': '#000', // 文字描边，确保在深色/浅色背景都看清
+            'text-halo-color': '#000',
             'text-halo-width': 1
           }
         });
 
-        // 渲染线
         map.value.addLayer({
           id: 'market-lines',
           type: 'line',
@@ -676,7 +616,6 @@ const fetchFeatures = async () => {
             'line-width': 4
           }
         });
-        // 线的文字标签 (沿线显示)
         map.value.addLayer({
           id: 'market-lines-label',
           type: 'symbol',
@@ -686,8 +625,8 @@ const fetchFeatures = async () => {
             'text-field': ['get', 'name'],
             'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
             'text-size': 12,
-            'symbol-placement': 'line', // ✨ 关键：让文字沿着线走
-            'text-offset': [0, 1]       // 稍微偏离线一点，不要压住线
+            'symbol-placement': 'line',
+            'text-offset': [0, 1]
           },
           paint: {
             'text-color': '#fff',
@@ -696,7 +635,6 @@ const fetchFeatures = async () => {
           }
         });
 
-        // 渲染点 (保持之前的样式)
         map.value.addLayer({
           id: 'market-points',
           type: 'circle',
@@ -715,7 +653,6 @@ const fetchFeatures = async () => {
             'circle-stroke-width': 1, 'circle-stroke-color': '#fff'
           }
         });
-        // 点的文字标签
         map.value.addLayer({
           id: 'market-points-label',
           type: 'symbol',
@@ -725,8 +662,8 @@ const fetchFeatures = async () => {
             'text-field': ['get', 'name'],
             'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
             'text-size': 12,
-            'text-anchor': 'top',   // 文字在点下方
-            'text-offset': [0, 0.8] // 向下偏移一点
+            'text-anchor': 'top',
+            'text-offset': [0, 0.8]
           },
           paint: {
             'text-color': '#fff',
@@ -735,33 +672,27 @@ const fetchFeatures = async () => {
           }
         });
 
-        // 自动聚焦数据区域 (Auto Fit Bounds)
         if (geojson.features.length > 0) {
-          // 创建一个空的边界框
           const bounds = new mapboxgl.LngLatBounds();
 
           geojson.features.forEach((feature) => {
             const geom = feature.geometry;
 
             if (geom.type === 'Point') {
-              // 点：直接扩展坐标
               bounds.extend(geom.coordinates);
             } else if (geom.type === 'LineString') {
-              // 线：遍历线上每个点扩展
               geom.coordinates.forEach(coord => bounds.extend(coord));
             } else if (geom.type === 'Polygon') {
-              // 面：遍历面上每个点 (面是数组的数组)
               geom.coordinates.forEach(ring => {
                 ring.forEach(coord => bounds.extend(coord));
               });
             }
           });
 
-          // 执行平滑缩放
           map.value.fitBounds(bounds, {
-            padding: 100,  // 四周留白 100px，防止点贴在屏幕边缘
-            maxZoom: 15,   // 最大缩放级别 (防止只有一个点时缩得太近)
-            duration: 2000 // 动画时长 2秒
+            padding: 100,
+            maxZoom: 15,
+            duration: 2000
           });
         }
       }
@@ -771,7 +702,6 @@ const fetchFeatures = async () => {
   }
 };
 
-// 辅助函数
 const handleCategoryChange = () => {
   formData.properties = {};
 };
@@ -782,10 +712,9 @@ const getCategoryLabel = (val) => {
 const getCategoryColor = (val) => categoryConfig.find(c => c.value === val)?.color || '#999';
 const parseProperties = (props) => {
   const { id, name, category, feature_type, ...rest } = props;
-  return rest; // 只显示业务属性
+  return rest;
 };
 const add3DBuildings = () => {
-  // 防止重复添加报错
   if (map.value.getLayer('add-3d-buildings')) return;
 
   const layers = map.value.getStyle().layers;
@@ -802,7 +731,7 @@ const add3DBuildings = () => {
       'type': 'fill-extrusion',
       'minzoom': 13,
       'paint': {
-        'fill-extrusion-color': '#2a3b55', // 建筑颜色
+        'fill-extrusion-color': '#2a3b55',
         'fill-extrusion-height': [
           'interpolate',
           ['linear'],
@@ -828,16 +757,30 @@ const add3DBuildings = () => {
   );
 };
 
-// 周期更新时间
 const updateTime = () => {
   const now = new Date();
   currentTime.value = now.toLocaleTimeString('en-US', { hour12: false });
 };
 
 onMounted(() => {
+  if (!token || !userInfoStr) {
+    router.push({
+      path: '/system/home',
+      query: { redirect: '/strategy/map' }
+    });
+    return;
+  }
+  
   updateTime();
-  setInterval(updateTime, 1000);
+  const timeInterval = setInterval(updateTime, 1000);
   initMap();
+  
+  onUnmounted(() => {
+    if (timeInterval) clearInterval(timeInterval);
+    if (map.value) {
+      map.value.remove();
+    }
+  });
 });
 </script>
 
@@ -853,18 +796,15 @@ onMounted(() => {
   height: 100%;
   background-color: #000;
   overflow: hidden;
-  /* 强制裁剪溢出内容 */
   font-family: 'Inter', sans-serif;
   color: #fff;
 }
 
-/* 确保地图容器也是撑满的 */
 .map-container {
   width: 100%;
   height: 100%;
 }
 
-/* 玻璃面板 */
 .glass-panel {
   background: rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(12px);
@@ -876,7 +816,6 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
-/* 顶部 HUD */
 .hud-header {
   top: 0;
   left: 0;
@@ -909,7 +848,6 @@ onMounted(() => {
   color: #409EFF;
 }
 
-/* 侧边面板 */
 .hud-panel {
   top: 80px;
   bottom: 30px;
@@ -953,7 +891,6 @@ onMounted(() => {
   margin: 20px 0;
 }
 
-/* 工具按钮 */
 .tool-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -965,7 +902,6 @@ onMounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   color: #fff !important;
   justify-content: flex-start !important;
-  /* 强制左对齐 */
   padding-left: 15px !important;
   font-size: 0.9rem !important;
 }
@@ -978,7 +914,6 @@ onMounted(() => {
 .tool-icon {
   display: inline-block;
   width: 24px;
-  /* 固定宽度，确保后面文字对齐 */
   text-align: center;
   margin-right: 8px;
 }
@@ -989,7 +924,6 @@ onMounted(() => {
   color: #555 !important;
 }
 
-/* 列表 */
 .layer-list {
   display: flex;
   flex-direction: column;
@@ -1009,7 +943,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  /* dot 和文字的间距 */
 }
 
 .dot {
@@ -1018,7 +951,6 @@ onMounted(() => {
   border-radius: 50%;
 }
 
-/* 详情 */
 .detail-title {
   margin: 0 0 10px 0;
   font-size: 1.2rem;
@@ -1037,7 +969,6 @@ onMounted(() => {
   color: #fff;
 }
 
-/* 弹窗定制 */
 :deep(.cyber-dialog) {
   background: rgba(16, 23, 40, 0.95) !important;
   border: 1px solid #409EFF;
@@ -1084,3 +1015,4 @@ onMounted(() => {
   display: none !important;
 }
 </style>
+

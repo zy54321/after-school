@@ -154,7 +154,7 @@ const formatDays = (daysStr) => {
   return arr.map(d => t(`class.week.${d}`)).join(', ');
 };
 
-const calculateEndDate = () => { /* 保持原有逻辑 */
+const calculateEndDate = () => {
   if (!form.start_date || !form.duration_value) return;
   const start = new Date(form.start_date);
   const duration = parseInt(form.duration_value);
@@ -247,3 +247,4 @@ onMounted(() => { fetchClasses(); });
   font-weight: bold;
 }
 </style>
+

@@ -1,10 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-// 引入新的布局组件
-// 注意：原 Layout.vue 已重命名为 AdminLayout.vue
-import PortalLayout from '../layout/PortalLayout.vue'
-import AdminLayout from '../layout/AdminLayout.vue' 
-import StrategyLayout from '../layout/StrategyLayout.vue'
+// 引入布局组件（新结构）
+import PortalLayout from '../portal/layout/PortalLayout.vue'
+import EducationLayout from '../systems/education/layout/EducationLayout.vue'
+import AnalyticsLayout from '../systems/analytics/layout/AnalyticsLayout.vue'
 
 const routes = [
   // 1. 门户层 (Portal) - 公开访问
@@ -15,78 +14,79 @@ const routes = [
       { 
         path: '', 
         name: 'Home', 
-        component: () => import('../views/portal/Home.vue') 
+        component: () => import('../portal/views/Home.vue') 
       }
     ]
   },
 
-  // 2. 登录页 - 独立页面（保留原有功能）
+  // 2. 教务系统首页 - 独立页面（不使用布局）
   {
-    path: '/login',
-    name: 'Login',
-    component: () => import('../views/Login.vue')
+    path: '/system/home',
+    name: 'SystemHome',
+    component: () => import('../systems/education/views/SystemHome.vue')
   },
 
-  // 3. 教务系统层 (System) - 需鉴权
+  // 3. 教务系统层 (Education System) - 需鉴权
   {
     path: '/system',
-    component: AdminLayout,
+    component: EducationLayout,
     meta: { requiresAuth: true }, // 标记需登录
     children: [
       { 
         path: 'dashboard', // 访问路径: /system/dashboard
         name: 'Dashboard', 
-        component: () => import('../views/system/Dashboard.vue') 
+        component: () => import('../systems/education/views/Dashboard.vue') 
       },
       { 
         path: 'students', 
         name: 'Students', 
-        component: () => import('../views/system/StudentList.vue') 
+        component: () => import('../systems/education/views/StudentList.vue') 
       },
       { 
         path: 'students/:id', 
         name: 'StudentDetail',
-        component: () => import('../views/system/StudentDetail.vue')
+        component: () => import('../systems/education/views/StudentDetail.vue')
       },
       { 
         path: 'attendance', 
         name: 'Attendance', 
-        component: () => import('../views/system/Attendance.vue') 
+        component: () => import('../systems/education/views/Attendance.vue') 
       },
       { 
         path: 'orders', 
         name: 'Orders', 
-        component: () => import('../views/system/OrderList.vue') 
+        component: () => import('../systems/education/views/OrderList.vue') 
       },
       { 
         path: 'classes', 
         name: 'Classes', 
-        component: () => import('../views/system/ClassManagement.vue') 
+        component: () => import('../systems/education/views/ClassManagement.vue') 
       },
       { 
         path: 'users', 
         name: 'Users', 
-        component: () => import('../views/system/UserList.vue') 
+        component: () => import('../systems/education/views/UserList.vue') 
       },
       // 原 "生源热力图" 现已归入系统作为基础 "网格化管理"
       { 
         path: 'grid-map', 
         name: 'GridMap', 
-        component: () => import('../views/system/StudentMap.vue') 
+        component: () => import('../systems/education/views/StudentMap.vue') 
       },
     ]
   },
 
-  // 4. 商业分析层 (Analytics) - 需鉴权
+  // 4. 商业分析层 (Analytics System) - 需鉴权
   {
     path: '/strategy',
-    component: StrategyLayout,
-    // meta: { requiresAuth: true },
+    component: AnalyticsLayout,
+    meta: { requiresAuth: true }, // 标记需登录
     children: [
       { 
         path: 'map', 
         name: 'StrategyMap', 
-        component: () => import('../views/strategy/StrategyMap.vue') 
+        component: () => import('../systems/analytics/views/StrategyMap.vue'),
+        meta: { requiresAuth: true } // 子路由也需要登录
       }
     ]
   }
@@ -101,16 +101,12 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('user_token')
 
-  // 1. 需要登录，但没 Token -> 跳转到登录页，并带上目标路径
+  // 1. 需要登录，但没 Token -> 跳转到教务系统首页，并带上目标路径
   if (to.meta.requiresAuth && !token) {
     next({ 
-      path: '/login', 
+      path: '/system/home', 
       query: { redirect: to.fullPath } 
     });
-  } 
-  // 2. 已登录，还想去登录页 -> 允许访问（用户可能想查看介绍或切换账号）
-  else if (to.path === '/login' && token) {
-    next(); 
   }
   // 3. 其他情况，放行
   else {

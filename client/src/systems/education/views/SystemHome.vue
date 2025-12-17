@@ -93,7 +93,7 @@
     <el-dialog v-model="loginVisible" :title="dialogTitle" width="400px" align-center class="login-dialog">
       <div v-if="isLoggedIn" class="welcome-back-card">
         <el-avatar :size="80" src="https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png" />
-        <h3>{{ $t('login.identityTitle') }}, {{ userInfo.real_name || userInfo.username }}</h3>
+        <h3>{{ $t('login.identityTitle') }}, {{ displayUserName }}</h3>
 
         <el-tag type="info" style="margin-bottom: 20px;">
           {{ targetSystemName }}
@@ -148,13 +148,11 @@ const router = useRouter();
 const route = useRoute();
 
 const currentLang = ref(locale.value);
-// 🟢 优化 1: 默认不弹窗，除非用户点击
 const loginVisible = ref(false);
 const loginFormRef = ref(null);
 const loading = ref(false);
 const loginForm = reactive({ username: '', password: '' });
 
-// 🟢 状态管理
 const isLoggedIn = ref(false);
 const userInfo = ref({});
 
@@ -163,7 +161,6 @@ const rules = {
   password: [{ required: true, message: 'Required', trigger: 'blur' }]
 };
 
-// 🟢 格式化显示用户名：游客账号只显示"游客"
 const displayUserName = computed(() => {
   if (!userInfo.value) return '';
   if (userInfo.value.username === 'visitor') {
@@ -172,13 +169,11 @@ const displayUserName = computed(() => {
   return userInfo.value.real_name || userInfo.value.username;
 });
 
-// 🟢 计算属性：判断去向
 const targetPath = computed(() => route.query.redirect || '/system/dashboard');
 const targetSystemName = computed(() => {
   if (targetPath.value.includes('/strategy')) return `🔐 ${t('login.accessing')}：${t('login.systemStrategy')}`;
   return `🔐 ${t('login.accessing')}：${t('login.systemEdu')}`;
 });
-// 弹窗标题
 const dialogTitle = computed(() => isLoggedIn.value ? t('login.identityTitle') : t('login.loginBtn'));
 
 onMounted(() => {
@@ -189,9 +184,6 @@ onMounted(() => {
     isLoggedIn.value = true;
     userInfo.value = JSON.parse(infoStr);
   }
-
-  // 注意：即使有 redirect 参数，我们也不自动弹窗了，遵守你的"不强制弹窗"约定。
-  // 用户看到 Login 页面介绍后，手动点击按钮才会触发 loginVisible = true
 });
 
 const showLoginModal = () => { loginVisible.value = true; };
@@ -218,13 +210,10 @@ const handleLogin = async () => {
           localStorage.setItem('user_token', 'logged_in');
           localStorage.setItem('user_info', JSON.stringify(res.data.data));
 
-          // 更新登录状态
           isLoggedIn.value = true;
           userInfo.value = res.data.data;
 
           ElMessage.success('登录成功');
-          // 登录成功后保持对话框打开，显示"进入系统"按钮
-          // loginVisible.value = false; // 注释掉，让对话框保持打开
         } else {
           ElMessage.error(res.data.msg || 'Login Failed');
         }
@@ -237,24 +226,20 @@ const handleLogin = async () => {
   });
 };
 
-// 已登录状态下，点击进入系统
 const handleEnterSystem = () => {
   router.push(targetPath.value);
 };
 
-// 切换账号
 const handleLogout = () => {
   localStorage.removeItem('user_token');
   localStorage.removeItem('user_info');
   isLoggedIn.value = false;
   loginForm.username = '';
   loginForm.password = '';
-  // 保持弹窗打开，显示表单
 };
 </script>
 
 <style scoped>
-/* 保持原有样式 */
 .landing-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -285,12 +270,7 @@ const handleLogout = () => {
 
 .nav-login-btn {
   font-weight: 600;
-  /* color: #606266; */
-  /* Element Plus type="primary" 会处理颜色 */
-  /* border-color: #dcdfe6; */
 }
-
-/* ...其他原有样式... */
 
 .welcome-back-card {
   text-align: center;
@@ -307,8 +287,6 @@ const handleLogout = () => {
   font-weight: bold;
 }
 
-/* 这里省略重复的 hero/feature CSS，请保留原文件中的其他样式 */
-/* ... */
 .hero-section {
   display: flex;
   align-items: center;
@@ -474,3 +452,4 @@ const handleLogout = () => {
   color: #409EFF;
 }
 </style>
+

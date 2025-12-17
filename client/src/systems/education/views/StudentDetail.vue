@@ -115,7 +115,7 @@ const formatDateTime = (str) => str ? new Date(str).toLocaleString() : '-';
 
 const fetchDetail = async () => {
   loading.value = true;
-  const id = route.params.id; // 从 URL 获取 ID
+  const id = route.params.id;
   try {
     const res = await axios.get(`/api/students/${id}`);
     if (res.data.code === 200) {
@@ -143,3 +143,4 @@ onMounted(() => {
 .label { color: #909399; }
 .balance { color: #f56c6c; font-weight: bold; font-size: 16px; }
 </style>
+

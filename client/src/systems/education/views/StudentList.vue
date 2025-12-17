@@ -153,54 +153,17 @@
 </template>
 
 <script setup>
-// ... script 部分代码基本保持不变，除了 ElMessage 和 ElMessageBox 使用 t() ...
 import { ref, reactive, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Location } from '@element-plus/icons-vue';
-import MapPicker from '../../components/MapPicker.vue';
+import MapPicker from '../../../shared/components/MapPicker.vue';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
 
-// ... 省略中间的数据定义 ...
-// 只展示修改了 t() 的部分示例
-
 const userInfoStr = localStorage.getItem('user_info');
 const role = userInfoStr ? JSON.parse(userInfoStr).role : 'teacher';
-
-// ...
-
-const handleDelete = async (row) => {
-  try {
-    await ElMessageBox.confirm(
-      t('common.confirm') + ' ' + t('common.delete') + '?',
-      t('common.delete'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning',
-      }
-    );
-    const res = await axios.delete(`/api/students/${row.id}`);
-    if (res.data.code === 200) {
-      ElMessage.success(t('common.success'));
-      fetchStudents();
-    } else {
-      ElMessage.error(res.data.msg || t('common.failed'));
-    }
-  } catch (err) {
-    if (err !== 'cancel') ElMessage.error(t('common.failed'));
-  }
-};
-
-// 需要把这些逻辑补全，为了篇幅我只展示了关键的 t() 替换点。
-// 实际操作时，你需要保留原有的 fetchStudents, fetchClasses, submitEnroll 等所有逻辑
-// 只是把里面的中文提示换成 t('...')
-
-// ... (补全原有的 script 逻辑) ...
-// 必须把原文件 script 部分完整复制过来，并引入 useI18n
-// 建议保留原有逻辑，只修改 ElMessage 的内容
 
 const tableData = ref([]);
 const loading = ref(false);
@@ -269,7 +232,7 @@ const submitEnroll = async () => {
 };
 const openEditDialog = (row) => {
   isEdit.value = true;
-  Object.assign(form, row); // 简化写法，实际要拷贝字段
+  Object.assign(form, row);
   form.address = row.address || '';
   displayBalance.value = (row.balance / 100).toFixed(2);
   dialogVisible.value = true;
@@ -321,5 +284,28 @@ const submitDrop = async () => {
     } else { ElMessage.error(res.data.msg); }
   } catch(err) { ElMessage.error(t('common.failed')); }
 };
+const handleDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm(
+      t('common.confirm') + ' ' + t('common.delete') + '?',
+      t('common.delete'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+      }
+    );
+    const res = await axios.delete(`/api/students/${row.id}`);
+    if (res.data.code === 200) {
+      ElMessage.success(t('common.success'));
+      fetchStudents();
+    } else {
+      ElMessage.error(res.data.msg || t('common.failed'));
+    }
+  } catch (err) {
+    if (err !== 'cancel') ElMessage.error(t('common.failed'));
+  }
+};
 onMounted(() => { fetchStudents(); });
 </script>
+

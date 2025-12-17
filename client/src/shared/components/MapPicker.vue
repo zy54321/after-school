@@ -47,7 +47,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import gcoord from 'gcoord';
 import { useI18n } from 'vue-i18n';
 import axios from 'axios';
-import { MAPBOX_TOKEN, MAP_STYLES } from '../config/mapStyles';
+import { MAPBOX_TOKEN, MAP_STYLES } from '../../config/mapStyles';
 
 const props = defineProps(['modelValue', 'title', 'initialLng', 'initialLat', 'readonly']);
 const emit = defineEmits(['update:modelValue', 'confirm']);
@@ -229,3 +229,4 @@ watch(() => props.modelValue, (val) => {
   align-items: center;
 }
 </style>
+

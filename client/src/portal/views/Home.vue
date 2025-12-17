@@ -25,6 +25,7 @@ const loginForm = reactive({ username: '', password: '' });
 const isLoggedIn = ref(false);
 const userInfo = ref({});
 const shouldRedirectAfterLogin = ref(false); // 标记登录后是否需要跳转
+const redirectTarget = ref(''); // 存储跳转目标路径
 
 const rules = {
   username: [{ required: true, message: 'Required', trigger: 'blur' }],
@@ -59,7 +60,7 @@ const handleSystemClick = () => {
   // 如果已登录，直接跳转到系统介绍页
   if (isLoggedIn.value) {
     router.push({
-      name: 'Login',
+      name: 'SystemHome',
       query: { redirect: '/system/dashboard' }
     });
   } else {
@@ -73,6 +74,33 @@ const handleSystemClick = () => {
         type: 'info'
       }
     ).then(() => {
+      // 设置跳转目标为系统介绍页
+      redirectTarget.value = '/system/dashboard';
+      shouldRedirectAfterLogin.value = true; // 点击卡片后登录，需要跳转
+      loginVisible.value = true;
+    }).catch(() => {
+      // 用户取消
+    });
+  }
+};
+
+const handleStrategyClick = () => {
+  // 如果已登录，直接跳转到商业分析地图
+  if (isLoggedIn.value) {
+    router.push({ name: 'StrategyMap' });
+  } else {
+    // 未登录，提示需要登录
+    ElMessageBox.confirm(
+      '请先登录以访问商业分析地图',
+      '提示',
+      {
+        confirmButtonText: '去登录',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    ).then(() => {
+      // 设置跳转目标为商业分析地图
+      redirectTarget.value = '/strategy/map';
       shouldRedirectAfterLogin.value = true; // 点击卡片后登录，需要跳转
       loginVisible.value = true;
     }).catch(() => {
@@ -106,11 +134,21 @@ const handleLogin = async () => {
           
           // 根据来源决定是否跳转
           if (shouldRedirectAfterLogin.value) {
-            // 点击卡片后登录，跳转到系统介绍页
-            router.push({
-              name: 'Login',
-              query: { redirect: '/system/dashboard' }
-            });
+            // 点击卡片后登录，根据目标路径跳转
+            const targetPath = redirectTarget.value || '/system/dashboard';
+            if (targetPath.includes('/strategy')) {
+              // 跳转到商业分析地图
+              router.push({ name: 'StrategyMap' });
+            } else {
+              // 跳转到系统介绍页
+              router.push({
+                name: 'SystemHome',
+                query: { redirect: targetPath }
+              });
+            }
+            // 重置标记
+            shouldRedirectAfterLogin.value = false;
+            redirectTarget.value = '';
           }
           // 否则保持当前页面（右上角登录按钮）
         } else {
@@ -500,6 +538,21 @@ const handleLogout = () => {
   z-index: 2000;
 }
 
+/* 🟢 修复双滚动条问题：防止 Element Plus Dialog 创建额外的滚动条 */
+:deep(.el-overlay) {
+  overflow: hidden !important;
+}
+
+:deep(.el-dialog__wrapper) {
+  overflow: hidden !important;
+}
+
+/* 确保 body 在对话框打开时不会出现双滚动条 */
+body.el-popup-parent--hidden {
+  overflow-y: auto !important;
+  padding-right: 0 !important;
+}
+
 .welcome-back-card {
   text-align: center;
   padding: 10px 0;
@@ -615,7 +668,7 @@ const handleLogout = () => {
           </div>
         </div>
 
-        <div class="app-card" @click="$router.push({ name: 'StrategyMap' })">
+        <div class="app-card" @click="handleStrategyClick">
           <div class="card-glow map-glow"></div>
           <div class="card-content">
             <div class="icon-wrapper">🗺️</div>
@@ -647,7 +700,7 @@ const handleLogout = () => {
     <div class="bg-orb orb-2"></div>
 
     <!-- 🟢 登录对话框 -->
-    <el-dialog v-model="loginVisible" :title="$t('login.loginBtn')" width="400px" align-center class="login-dialog">
+    <el-dialog v-model="loginVisible" :title="$t('login.loginBtn')" width="400px" align-center class="login-dialog" :lock-scroll="false">
       <div v-if="isLoggedIn" class="welcome-back-card">
         <el-avatar :size="80" src="https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png" />
         <h3>{{ $t('login.identityTitle') }}, {{ displayUserName }}</h3>
@@ -682,3 +735,4 @@ const handleLogout = () => {
     </el-dialog>
   </div>
 </template>
+

@@ -52,7 +52,6 @@
 </template>
 
 <script setup>
-// Script部分，主要是引入 i18n，并在 ElMessage 处使用 t()
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
@@ -106,7 +105,7 @@ const handleCheckIn = async (card) => {
     });
 
     if (res.data.code === 200) {
-      ElMessage.success(t('attendance.msgSuccess')); // 使用翻译
+      ElMessage.success(t('attendance.msgSuccess'));
       const sourceStudent = allStudents.value.find(s => s.id === card.studentId);
       if (sourceStudent && sourceStudent.courses) {
         const sourceCourse = sourceStudent.courses.find(c => c.class_id === card.classId);
@@ -132,7 +131,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* 样式保持不变 */
 .header-row {
   display: flex;
   justify-content: space-between;
@@ -185,3 +183,4 @@ onMounted(() => {
   width: 90px;
 }
 </style>
+
