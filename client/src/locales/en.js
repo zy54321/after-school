@@ -32,6 +32,8 @@ export default {
     loading: 'Loading...',
     placeholderSelect: 'Select',
     placeholderInput: 'Enter',
+    yes: 'Yes',
+    no: 'No',
   },
   dashboard: {
     totalStudents: 'Total Students',
@@ -165,16 +167,60 @@ export default {
     subSlogan:
       'The intelligent housekeeper for after-school institutions. From LBS maps to precise financial flows, we liberate you from tedious spreadsheets.',
     ctaBtn: 'Try Demo Now',
+    enterNow: 'Enter Workbench',
+    intro: {
+      title: 'System Overview',
+      desc: 'Education Management System is an intelligent operations management platform designed for small and medium-sized educational institutions, after-school care centers, and training institutions. The system covers core functions including student management, course management, attendance check-in, and financial flows, helping institutions achieve full-process digital management from enrollment to teaching, improving operational efficiency and reducing management costs.',
+      highlight1: 'Full-Process Management',
+      highlight1Desc: 'Covers the entire operation process of educational institutions including student records, course scheduling, attendance check-in, and financial flows',
+      highlight2: 'Intelligent Automation',
+      highlight2Desc: 'Automatic lesson deduction, validity calculation, and financial report generation, reducing manual operations',
+      highlight3: 'Data Visualization',
+      highlight3Desc: 'LBS map displays student distribution, clear and intuitive data reports, assisting decision analysis',
+    },
     features: {
       mapTitle: 'LBS Smart Map',
-      mapDesc:
-        'Integrated with AMAP SDK to visualize student distribution and assist market decisions.',
+      mapDesc: 'Integrated with AMAP SDK, visualizes student distribution heat maps, intuitively displays student geographic distribution, assists market expansion and site selection decisions. Supports map point selection, address parsing, distance calculation, and more.',
       checkinTitle: 'One-Click Check-in',
-      checkinDesc:
-        'Complete check-in in 3 seconds. Automatically deduct lessons and calculate validity.',
+      checkinDesc: 'Complete student check-in in 3 seconds, automatically deducts lessons and calculates validity. Supports batch check-in, retroactive check-in, leave requests, and other scenarios, with complete traceable attendance records.',
       financeTitle: 'Strict Financial Loop',
-      financeDesc:
-        'Unique negative order logic perfectly handles complex scenarios like refunds and transfers.',
+      financeDesc: 'Unique negative order logic perfectly handles complex scenarios like refunds, course transfers, and price differences. Supports term-based and per-lesson billing modes, with clear and transparent financial flows.',
+      studentTitle: 'Student Records Management',
+      studentDesc: 'Complete student information management, including basic information, parent contact details, course records, balance inquiries, etc. Supports batch import/export, with secure and reliable data.',
+      classTitle: 'Course & Class Management',
+      classDesc: 'Flexible course settings, supporting term-based and per-lesson billing modes. Automatic scheduling, lesson statistics, course progress tracking, making teaching management more organized.',
+      reportTitle: 'Data Reports & Analysis',
+      reportDesc: 'Multi-dimensional data statistics and analysis, including student growth trends, course sales, financial income and expenditure reports, etc., providing data support for institutional operations.',
+    },
+    useCases: {
+      title: 'Use Cases',
+      case1: {
+        title: 'After-School Care Centers',
+        desc: 'Suitable for after-school care and evening care centers, managing student records, attendance check-in, course scheduling, and financial flows',
+      },
+      case2: {
+        title: 'Training Institutions',
+        desc: 'Suitable for academic training and interest classes, supporting multiple course types and billing modes, flexibly meeting different business needs',
+      },
+      case3: {
+        title: 'Small Educational Institutions',
+        desc: 'Designed specifically for small and medium-sized institutions, simple and easy to use, quick to get started without complex training, lowering the barrier to use',
+      },
+    },
+    advantages: {
+      title: 'Core Advantages',
+      adv1: {
+        title: 'Simple & Easy',
+        desc: 'Simple and intuitive interface, clear operation flow, can get started in 3 minutes without complex training',
+      },
+      adv2: {
+        title: 'Comprehensive Features',
+        desc: 'Covers core functions of educational institution operations management, one-stop solution for daily management needs',
+      },
+      adv3: {
+        title: 'Data Security',
+        desc: 'Localized deployment, complete data control, meeting data security requirements of the education industry',
+      },
     },
     contact: 'Contact Us',
     phone: 'Mobile / WeChat',
@@ -240,6 +286,7 @@ export default {
       block: 'Block Line',
       hotzone: 'Hot Zone'
     },
+    dictionary: 'Dictionary Management',
     actions: {
       cancel: 'Cancel',
       save: 'Save Intel',
@@ -262,20 +309,150 @@ export default {
     hero: {
       greeting: 'Smart Operations & BI Platform',
       role: 'Data-Driven · Spatial Intelligence · Synergy',
-      desc: 'Integrating full-stack architecture with advanced GIS technology. A one-stop digital solution empowering businesses from daily operations to strategic market analysis.',
+      desc: 'A one-stop digital solution empowering businesses from daily operations to strategic market analysis. Help organizations improve operational efficiency, optimize decision-making, and drive business growth.',
     },
     systemCard: {
       title: 'Edu Management System',
-      desc: 'Full-stack CRM based on Vue3 + Node.js. Student management, Finance, Attendance.',
+      desc: 'One-stop solution for educational institutions. Streamline student records, automate financial tracking, and manage attendance effortlessly.',
       tag: 'Private',
       btn: 'Enter Workbench',
     },
     strategyCard: {
       title: 'Business Analytics Map',
-      desc: 'Business data analytics platform based on Mapbox GL. Supports data collection, POI overlay, site analysis, and market insights.',
+      desc: 'Intelligent site selection and market analysis tool. Visualize geographic data to identify prime locations, assess competition, and make data-driven expansion decisions.',
       tag: 'Public Demo',
       btn: 'Enter Analytics',
     },
     copyright: '© 2025 Digital Platform. Designed by Developer.',
+  },
+  // Dictionary Management translations
+  dictionary: {
+    title: 'Dictionary Management',
+    geometryTypes: {
+      point: 'Point',
+      line: 'Line',
+      polygon: 'Polygon'
+    },
+    types: {
+      title: 'Type Management',
+      add: 'Add Type',
+      edit: 'Edit Type',
+      columns: {
+        nameZh: 'Chinese Name',
+        nameEn: 'English Name',
+        code: 'Type Code',
+        color: 'Color',
+        icon: 'Icon',
+        status: 'Status',
+        actions: 'Actions'
+      },
+      status: {
+        active: 'Active',
+        inactive: 'Inactive'
+      },
+      form: {
+        geometryType: 'Geometry Type',
+        code: 'Type Code',
+        nameZh: 'Chinese Name',
+        nameEn: 'English Name',
+        color: 'Color',
+        icon: 'Icon',
+        sortOrder: 'Sort Order',
+        status: 'Status'
+      }
+    },
+    fields: {
+      title: 'Field Management',
+      add: 'Add Field',
+      edit: 'Edit Field',
+      columns: {
+        nameZh: 'Chinese Label',
+        nameEn: 'English Label',
+        key: 'Field Key',
+        type: 'Field Type',
+        required: 'Required',
+        actions: 'Actions'
+      },
+      form: {
+        key: 'Field Key',
+        nameZh: 'Chinese Label',
+        nameEn: 'English Label',
+        type: 'Field Type',
+        required: 'Required',
+        defaultValue: 'Default Value',
+        placeholderZh: 'Chinese Placeholder',
+        placeholderEn: 'English Placeholder',
+        suffix: 'Suffix',
+        sortOrder: 'Sort Order',
+        options: 'Select Options',
+        addOption: 'Add Option',
+        optionLabelZh: 'Chinese Label',
+        optionLabelEn: 'English Label',
+        optionValue: 'Option Value'
+      }
+    },
+    empty: 'No dictionary configuration'
+  },
+  // Analytics System Home translations
+  analytics: {
+    home: {
+      title: 'Business Analytics Map',
+      slogan: 'Make Site Selection Smarter and More Precise',
+      subSlogan: 'A GIS-based business data analytics platform that helps you quickly identify prime locations, assess competition, and make data-driven expansion decisions through visual maps.',
+      ctaBtn: 'Try Demo Now',
+      enterNow: 'Enter Analytics Map',
+      intro: {
+        title: 'System Overview',
+        desc: 'Business Analytics Map is a geographic information analysis tool designed for educational institutions, chain businesses, and other industries that require precise site selection. The system integrates advanced map visualization engines and flexible data dictionary management, allowing you to mark, analyze, and make decisions intuitively on the map.',
+        highlight1: 'Multi-Element Support',
+        highlight1Desc: 'Supports point, line, and polygon geographic elements to meet different business scenarios',
+        highlight2: 'Flexible Configuration',
+        highlight2Desc: 'Customize element types and attribute fields through dictionary management to adapt to different industry needs',
+        highlight3: 'Data-Driven',
+        highlight3Desc: 'All data is saved in real-time, supporting multi-dimensional analysis and visualization',
+      },
+      features: {
+        mapTitle: 'Geographic Data Visualization',
+        mapDesc: 'Integrated Mapbox GL map engine supporting multiple geographic feature overlays, including points (campuses, competitors, schools, communities), lines (routes, block lines), and polygons (hot zones), making complex geographic data clear at a glance.',
+        siteTitle: 'Intelligent Site Selection',
+        siteDesc: 'Through multi-dimensional data marking and analysis, including competitor distribution, student heat maps, service radius, etc., help you find the best business locations and assess market potential.',
+        dataTitle: 'Flexible Data Management',
+        dataDesc: 'Supports custom element types and attribute fields, flexibly configuring business data models through dictionary management to adapt to different industries and business scenarios.',
+        dictTitle: 'Dictionary Management',
+        dictDesc: 'Powerful dictionary management function, supporting element type management by point, line, and polygon categories, custom attribute fields (text, number, date, boolean, select, rate, etc.), and flexible business data model configuration.',
+        layerTitle: 'Layer Control',
+        layerDesc: 'Intelligent layer control system, supporting grouped show/hide by element type, accordion-style folding design, making map display clearer and more organized.',
+      },
+      useCases: {
+        title: 'Use Cases',
+        case1: {
+          title: 'Educational Institution Site Selection',
+          desc: 'Analyze surrounding school distribution, student heat maps, competitor locations to find the best campus site',
+        },
+        case2: {
+          title: 'Chain Store Expansion',
+          desc: 'Assess business district potential, analyze competition density, plan service coverage, and develop expansion strategies',
+        },
+        case3: {
+          title: 'Market Research Analysis',
+          desc: 'Collect and organize market data, analyze market structure and opportunities through map visualization',
+        },
+      },
+      advantages: {
+        title: 'Core Advantages',
+        adv1: {
+          title: 'Professional Map Engine',
+          desc: 'Based on Mapbox GL, providing smooth interaction and professional visualization effects',
+        },
+        adv2: {
+          title: 'Flexible Data Model',
+          desc: 'Dictionary management allows the system to adapt to different industries without code modifications',
+        },
+        adv3: {
+          title: 'Intuitive Interface',
+          desc: 'Simple and intuitive operation interface with drag-and-drop drawing, batch management, and other convenient features',
+        },
+      },
+    },
   },
 };

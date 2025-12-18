@@ -85,9 +85,12 @@ const handleSystemClick = () => {
 };
 
 const handleStrategyClick = () => {
-  // 如果已登录，直接跳转到商业分析地图
+  // 如果已登录，直接跳转到商业分析系统首页
   if (isLoggedIn.value) {
-    router.push({ name: 'StrategyMap' });
+    router.push({
+      name: 'AnalyticsHome',
+      query: { redirect: '/strategy/map' }
+    });
   } else {
     // 未登录，提示需要登录
     ElMessageBox.confirm(
@@ -99,7 +102,7 @@ const handleStrategyClick = () => {
         type: 'info'
       }
     ).then(() => {
-      // 设置跳转目标为商业分析地图
+      // 设置跳转目标为商业分析系统首页
       redirectTarget.value = '/strategy/map';
       shouldRedirectAfterLogin.value = true; // 点击卡片后登录，需要跳转
       loginVisible.value = true;
@@ -137,10 +140,13 @@ const handleLogin = async () => {
             // 点击卡片后登录，根据目标路径跳转
             const targetPath = redirectTarget.value || '/system/dashboard';
             if (targetPath.includes('/strategy')) {
-              // 跳转到商业分析地图
-              router.push({ name: 'StrategyMap' });
+              // 跳转到商业分析系统首页
+              router.push({
+                name: 'AnalyticsHome',
+                query: { redirect: targetPath }
+              });
             } else {
-              // 跳转到系统介绍页
+              // 跳转到教务系统介绍页
               router.push({
                 name: 'SystemHome',
                 query: { redirect: targetPath }
@@ -206,7 +212,7 @@ const handleLogout = () => {
   /* ... 以下保持不变 ... */
   color: #fff;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  overflow-y: auto;
+  /* 🟢 修复滚动问题：移除 overflow-y: auto，让滚动发生在 body 上 */
   overflow-x: hidden;
   position: relative;
   display: flex;
@@ -301,11 +307,14 @@ const handleLogout = () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* 🟢 修复滚动问题：改为 flex-start，避免内容不足时居中导致滚动问题 */
+  justify-content: flex-start;
   align-items: center;
   gap: 60px;
-  padding: 40px 20px;
+  padding: 80px 20px 40px;
   z-index: 5;
+  /* 🟢 确保内容有足够的最小高度 */
+  min-height: calc(100vh - 200px);
 }
 
 /* Hero 个人简介 */
@@ -492,12 +501,14 @@ const handleLogout = () => {
 
 /* 背景光球 */
 .bg-orb {
-  position: absolute;
+  position: fixed;
+  /* 🟢 修复滚动问题：改为 fixed，避免影响滚动 */
   border-radius: 50%;
   filter: blur(100px);
   opacity: 0.2;
   z-index: 1;
   pointer-events: none;
+  /* 🟢 确保不会阻止滚动事件 */
 }
 
 .orb-1 {
@@ -642,7 +653,6 @@ body.el-popup-parent--hidden {
     <main class="main-content">
 
       <section class="hero-area">
-        <div class="badge-pill">Vue 3 • Node.js • PostGIS</div>
         <h1 class="hero-title">
           {{ $t('portal.hero.greeting') }}
         </h1>

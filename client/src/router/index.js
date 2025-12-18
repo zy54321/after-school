@@ -26,6 +26,13 @@ const routes = [
     component: () => import('../systems/education/views/SystemHome.vue')
   },
 
+  // 2.1 商业分析系统首页 - 独立页面（不使用布局）
+  {
+    path: '/strategy/home',
+    name: 'AnalyticsHome',
+    component: () => import('../systems/analytics/views/AnalyticsHome.vue')
+  },
+
   // 3. 教务系统层 (Education System) - 需鉴权
   {
     path: '/system',
@@ -87,6 +94,12 @@ const routes = [
         name: 'StrategyMap', 
         component: () => import('../systems/analytics/views/StrategyMap.vue'),
         meta: { requiresAuth: true } // 子路由也需要登录
+      },
+      { 
+        path: 'dictionary', 
+        name: 'DictionaryManagement', 
+        component: () => import('../systems/analytics/views/DictionaryManagement.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true } // 需要管理员权限
       }
     ]
   }
@@ -101,12 +114,22 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('user_token')
 
-  // 1. 需要登录，但没 Token -> 跳转到教务系统首页，并带上目标路径
+  // 1. 需要登录，但没 Token -> 根据目标路径跳转到对应的系统首页
   if (to.meta.requiresAuth && !token) {
-    next({ 
-      path: '/system/home', 
-      query: { redirect: to.fullPath } 
-    });
+    // 判断目标路径属于哪个系统
+    if (to.fullPath.startsWith('/strategy')) {
+      // 商业分析系统，跳转到商业分析系统首页
+      next({ 
+        path: '/strategy/home', 
+        query: { redirect: to.fullPath } 
+      });
+    } else {
+      // 其他系统（教务系统等），跳转到教务系统首页
+      next({ 
+        path: '/system/home', 
+        query: { redirect: to.fullPath } 
+      });
+    }
   }
   // 3. 其他情况，放行
   else {

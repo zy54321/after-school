@@ -38,15 +38,92 @@
 
       <div class="panel-divider"></div>
 
+      <el-button 
+        v-if="isAdmin" 
+        size="small" 
+        class="tool-btn" 
+        style="width: 100%; margin-bottom: 15px;"
+        @click="$router.push('/strategy/dictionary')"
+      >
+        <span class="tool-icon">📚</span> {{ $t('strategy.dictionary') }}
+      </el-button>
+
+      <div class="panel-divider"></div>
+
       <div class="panel-title">{{ t('strategy.layers') }}</div>
       <div class="layer-list">
-        <div class="layer-item" v-for="cat in categoryConfig" :key="cat.value">
-          <div class="layer-label">
-            <span class="dot" :style="{ background: cat.color, boxShadow: `0 0 5px ${cat.color}` }"></span>
-            {{ t(cat.label) }}
+        <template v-if="dictionaryConfig.length === 0 && !dictionaryLoading">
+          <div class="empty-tip">
+            {{ $t('dictionary.empty') }}
           </div>
-          <el-switch v-model="layers[cat.value]" size="small" />
-        </div>
+        </template>
+        <template v-else>
+          <!-- 🟢 手风琴样式：按点线面分组 -->
+          <el-collapse v-model="activeCollapsePanels" class="layer-collapse">
+            <!-- 点要素 -->
+            <el-collapse-item name="Point" v-if="pointTypes.length > 0">
+              <template #title>
+                <span class="collapse-title">
+                  <span class="geometry-icon">📍</span>
+                  {{ locale === 'zh' ? '点要素' : 'Point' }}
+                </span>
+              </template>
+              <div 
+                class="layer-item" 
+                v-for="type in pointTypes" 
+                :key="type.type_code"
+              >
+                <div class="layer-label">
+                  <span class="dot" :style="{ background: type.color, boxShadow: `0 0 5px ${type.color}` }"></span>
+                  {{ locale === 'zh' ? type.name_zh : type.name_en }}
+                </div>
+                <el-switch v-model="layers[type.type_code]" size="small" />
+              </div>
+            </el-collapse-item>
+
+            <!-- 线要素 -->
+            <el-collapse-item name="LineString" v-if="lineTypes.length > 0">
+              <template #title>
+                <span class="collapse-title">
+                  <span class="geometry-icon">〰️</span>
+                  {{ locale === 'zh' ? '线要素' : 'Line' }}
+                </span>
+              </template>
+              <div 
+                class="layer-item" 
+                v-for="type in lineTypes" 
+                :key="type.type_code"
+              >
+                <div class="layer-label">
+                  <span class="dot" :style="{ background: type.color, boxShadow: `0 0 5px ${type.color}` }"></span>
+                  {{ locale === 'zh' ? type.name_zh : type.name_en }}
+                </div>
+                <el-switch v-model="layers[type.type_code]" size="small" />
+              </div>
+            </el-collapse-item>
+
+            <!-- 面要素 -->
+            <el-collapse-item name="Polygon" v-if="polygonTypes.length > 0">
+              <template #title>
+                <span class="collapse-title">
+                  <span class="geometry-icon">⬡</span>
+                  {{ locale === 'zh' ? '面要素' : 'Polygon' }}
+                </span>
+              </template>
+              <div 
+                class="layer-item" 
+                v-for="type in polygonTypes" 
+                :key="type.type_code"
+              >
+                <div class="layer-label">
+                  <span class="dot" :style="{ background: type.color, boxShadow: `0 0 5px ${type.color}` }"></span>
+                  {{ locale === 'zh' ? type.name_zh : type.name_en }}
+                </div>
+                <el-switch v-model="layers[type.type_code]" size="small" />
+              </div>
+            </el-collapse-item>
+          </el-collapse>
+        </template>
       </div>
     </aside>
 
@@ -72,9 +149,16 @@
       </aside>
     </transition>
 
-    <el-dialog v-model="formVisible" :title="t('strategy.dialogTitle')" width="400px" :close-on-click-modal="false"
-      :show-close="false" class="cyber-dialog">
-      <el-form :model="formData" label-position="top" size="large">
+    <el-dialog 
+      v-model="formVisible" 
+      :title="t('strategy.dialogTitle')" 
+      width="500px" 
+      :close-on-click-modal="false"
+      :show-close="false" 
+      class="cyber-dialog feature-form-dialog"
+    >
+      <div class="dialog-form-container">
+        <el-form :model="formData" label-position="top" size="large">
         <el-form-item :label="t('strategy.fields.name')">
           <el-input v-model="formData.name" :placeholder="t('strategy.placeholders.name')" />
         </el-form-item>
@@ -89,20 +173,79 @@
         <div v-if="currentFormFields.length > 0" class="dynamic-fields">
           <div class="field-group-title">{{ t('strategy.fields.attributes') }}</div>
 
-          <el-form-item v-for="field in currentFormFields" :key="field.key" :label="formatKey(field.key)">
-            <el-input v-if="field.type === 'text' || field.type === 'number'" v-model="formData.properties[field.key]"
-              :type="field.type" :placeholder="field.placeholder">
+          <el-form-item 
+            v-for="field in currentFormFields" 
+            :key="field.key" 
+            :label="field.label"
+            :required="field.is_required"
+          >
+            <!-- 文本输入 -->
+            <el-input 
+              v-if="field.type === 'text' || field.type === 'textarea' || field.type === 'url'"
+              v-model="formData.properties[field.key]"
+              :type="field.type === 'textarea' ? 'textarea' : 'text'"
+              :placeholder="field.placeholder || ''"
+              :rows="field.type === 'textarea' ? 3 : undefined"
+            >
               <template v-if="field.suffix" #append>{{ field.suffix }}</template>
             </el-input>
 
-            <el-rate v-if="field.type === 'rate'" v-model="formData.properties[field.key]" :max="field.max" show-score
-              text-color="#ff9900" />
+            <!-- 数字输入 -->
+            <el-input-number 
+              v-if="field.type === 'number'"
+              v-model="formData.properties[field.key]"
+              :placeholder="field.placeholder || ''"
+              :min="field.validation_rule?.min"
+              :max="field.validation_rule?.max"
+              style="width: 100%"
+            >
+              <template v-if="field.suffix" #append>{{ field.suffix }}</template>
+            </el-input-number>
 
-            <el-switch v-if="field.type === 'switch'" v-model="formData.properties[field.key]" />
+            <!-- 日期选择 -->
+            <el-date-picker
+              v-if="field.type === 'date'"
+              v-model="formData.properties[field.key]"
+              type="date"
+              :placeholder="field.placeholder || ''"
+              style="width: 100%"
+            />
+
+            <!-- 布尔值（开关） -->
+            <el-switch 
+              v-if="field.type === 'boolean'"
+              v-model="formData.properties[field.key]"
+            />
+
+            <!-- 下拉选择 -->
+            <el-select
+              v-if="field.type === 'select'"
+              v-model="formData.properties[field.key]"
+              :placeholder="field.placeholder || ''"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="opt in (field.options || [])"
+                :key="opt.value"
+                :label="locale === 'zh' ? opt.label_zh : opt.label_en"
+                :value="opt.value"
+              />
+            </el-select>
+
+            <!-- 评分 -->
+            <el-rate 
+              v-if="field.type === 'rate'"
+              v-model.number="formData.properties[field.key]" 
+              :max="field.max || 5" 
+              :allow-half="false"
+              show-score
+              text-color="#ff9900"
+            />
           </el-form-item>
         </div>
 
-      </el-form>
+        </el-form>
+      </div>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="cancelDraw">{{ t('strategy.actions.cancel') }}</el-button>
@@ -115,8 +258,8 @@
 
 <script setup>
 import { useI18n } from 'vue-i18n';
-import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, reactive, onMounted, onUnmounted, onActivated, computed, watch, nextTick } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import mapboxgl from 'mapbox-gl';
@@ -126,6 +269,7 @@ import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
 const router = useRouter();
+const route = useRoute();
 
 const { t, locale } = useI18n();
 const toggleLang = () => {
@@ -174,36 +318,92 @@ const formData = reactive({
 });
 const currentDrawFeatureId = ref(null);
 
-const categoryConfig = [
-  { value: 'own', label: 'strategy.layerItems.own', color: '#409EFF', type: 'Point' },
-  { value: 'competitor', label: 'strategy.layerItems.competitor', color: '#F56C6C', type: 'Point' },
-  { value: 'school', label: 'strategy.layerItems.school', color: '#67C23A', type: 'Point' },
-  { value: 'community', label: 'strategy.layerItems.community', color: '#E6A23C', type: 'Point' },
-  { value: 'route', label: 'strategy.layerItems.route', color: '#00FFFF', type: 'LineString' },
-  { value: 'block', label: 'strategy.layerItems.block', color: '#FF00FF', type: 'LineString' },
-  { value: 'hotzone', label: 'strategy.layerItems.hotzone', color: '#FFFF00', type: 'Polygon' }
-];
+// 🟢 字典配置（从API获取，替代硬编码）
+const dictionaryConfig = ref([]); // 存储完整的字典配置 [{ type_code, name_zh, name_en, color, fields: [...] }]
+const dictionaryLoading = ref(false);
 
-const formSchema = {
-  competitor: [
-    { key: 'price', label: '预估客单价', type: 'number', suffix: '元' },
-    { key: 'students', label: '预估学员数', type: 'number', suffix: '人' },
-    { key: 'threat', label: '威胁等级', type: 'rate', max: 5 }
-  ],
-  community: [
-    { key: 'avg_price', label: '挂牌均价', type: 'number', suffix: '元/㎡' },
-    { key: 'households', label: '总户数', type: 'number', suffix: '户' },
-    { key: 'age', label: '建筑年代', type: 'text', placeholder: '如: 2010年' }
-  ],
-  school: [
-    { key: 'level', label: '学校等级', type: 'text', placeholder: '省重点/市重点' },
-    { key: 'students', label: '在校生总数', type: 'number', suffix: '人' }
-  ],
-  route: [
-    { key: 'duration', label: '预计耗时', type: 'number', suffix: '分钟' },
-    { key: 'safety', label: '安全系数', type: 'rate', max: 5 }
-  ]
+// 🟢 获取字典配置
+const fetchDictionaryConfig = async () => {
+  dictionaryLoading.value = true;
+  try {
+    const res = await axios.get('/api/mapbox/dictionary/full');
+    if (res.data.code === 200) {
+      dictionaryConfig.value = res.data.data;
+      // 初始化图层控制
+      initializeLayers();
+    }
+  } catch (err) {
+    console.error('获取字典配置失败:', err);
+    ElMessage.error('获取字典配置失败，使用默认配置');
+    // 如果API失败，使用空数组，避免报错
+    dictionaryConfig.value = [];
+  } finally {
+    dictionaryLoading.value = false;
+  }
 };
+
+// 🟢 初始化图层控制（根据字典配置）
+const initializeLayers = () => {
+  // 清空现有图层状态
+  Object.keys(layers).forEach(key => {
+    delete layers[key];
+  });
+  // 根据字典配置初始化
+  dictionaryConfig.value.forEach(type => {
+    if (type.is_active) {
+      layers[type.type_code] = true;
+    }
+  });
+};
+
+// 🟢 更新地图图层颜色（当字典配置变化时调用）
+const updateMapLayerColors = () => {
+  if (!map.value) return;
+  
+  // 更新多边形颜色
+  if (map.value.getLayer('market-polygons')) {
+    map.value.setPaintProperty('market-polygons', 'fill-color', buildColorMatchExpression('Polygon'));
+  }
+  
+  // 更新线颜色
+  if (map.value.getLayer('market-lines')) {
+    map.value.setPaintProperty('market-lines', 'line-color', buildColorMatchExpression('LineString'));
+  }
+  
+  // 更新点颜色
+  if (map.value.getLayer('market-points')) {
+    map.value.setPaintProperty('market-points', 'circle-color', buildColorMatchExpression('Point'));
+  }
+};
+
+// 🟢 监听字典配置变化，更新地图图层颜色
+watch(() => dictionaryConfig.value, (newConfig) => {
+  updateMapLayerColors();
+}, { deep: true });
+
+// 🟢 监听路由变化，从字典管理页面返回时刷新配置
+watch(() => route.path, (newPath, oldPath) => {
+  // 如果从字典管理页面返回到地图页面，重新获取字典配置
+  if (oldPath === '/strategy/dictionary' && newPath === '/strategy/map') {
+    fetchDictionaryConfig();
+  }
+});
+
+// 🟢 监听字典配置更新事件（从字典管理页面触发）
+onMounted(() => {
+  const handleDictionaryUpdate = () => {
+    // 如果当前在地图页面，刷新字典配置
+    if (route.path === '/strategy/map' && map.value) {
+      fetchDictionaryConfig();
+    }
+  };
+  
+  window.addEventListener('dictionary-config-updated', handleDictionaryUpdate);
+  
+  onUnmounted(() => {
+    window.removeEventListener('dictionary-config-updated', handleDictionaryUpdate);
+  });
+});
 
 watch(layers, (newVal) => {
   if (!map.value || !map.value.getSource('market-data')) return;
@@ -237,19 +437,68 @@ watch(layers, (newVal) => {
 
 }, { deep: true });
 
-const availableCategories = computed(() => {
-  if (!formData.featureType) return [];
-  if (formData.featureType === 'Point') {
-    return categoryConfig.filter(c => ['own', 'competitor', 'school', 'community'].includes(c.value));
-  } else if (formData.featureType === 'LineString') {
-    return categoryConfig.filter(c => ['route', 'block'].includes(c.value));
-  } else {
-    return categoryConfig.filter(c => ['hotzone', 'community'].includes(c.value));
-  }
+// 🟢 启用的字典类型列表（用于图层控制）
+const activeDictionaryTypes = computed(() => {
+  return dictionaryConfig.value.filter(type => type && type.is_active);
 });
 
+// 🟢 按几何类型分组
+const pointTypes = computed(() => {
+  return activeDictionaryTypes.value.filter(type => type.geometry_type === 'Point');
+});
+
+const lineTypes = computed(() => {
+  return activeDictionaryTypes.value.filter(type => type.geometry_type === 'LineString');
+});
+
+const polygonTypes = computed(() => {
+  return activeDictionaryTypes.value.filter(type => type.geometry_type === 'Polygon');
+});
+
+// 🟢 手风琴展开的面板（默认全部收起）
+const activeCollapsePanels = ref([]);
+
+// 🟢 可用类型列表（根据当前几何类型和字典配置）
+const availableCategories = computed(() => {
+  if (!formData.featureType || dictionaryConfig.value.length === 0) return [];
+  
+  // 从字典配置中筛选匹配的几何类型，且为启用状态
+  return dictionaryConfig.value
+    .filter(type => 
+      type && 
+      type.geometry_type === formData.featureType && 
+      type.is_active
+    )
+    .map(type => ({
+      value: type.type_code,
+      label: locale.value === 'zh' ? type.name_zh : type.name_en,
+      color: type.color,
+      type: type.geometry_type
+    }));
+});
+
+// 🟢 当前类型的字段列表（从字典配置获取）
 const currentFormFields = computed(() => {
-  return formSchema[formData.category] || [];
+  if (!formData.category || dictionaryConfig.value.length === 0) return [];
+  
+  const selectedType = dictionaryConfig.value.find(t => t && t.type_code === formData.category);
+  if (!selectedType || !selectedType.fields || !Array.isArray(selectedType.fields)) return [];
+  
+  // 返回字段列表，并处理国际化
+  return selectedType.fields
+    .filter(field => field) // 过滤掉可能的 undefined
+    .map(field => ({
+      key: field.field_key,
+      label: locale.value === 'zh' ? field.name_zh : field.name_en,
+      type: field.field_type,
+      suffix: field.suffix,
+      placeholder: locale.value === 'zh' ? field.placeholder_zh : field.placeholder_en,
+      is_required: field.is_required,
+      default_value: field.default_value,
+      validation_rule: field.validation_rule,
+      options: field.options,
+      max: field.field_type === 'rate' ? (field.validation_rule?.max || 5) : undefined
+    }));
 });
 
 const initMap = () => {
@@ -481,7 +730,7 @@ const handleSelectionChange = (e) => {
   drawSelectedId.value = e.features.length > 0 ? e.features[0].id : null;
 };
 
-const handleDrawCreate = (e) => {
+const handleDrawCreate = async (e) => {
   if (!isAdmin.value) {
     if (e.features.length > 0) {
       draw.value.delete(e.features[0].id);
@@ -504,6 +753,30 @@ const handleDrawCreate = (e) => {
   formData.category = '';
   formData.featureType = feature.geometry.type;
   formData.properties = {};
+  
+  // 🟢 等待下一个 tick，确保 currentFormFields 已更新
+  await nextTick();
+  
+  // 🟢 初始化字段默认值
+  currentFormFields.value.forEach(field => {
+    if (field.default_value !== null && field.default_value !== undefined && field.default_value !== '') {
+      // 对于 rate 类型，确保是数字类型
+      if (field.type === 'rate') {
+        const numValue = typeof field.default_value === 'string' 
+          ? parseFloat(field.default_value) 
+          : Number(field.default_value);
+        formData.properties[field.key] = isNaN(numValue) ? 0 : numValue;
+      } else {
+        formData.properties[field.key] = field.default_value;
+      }
+    } else if (field.type === 'rate') {
+      // rate 类型如果没有默认值，初始化为 0
+      formData.properties[field.key] = 0;
+    } else if (field.type === 'boolean') {
+      // boolean 类型如果没有默认值，初始化为 false
+      formData.properties[field.key] = false;
+    }
+  });
 
   formVisible.value = true;
 };
@@ -556,6 +829,26 @@ const saveFeature = async () => {
   }
 };
 
+// 🟢 动态生成颜色匹配表达式（用于 Mapbox）
+const buildColorMatchExpression = (geometryType) => {
+  const types = dictionaryConfig.value.filter(t => 
+    t && 
+    t.geometry_type === geometryType && 
+    t.is_active
+  );
+  const expression = ['match', ['get', 'category']];
+  
+  types.forEach(type => {
+    if (type && type.type_code && type.color) {
+      expression.push(type.type_code, type.color);
+    }
+  });
+  
+  // 默认颜色
+  expression.push('#888');
+  return expression;
+};
+
 const fetchFeatures = async () => {
   try {
     const res = await axios.get(`/api/mapbox/features?t=${new Date().getTime()}`);
@@ -567,18 +860,14 @@ const fetchFeatures = async () => {
       } else {
         map.value.addSource('market-data', { type: 'geojson', data: geojson });
 
+        // 🟢 使用字典配置动态生成颜色
         map.value.addLayer({
           id: 'market-polygons',
           type: 'fill',
           source: 'market-data',
           filter: ['==', '$type', 'Polygon'],
           paint: {
-            'fill-color': [
-              'match', ['get', 'category'],
-              'hotzone', '#FFFF00',
-              'community', '#E6A23C',
-              '#888'
-            ],
+            'fill-color': buildColorMatchExpression('Polygon'),
             'fill-opacity': 0.3
           }
         });
@@ -600,6 +889,7 @@ const fetchFeatures = async () => {
           }
         });
 
+        // 🟢 使用字典配置动态生成颜色
         map.value.addLayer({
           id: 'market-lines',
           type: 'line',
@@ -607,12 +897,7 @@ const fetchFeatures = async () => {
           filter: ['==', '$type', 'LineString'],
           layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-            'line-color': [
-              'match', ['get', 'category'],
-              'route', '#00FFFF',
-              'block', '#FF00FF',
-              '#888'
-            ],
+            'line-color': buildColorMatchExpression('LineString'),
             'line-width': 4
           }
         });
@@ -635,6 +920,7 @@ const fetchFeatures = async () => {
           }
         });
 
+        // 🟢 使用字典配置动态生成颜色
         map.value.addLayer({
           id: 'market-points',
           type: 'circle',
@@ -642,14 +928,7 @@ const fetchFeatures = async () => {
           filter: ['==', '$type', 'Point'],
           paint: {
             'circle-radius': 6,
-            'circle-color': [
-              'match', ['get', 'category'],
-              'own', '#409EFF',
-              'competitor', '#F56C6C',
-              'school', '#67C23A',
-              'community', '#E6A23C',
-              '#ffffff'
-            ],
+            'circle-color': buildColorMatchExpression('Point'),
             'circle-stroke-width': 1, 'circle-stroke-color': '#fff'
           }
         });
@@ -702,14 +981,49 @@ const fetchFeatures = async () => {
   }
 };
 
+// 🟢 处理类型切换，初始化字段默认值
 const handleCategoryChange = () => {
   formData.properties = {};
+  
+  // 根据字段配置设置默认值
+  currentFormFields.value.forEach(field => {
+    if (field.default_value !== null && field.default_value !== undefined && field.default_value !== '') {
+      // 🟢 对于 rate 类型，确保是数字类型
+      if (field.type === 'rate') {
+        const numValue = typeof field.default_value === 'string' 
+          ? parseFloat(field.default_value) 
+          : Number(field.default_value);
+        formData.properties[field.key] = isNaN(numValue) ? 0 : numValue;
+      } else {
+        formData.properties[field.key] = field.default_value;
+      }
+    } else if (field.type === 'rate') {
+      // 🟢 rate 类型如果没有默认值，初始化为 0
+      formData.properties[field.key] = 0;
+    } else if (field.type === 'boolean') {
+      // 🟢 boolean 类型如果没有默认值，初始化为 false
+      formData.properties[field.key] = false;
+    } else if (field.type === 'number') {
+      // 🟢 number 类型如果没有默认值，初始化为 null（允许为空）
+      formData.properties[field.key] = null;
+    }
+  });
 };
+
+// 🟢 获取类型标签（使用字典配置）
 const getCategoryLabel = (val) => {
-  const item = categoryConfig.find(c => c.value === val);
-  return item ? t(item.label) : val;
+  const type = dictionaryConfig.value.find(t => t && t.type_code === val);
+  if (type) {
+    return locale.value === 'zh' ? type.name_zh : type.name_en;
+  }
+  return val;
 };
-const getCategoryColor = (val) => categoryConfig.find(c => c.value === val)?.color || '#999';
+
+// 🟢 获取类型颜色（使用字典配置）
+const getCategoryColor = (val) => {
+  const type = dictionaryConfig.value.find(t => t && t.type_code === val);
+  return type?.color || '#999';
+};
 const parseProperties = (props) => {
   const { id, name, category, feature_type, ...rest } = props;
   return rest;
@@ -762,25 +1076,52 @@ const updateTime = () => {
   currentTime.value = now.toLocaleTimeString('en-US', { hour12: false });
 };
 
-onMounted(() => {
+// 🟢 监听字典配置更新事件（从字典管理页面触发）
+let dictionaryUpdateHandler = null;
+
+onMounted(async () => {
   if (!token || !userInfoStr) {
     router.push({
-      path: '/system/home',
+      path: '/strategy/home',
       query: { redirect: '/strategy/map' }
     });
     return;
   }
   
+  // 🟢 先获取字典配置
+  await fetchDictionaryConfig();
+  
   updateTime();
   const timeInterval = setInterval(updateTime, 1000);
   initMap();
+  
+  // 🟢 监听字典配置更新事件
+  dictionaryUpdateHandler = () => {
+    // 如果当前在地图页面，刷新字典配置
+    if (route.path === '/strategy/map' && map.value) {
+      fetchDictionaryConfig();
+    }
+  };
+  window.addEventListener('dictionary-config-updated', dictionaryUpdateHandler);
   
   onUnmounted(() => {
     if (timeInterval) clearInterval(timeInterval);
     if (map.value) {
       map.value.remove();
     }
+    // 移除事件监听
+    if (dictionaryUpdateHandler) {
+      window.removeEventListener('dictionary-config-updated', dictionaryUpdateHandler);
+    }
   });
+});
+
+// 🟢 当组件被激活时（从其他页面返回），刷新字典配置
+onActivated(async () => {
+  // 如果地图已初始化，刷新字典配置以获取最新的颜色设置
+  if (map.value) {
+    await fetchDictionaryConfig();
+  }
 });
 </script>
 
@@ -897,6 +1238,11 @@ onMounted(() => {
   gap: 10px;
 }
 
+/* 🟢 取消 Element Plus 按钮的默认间距 */
+.tool-grid .el-button + .el-button {
+  margin-left: 0 !important;
+}
+
 .tool-btn {
   background: rgba(255, 255, 255, 0.05) !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
@@ -930,13 +1276,84 @@ onMounted(() => {
   gap: 10px;
 }
 
+/* 🟢 手风琴样式 - 与工具栏按钮保持一致 */
+.layer-collapse {
+  border: none;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.layer-collapse :deep(.el-collapse-item) {
+  border: none;
+  margin-bottom: 0;
+}
+
+.layer-collapse :deep(.el-collapse-item__header) {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 4px;
+  padding: 10px 15px !important;
+  color: #fff !important;
+  font-size: 0.9rem !important;
+  height: auto !important;
+  min-height: 40px !important;
+  line-height: 1.5;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  transition: all 0.3s;
+}
+
+.layer-collapse :deep(.el-collapse-item__header:hover) {
+  border-color: #409EFF !important;
+  background: rgba(64, 158, 255, 0.1) !important;
+}
+
+.layer-collapse :deep(.el-collapse-item__header.is-active) {
+  border-bottom: none;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.layer-collapse :deep(.el-collapse-item__wrap) {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.layer-collapse :deep(.el-collapse-item__content) {
+  padding: 10px 15px;
+  padding-bottom: 10px;
+}
+
+/* 🟢 取消 Element Plus 手风琴按钮的默认间距 */
+.layer-collapse .el-collapse-item + .el-collapse-item {
+  margin-top: 0;
+}
+
+.collapse-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.geometry-icon {
+  font-size: 1.1rem;
+}
+
 .layer-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 0.9rem;
   color: #cbd5e1;
-  cursor: pointer;
+  padding: 6px 0;
 }
 
 .layer-label {
@@ -973,6 +1390,61 @@ onMounted(() => {
   background: rgba(16, 23, 40, 0.95) !important;
   border: 1px solid #409EFF;
   box-shadow: 0 0 20px rgba(64, 158, 255, 0.3);
+}
+
+/* 🟢 要素表单对话框 - 固定大小，内容可滚动 */
+.feature-form-dialog :deep(.el-dialog) {
+  height: 600px !important;
+  max-height: 600px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.feature-form-dialog :deep(.el-dialog__header) {
+  flex-shrink: 0;
+  padding: 20px 20px 10px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.feature-form-dialog :deep(.el-dialog__body) {
+  flex: 1;
+  overflow: hidden !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.feature-form-dialog .dialog-form-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px;
+  max-height: calc(600px - 120px); /* 减去 header 和 footer 的高度 */
+}
+
+/* 🟢 自定义滚动条样式 */
+.feature-form-dialog .dialog-form-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.feature-form-dialog .dialog-form-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.feature-form-dialog .dialog-form-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.feature-form-dialog .dialog-form-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.feature-form-dialog :deep(.el-dialog__footer) {
+  flex-shrink: 0;
+  padding: 15px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 :deep(.el-dialog__title) {
