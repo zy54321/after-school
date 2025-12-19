@@ -1,6 +1,29 @@
 <template>
-  <router-view></router-view>
+  <el-config-provider :locale="elementPlusLocale">
+    <router-view></router-view>
+  </el-config-provider>
 </template>
+
+<script setup>
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ElConfigProvider } from 'element-plus'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import en from 'element-plus/dist/locale/en.mjs'
+
+const { locale } = useI18n()
+
+// Element Plus 语言映射
+const elementPlusLocaleMap = {
+  zh: zhCn,
+  en: en
+}
+
+// 根据当前语言返回对应的 Element Plus locale
+const elementPlusLocale = computed(() => {
+  return elementPlusLocaleMap[locale.value] || zhCn
+})
+</script>
 
 <style>
 /* 全局重置样式，去掉浏览器的默认边距 */

@@ -4,8 +4,6 @@ const pool = require('../../../shared/config/db');
 const createOrder = async (req, res) => {
   const { student_id, class_id, quantity, amount, remark } = req.body;
 
-  console.log('收到报名请求:', { student_id, class_id, quantity, amount });
-
   const client = await pool.connect();
 
   try {
@@ -118,12 +116,11 @@ const createOrder = async (req, res) => {
     await client.query(upsertBalanceText, params);
 
     await client.query('COMMIT');
-    console.log('✅ 交易成功');
     res.json({ code: 200, msg: '报名成功' });
 
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('❌ 交易失败:', err);
+    console.error('交易失败:', err);
     res.status(500).json({ code: 500, msg: '交易失败，系统已自动回滚', error: err.message });
   } finally {
     client.release();

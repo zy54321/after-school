@@ -108,6 +108,63 @@ const createFeature = async (req, res) => {
   }
 };
 
+const updateFeature = async (req, res) => {
+  const { id } = req.params;
+  const { name, feature_type, category, properties, geometry } = req.body;
+
+  try {
+    // 检查要素是否存在
+    const checkResult = await pool.query(
+      'SELECT id FROM market_features WHERE id = $1',
+      [id]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ code: 404, msg: '要素不存在' });
+    }
+
+    // 构建更新查询
+    let query = `
+      UPDATE market_features
+      SET name = COALESCE($1, name),
+          feature_type = COALESCE($2, feature_type),
+          category = COALESCE($3, category),
+          properties = COALESCE($4::jsonb, properties),
+    `;
+    
+    const values = [
+      name,
+      feature_type,
+      category,
+      properties ? JSON.stringify(properties) : null
+    ];
+
+    // 如果提供了几何形状，更新几何形状
+    if (geometry) {
+      query += `geom = ST_SetSRID(ST_GeomFromGeoJSON($${values.length + 1}), 4326),`;
+      values.push(JSON.stringify(geometry));
+    }
+
+    query += `
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $${values.length + 1}
+      RETURNING id
+    `;
+    values.push(id);
+
+    const result = await pool.query(query, values);
+
+    res.json({
+      code: 200,
+      msg: '更新成功',
+      data: { id: result.rows[0].id }
+    });
+  } catch (err) {
+    console.error('Update error:', err);
+    res.status(500).json({ code: 500, msg: '更新失败，服务器内部错误' });
+  }
+};
+
 const deleteFeature = async (req, res) => {
   const { id } = req.params;
 
@@ -132,5 +189,5 @@ const deleteFeature = async (req, res) => {
   }
 };
 
-module.exports = { searchPlaces, getFeatures, createFeature, deleteFeature };
+module.exports = { searchPlaces, getFeatures, createFeature, updateFeature, deleteFeature };
 

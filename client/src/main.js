@@ -12,7 +12,7 @@ import axios from 'axios'
 // 👇 引入 i18n 相关
 import { createI18n } from 'vue-i18n'
 import zh from './locales/zh'
-import en from './locales/en'
+import enLocale from './locales/en'
 
 const app = createApp(App)
 
@@ -23,7 +23,7 @@ const i18n = createI18n({
   fallbackLocale: 'en', // 缺省语言
   messages: {
     zh,
-    en
+    en: enLocale
   }
 })
 

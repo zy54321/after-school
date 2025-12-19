@@ -30,6 +30,7 @@ const amapRoutes = require('./src/systems/education/routes/amapRoutes');
 // Analytics System 路由（商业分析系统）
 const mapboxRoutes = require('./src/systems/analytics/routes/mapboxRoutes');
 const dictionaryRoutes = require('./src/systems/analytics/routes/dictionaryRoutes');
+const demographicsRoutes = require('./src/systems/analytics/routes/demographicsRoutes');
 
 // 中间件
 app.use(cors({
@@ -83,6 +84,8 @@ app.use('/api/users', checkAuth, checkAdmin, userRoutes);
 app.use('/api/mapbox', checkAuth, mapboxRoutes);
 // 🔒 Analytics System 字典管理路由（需要登录，部分操作需要管理员权限）
 app.use('/api/mapbox/dictionary', checkAuth, dictionaryRoutes);
+// 🔒 Analytics System 人口构成分析路由（需要登录）
+app.use('/api/analytics/demographics', checkAuth, demographicsRoutes);
 
 // 启动服务
 app.listen(port, () => {

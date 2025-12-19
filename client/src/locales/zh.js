@@ -309,12 +309,22 @@ export default {
       polygon: '圈定区域',
       delete: '删除选中'
     },
+    measurement: {
+      title: '测量工具',
+      distance: '测距离',
+      area: '测面积',
+      clear: '清除',
+    },
     dialogs: {
       deleteTitle: '警告',
       deleteMsg: '确定要从数据库中永久删除 "{name}" 吗?', // {name} 是动态参数
       confirmDelete: '确定删除',
       cancel: '取消',
       defaultData: '该数据' // 当没有名称时的兜底显示
+    },
+    search: {
+      placeholder: '输入关键词 (如: 小区名、学校名)',
+      city: '城市(选填)'
     }
   },
   // 新增门户首页翻译

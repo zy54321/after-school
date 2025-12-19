@@ -295,12 +295,22 @@ export default {
       polygon: 'Draw Area',
       delete: 'Delete'
     },
+    measurement: {
+      title: 'Measurement Tools',
+      distance: 'Measure Distance',
+      area: 'Measure Area',
+      clear: 'Clear',
+    },
     dialogs: {
       deleteTitle: 'Warning',
       deleteMsg: 'Are you sure you want to permanently delete "{name}"?',
       confirmDelete: 'Delete',
       cancel: 'Cancel',
       defaultData: 'this item'
+    },
+    search: {
+      placeholder: 'Search Places',
+      city: 'City (Optional)'
     }
   },
   // New Portal translations

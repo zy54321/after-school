@@ -1,5 +1,12 @@
 <template>
   <div class="analytics-map-container">
+    <!-- 🟢 人口构成分析模式组件 -->
+    <DemographicsAnalysis 
+      v-if="isDemographicsAnalysisMode"
+      :map="map"
+      @exit="exitDemographicsAnalysis"
+    />
+    
     <div id="map-container" class="map-container"></div>
 
     <header class="hud-header glass-panel">
@@ -9,6 +16,42 @@
             }}</span></span>
       </div>
       <div class="hud-center">
+        <div class="search-box">
+          <el-input 
+            v-if="locale === 'zh'" 
+            v-model="searchCity" 
+            :placeholder="t('strategy.search.city')"
+            style="width: 100px; margin-right: 5px;" 
+            clearable 
+            size="small"
+          />
+          <el-select 
+            v-model="searchResult" 
+            filterable 
+            remote 
+            reserve-keyword
+            :placeholder="t('strategy.search.placeholder')" 
+            :remote-method="handleSearch"
+            :loading="searching" 
+            @change="onSelectLocation" 
+            style="width: 300px;" 
+            clearable 
+            value-key="id"
+            size="small"
+          >
+            <el-option 
+              v-for="item in searchOptions" 
+              :key="item.id" 
+              :label="item.name" 
+              :value="item"
+            >
+              <span style="float: left">{{ item.name }}</span>
+              <span style="float: right; color: #8492a6; font-size: 12px; margin-left: 10px">
+                {{ item.district }}
+              </span>
+            </el-option>
+          </el-select>
+        </div>
       </div>
       <div class="hud-right">
         <el-button link class="lang-btn" @click="toggleLang"
@@ -19,7 +62,7 @@
       </div>
     </header>
 
-    <aside class="hud-panel left-panel glass-panel">
+    <aside class="hud-panel left-panel glass-panel" v-if="!isDemographicsAnalysisMode">
       <div class="panel-title">{{ t('strategy.arsenal') }}</div>
       <div class="tool-grid">
         <el-button size="small" class="tool-btn" @click="startDraw('point')" :disabled="!isAdmin">
@@ -34,6 +77,63 @@
         <el-button size="small" class="tool-btn delete-btn" type="danger" @click="handleDelete" :disabled="!canDelete || !isAdmin">
           <span class="tool-icon">🗑️</span> {{ t('strategy.actions.delete') }}
         </el-button>
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <!-- 🟢 分析工具 -->
+      <div class="panel-title">{{ locale === 'zh' ? '分析工具' : 'Analysis Tools' }}</div>
+      <div class="tool-grid">
+        <el-button 
+          size="small" 
+          class="tool-btn" 
+          @click="enterDemographicsAnalysis"
+        >
+          <span class="tool-icon">📊</span> {{ locale === 'zh' ? '人口构成分析' : 'Demographics Analysis' }}
+        </el-button>
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <!-- 🟢 测量工具 -->
+      <div class="panel-title">{{ t('strategy.measurement.title') }}</div>
+      <div class="tool-grid">
+        <el-button 
+          size="small" 
+          class="tool-btn" 
+          :type="measurementMode === 'distance' ? 'primary' : 'default'"
+          @click="startMeasureDistance"
+        >
+          <span class="tool-icon">📏</span> {{ t('strategy.measurement.distance') }}
+        </el-button>
+        <el-button 
+          size="small" 
+          class="tool-btn" 
+          :type="measurementMode === 'area' ? 'primary' : 'default'"
+          @click="startMeasureArea"
+        >
+          <span class="tool-icon">📐</span> {{ t('strategy.measurement.area') }}
+        </el-button>
+        <el-button 
+          size="small" 
+          class="tool-btn" 
+          @click="clearMeasurement"
+          :disabled="!hasMeasurement"
+        >
+          <span class="tool-icon">🗑️</span> {{ t('strategy.measurement.clear') }}
+        </el-button>
+      </div>
+      
+      <!-- 🟢 测量结果显示 -->
+      <div v-if="hasMeasurement" class="measurement-result">
+        <div v-if="measurementDistance" class="measurement-item">
+          <span class="measurement-label">{{ t('strategy.measurement.distance') }}:</span>
+          <span class="measurement-value">{{ formatDistance(measurementDistance) }}</span>
+        </div>
+        <div v-if="measurementArea" class="measurement-item">
+          <span class="measurement-label">{{ t('strategy.measurement.area') }}:</span>
+          <span class="measurement-value">{{ formatArea(measurementArea) }}</span>
+        </div>
       </div>
 
       <div class="panel-divider"></div>
@@ -131,20 +231,133 @@
       <aside class="hud-panel right-panel glass-panel" v-if="viewModeFeature">
         <div class="panel-header">
           <div class="panel-title">{{ t('strategy.details') }}</div>
-          <el-button link size="small" @click="viewModeFeature = null">✖</el-button>
+          <div>
+            <el-button 
+              v-if="isAdmin && !isEditingFeature" 
+              link 
+              size="small" 
+              type="primary"
+              @click="startEditFeature"
+              style="margin-right: 10px;"
+            >
+              {{ locale === 'zh' ? '编辑' : 'Edit' }}
+            </el-button>
+            <el-button link size="small" @click="handleCloseDetailPanel">✖</el-button>
+          </div>
         </div>
 
-        <div class="feature-detail">
+        <!-- 🟢 查看模式 -->
+        <div v-if="!isEditingFeature" class="feature-detail">
           <h3 class="detail-title">{{ viewModeFeature.properties.name }}</h3>
           <el-tag size="small" effect="dark" :color="getCategoryColor(viewModeFeature.properties.category)"
             style="border:none; margin-bottom:15px;">
             {{ getCategoryLabel(viewModeFeature.properties.category) }}
           </el-tag>
 
-          <div v-for="(val, key) in parseProperties(viewModeFeature.properties)" :key="key" class="stat-row">
-            <span>{{ formatKey(key) }}:</span>
-            <strong>{{ val }}</strong>
+          <!-- 🟢 显示所有字段，根据字典配置 -->
+          <div v-for="field in detailFields" :key="field.field_key" class="stat-row">
+            <span>{{ locale === 'zh' ? field.name_zh : field.name_en }}:</span>
+            <strong>{{ formatFieldValue(field, viewModeFeature.properties[field.field_key]) }}</strong>
           </div>
+        </div>
+
+        <!-- 🟢 编辑模式 -->
+        <div v-else class="feature-edit">
+          <el-form :model="editFormData" label-position="top" size="default">
+            <el-form-item :label="t('strategy.fields.name')">
+              <el-input v-model="editFormData.name" :placeholder="t('strategy.placeholders.name')" />
+            </el-form-item>
+
+            <el-form-item :label="t('strategy.fields.category')">
+              <el-select v-model="editFormData.category" :placeholder="t('strategy.placeholders.selectType')" disabled>
+                <el-option 
+                  v-for="opt in availableCategories" 
+                  :key="opt.value" 
+                  :label="t(opt.label)" 
+                  :value="opt.value" 
+                />
+              </el-select>
+            </el-form-item>
+
+            <div v-if="editFormFields.length > 0" class="dynamic-fields">
+              <div class="field-group-title">{{ t('strategy.fields.attributes') }}</div>
+
+              <el-form-item 
+                v-for="field in editFormFields" 
+                :key="field.key" 
+                :label="field.label"
+                :required="field.is_required"
+              >
+                <!-- 文本输入 -->
+                <el-input 
+                  v-if="field.type === 'text' || field.type === 'textarea' || field.type === 'url'"
+                  v-model="editFormData.properties[field.key]"
+                  :type="field.type === 'textarea' ? 'textarea' : 'text'"
+                  :placeholder="field.placeholder || ''"
+                  :rows="field.type === 'textarea' ? 3 : undefined"
+                >
+                  <template v-if="field.suffix" #append>{{ field.suffix }}</template>
+                </el-input>
+
+                <!-- 数字输入 -->
+                <el-input-number 
+                  v-if="field.type === 'number'"
+                  v-model="editFormData.properties[field.key]"
+                  :placeholder="field.placeholder || ''"
+                  :min="field.validation_rule?.min"
+                  :max="field.validation_rule?.max"
+                  style="width: 100%"
+                >
+                  <template v-if="field.suffix" #append>{{ field.suffix }}</template>
+                </el-input-number>
+
+                <!-- 日期选择 -->
+                <el-date-picker
+                  v-if="field.type === 'date'"
+                  v-model="editFormData.properties[field.key]"
+                  type="date"
+                  :placeholder="field.placeholder || ''"
+                  style="width: 100%"
+                />
+
+                <!-- 布尔值 -->
+                <el-switch
+                  v-if="field.type === 'boolean'"
+                  v-model="editFormData.properties[field.key]"
+                />
+
+                <!-- 下拉选择 -->
+                <el-select
+                  v-if="field.type === 'select'"
+                  v-model="editFormData.properties[field.key]"
+                  :placeholder="field.placeholder || ''"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="opt in field.options"
+                    :key="opt.value"
+                    :label="locale === 'zh' ? opt.label_zh : opt.label_en"
+                    :value="opt.value"
+                  />
+                </el-select>
+
+                <!-- 评分 -->
+                <el-rate
+                  v-if="field.type === 'rate'"
+                  v-model.number="editFormData.properties[field.key]"
+                  :max="5"
+                  allow-half="false"
+                />
+              </el-form-item>
+            </div>
+
+            <div class="edit-actions">
+              <el-button @click="cancelEditFeature">{{ t('strategy.actions.cancel') }}</el-button>
+              <el-button type="primary" @click="saveEditFeature" :loading="savingEdit">
+                {{ locale === 'zh' ? '保存' : 'Save' }}
+              </el-button>
+            </div>
+          </el-form>
         </div>
       </aside>
     </transition>
@@ -154,6 +367,7 @@
       :title="t('strategy.dialogTitle')" 
       width="500px" 
       :close-on-click-modal="false"
+      :close-on-press-escape="false"
       :show-close="false" 
       class="cyber-dialog feature-form-dialog"
     >
@@ -267,11 +481,17 @@ import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import { Back } from '@element-plus/icons-vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import gcoord from 'gcoord';
+import * as turf from '@turf/turf';
+import DemographicsAnalysis from '../components/DemographicsAnalysis.vue';
 
 const router = useRouter();
 const route = useRoute();
 
 const { t, locale } = useI18n();
+
+// 🟢 人口构成分析模式状态
+const isDemographicsAnalysisMode = ref(false);
 const toggleLang = () => {
   locale.value = locale.value === 'zh' ? 'en' : 'zh';
   ElMessage.success(`Language switched to ${locale.value.toUpperCase()}`);
@@ -288,8 +508,33 @@ const isVisitor = computed(() => userRole === 'visitor' || userInfo.username ===
 const saving = ref(false);
 const isCanceling = ref(false);
 
+// 🟢 格式化字段键为显示名称（从字典配置中获取）
 const formatKey = (key) => {
-  return t(`strategy.fields.${key}`, key);
+  // 如果有选中的要素，尝试从字典配置中查找字段名称
+  if (viewModeFeature.value && viewModeFeature.value.properties) {
+    const category = viewModeFeature.value.properties.category;
+    if (category) {
+      // 查找对应的类型配置
+      const typeConfig = dictionaryConfig.value.find(t => t && t.type_code === category);
+      if (typeConfig && typeConfig.fields) {
+        // 在字段列表中查找匹配的字段
+        const field = typeConfig.fields.find(f => f && f.field_key === key);
+        if (field) {
+          // 根据当前语言返回对应的名称
+          return locale.value === 'zh' ? field.name_zh : field.name_en;
+        }
+      }
+    }
+  }
+  
+  // 如果找不到，尝试使用翻译文件（向后兼容）
+  const translated = t(`strategy.fields.${key}`, '');
+  if (translated && translated !== `strategy.fields.${key}`) {
+    return translated;
+  }
+  
+  // 如果都没有，返回原始键值（首字母大写）
+  return key.charAt(0).toUpperCase() + key.slice(1);
 };
 
 const currentTime = ref('');
@@ -308,6 +553,29 @@ const layers = reactive({
 });
 
 const viewModeFeature = ref(null);
+
+// 🟢 编辑要素相关变量
+const isEditingFeature = ref(false);
+const savingEdit = ref(false);
+const editingFeatureDrawId = ref(null); // 编辑模式下 Draw 中的要素 ID
+
+// 🟢 测量工具相关状态
+const measurementMode = ref(null); // 'distance' | 'area' | null
+const measurementDistance = ref(null); // 距离（米）
+const measurementArea = ref(null); // 面积（平方米）
+const measurementFeatureId = ref(null); // 当前测量的要素 ID
+const hasMeasurement = computed(() => measurementDistance.value !== null || measurementArea.value !== null);
+const editFormData = reactive({
+  name: '',
+  category: '',
+  properties: {}
+});
+
+// 🔍 搜索相关变量
+const searching = ref(false);
+const searchOptions = ref([]);
+const searchResult = ref(null);
+const searchCity = ref('');
 
 const formVisible = ref(false);
 const formData = reactive({
@@ -374,6 +642,73 @@ const updateMapLayerColors = () => {
   if (map.value.getLayer('market-points')) {
     map.value.setPaintProperty('market-points', 'circle-color', buildColorMatchExpression('Point'));
   }
+};
+
+// 🔍 搜索逻辑
+const handleSearch = async (query) => {
+  if (!query) {
+    searchOptions.value = [];
+    return;
+  }
+  searching.value = true;
+  try {
+    if (locale.value === 'zh') {
+      // 中文模式：使用高德API
+      let url = `/api/amap/tips?keywords=${encodeURIComponent(query)}`;
+      if (searchCity.value) {
+        url += `&city=${encodeURIComponent(searchCity.value)}`;
+      }
+      const res = await axios.get(url);
+      if (res.data.code === 200) {
+        searchOptions.value = res.data.data
+          .filter(tip => tip.location && tip.location.length > 0)
+          .map(tip => ({
+            id: tip.id || tip.name,
+            name: tip.name,
+            district: tip.district,
+            center: tip.location.split(',').map(Number)
+          }));
+      }
+    } else {
+      // 英文模式：使用Mapbox API
+      const url = `/api/mapbox/places?query=${encodeURIComponent(query)}`;
+      const res = await axios.get(url);
+      if (res.data.code === 200 && res.data.data.features) {
+        searchOptions.value = res.data.data.features.map(f => ({
+          id: f.id,
+          name: f.text, // 地点名
+          district: f.place_name, // 完整地址
+          center: f.center // [lng, lat]
+        }));
+      }
+    }
+  } catch (err) {
+    console.error('Search failed:', err);
+    ElMessage.error(locale.value === 'zh' ? '搜索失败，请稍后重试' : 'Search failed, please try again');
+  } finally {
+    searching.value = false;
+  }
+};
+
+// 🎯 选中搜索结果，地图飞行到该位置
+const onSelectLocation = (item) => {
+  if (!item || !item.center || !map.value) return;
+
+  let [lng, lat] = item.center;
+
+  // 如果是高德搜索结果(GCJ02)，必须转换为 WGS84
+  if (locale.value === 'zh') {
+    const result = gcoord.transform([lng, lat], gcoord.GCJ02, gcoord.WGS84);
+    lng = result[0];
+    lat = result[1];
+  }
+
+  // 地图飞行到该位置
+  map.value.flyTo({
+    center: [lng, lat],
+    zoom: 14,
+    duration: 1500
+  });
 };
 
 // 🟢 监听字典配置变化，更新地图图层颜色
@@ -501,6 +836,30 @@ const currentFormFields = computed(() => {
     }));
 });
 
+// 🟢 编辑模式的字段列表（从字典配置获取）
+const editFormFields = computed(() => {
+  if (!editFormData.category || dictionaryConfig.value.length === 0) return [];
+  
+  const selectedType = dictionaryConfig.value.find(t => t && t.type_code === editFormData.category);
+  if (!selectedType || !selectedType.fields || !Array.isArray(selectedType.fields)) return [];
+  
+  // 返回字段列表，并处理国际化
+  return selectedType.fields
+    .filter(field => field) // 过滤掉可能的 undefined
+    .map(field => ({
+      key: field.field_key,
+      label: locale.value === 'zh' ? field.name_zh : field.name_en,
+      type: field.field_type,
+      suffix: field.suffix,
+      placeholder: locale.value === 'zh' ? field.placeholder_zh : field.placeholder_en,
+      is_required: field.is_required,
+      default_value: field.default_value,
+      validation_rule: field.validation_rule,
+      options: field.options,
+      max: field.field_type === 'rate' ? (field.validation_rule?.max || 5) : undefined
+    }));
+});
+
 const initMap = () => {
   const token = import.meta.env.VITE_MAPBOX_TOKEN;
   if (!token) return ElMessage.error('Mapbox Token Missing');
@@ -558,6 +917,18 @@ const initMap = () => {
         'type': 'circle',
         'filter': ['all', ['==', '$type', 'Point'], ['!=', 'mode', 'static']],
         'paint': {
+          'circle-radius': 14,
+          'circle-color': '#409EFF',
+          'circle-stroke-width': 4,
+          'circle-stroke-color': '#fff',
+          'circle-opacity': 1
+        }
+      },
+      {
+        'id': 'gl-draw-point-inactive',
+        'type': 'circle',
+        'filter': ['all', ['==', '$type', 'Point'], ['==', 'mode', 'static']],
+        'paint': {
           'circle-radius': 6,
           'circle-color': '#fff'
         }
@@ -567,8 +938,10 @@ const initMap = () => {
         'type': 'circle',
         'filter': ['all', ['==', 'meta', 'vertex'], ['!=', 'mode', 'static']],
         'paint': {
-          'circle-radius': 5,
-          'circle-color': '#fbb03b'
+          'circle-radius': 8,
+          'circle-color': '#fbb03b',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#fff'
         }
       }
     ]
@@ -599,17 +972,45 @@ const initMap = () => {
 
     map.value.on('draw.create', handleDrawCreate);
     map.value.on('draw.selectionchange', handleSelectionChange);
+    map.value.on('draw.update', handleDrawUpdate);
+    // 🟢 监听测量相关的 Draw 事件
+    map.value.on('draw.create', handleMeasurementCreate);
+    map.value.on('draw.update', handleMeasurementUpdate);
   });
 
   map.value.on('click', (e) => {
+    // 🟢 如果正在编辑模式，不允许点击其他要素
+    if (isEditingFeature.value) {
+      return;
+    }
+
+    // 🟢 在分析模式下，也允许点击查看要素详情（除非在特定的选择模式中）
+    // 分析组件的点击事件处理器会在特定模式下处理，这里不做额外检查
+    // 因为 Mapbox 允许多个事件监听器，它们会按顺序执行
+
     if (draw.value.getMode() !== 'simple_select' && draw.value.getMode() !== 'direct_select') {
       return;
     }
 
+    // 🟢 检查图层是否存在，只查询已存在的图层
     const interactLayers = ['market-points', 'market-lines', 'market-polygons'];
-    const features = map.value.queryRenderedFeatures(e.point, {
-      layers: interactLayers
-    });
+    const existingLayers = interactLayers.filter(layerId => map.value.getLayer(layerId));
+    
+    // 如果没有任何图层存在，直接返回
+    if (existingLayers.length === 0) {
+      viewModeFeature.value = null;
+      return;
+    }
+
+    let features = [];
+    try {
+      features = map.value.queryRenderedFeatures(e.point, {
+        layers: existingLayers
+      });
+    } catch (err) {
+      console.warn('查询要素失败:', err);
+      return;
+    }
 
     if (!features.length) {
       viewModeFeature.value = null;
@@ -652,15 +1053,6 @@ const initMap = () => {
     }
   });
 
-  const interactLayers = ['market-points', 'market-lines', 'market-polygons'];
-  interactLayers.forEach(layerId => {
-    map.value.on('mouseenter', layerId, () => {
-      map.value.getCanvas().style.cursor = 'pointer';
-    });
-    map.value.on('mouseleave', layerId, () => {
-      map.value.getCanvas().style.cursor = '';
-    });
-  });
 };
 
 const startDraw = (type) => {
@@ -668,10 +1060,80 @@ const startDraw = (type) => {
     ElMessage.warning('游客权限仅可查看，无法添加数据');
     return;
   }
+  // 🟢 如果正在测量模式，先退出测量模式
+  if (measurementMode.value) {
+    clearMeasurement();
+  }
   viewModeFeature.value = null;
   if (type === 'point') draw.value.changeMode('draw_point');
   if (type === 'line') draw.value.changeMode('draw_line_string');
   if (type === 'polygon') draw.value.changeMode('draw_polygon');
+};
+
+// 🟢 开始测量距离
+const startMeasureDistance = () => {
+  if (measurementMode.value === 'distance') {
+    // 如果已经在距离测量模式，则退出
+    clearMeasurement();
+    return;
+  }
+  
+  clearMeasurement();
+  measurementMode.value = 'distance';
+  viewModeFeature.value = null;
+  draw.value.changeMode('draw_line_string');
+};
+
+// 🟢 开始测量面积
+const startMeasureArea = () => {
+  if (measurementMode.value === 'area') {
+    // 如果已经在面积测量模式，则退出
+    clearMeasurement();
+    return;
+  }
+  
+  clearMeasurement();
+  measurementMode.value = 'area';
+  viewModeFeature.value = null;
+  draw.value.changeMode('draw_polygon');
+};
+
+// 🟢 清除测量结果
+const clearMeasurement = () => {
+  if (measurementFeatureId.value && draw.value) {
+    try {
+      draw.value.delete(measurementFeatureId.value);
+    } catch (err) {
+      // 忽略错误，可能要素已经不存在
+    }
+  }
+  measurementMode.value = null;
+  measurementDistance.value = null;
+  measurementArea.value = null;
+  measurementFeatureId.value = null;
+  
+  // 切换回简单选择模式
+  if (draw.value) {
+    draw.value.changeMode('simple_select', { featureIds: [] });
+  }
+};
+
+// 🟢 格式化距离显示
+const formatDistance = (meters) => {
+  if (meters < 1000) {
+    return `${meters.toFixed(2)} ${locale.value === 'zh' ? '米' : 'm'}`;
+  } else {
+    return `${(meters / 1000).toFixed(2)} ${locale.value === 'zh' ? '千米' : 'km'}`;
+  }
+};
+
+// 🟢 格式化面积显示
+const formatArea = (squareMeters) => {
+  if (squareMeters < 10000) {
+    return `${squareMeters.toFixed(2)} ${locale.value === 'zh' ? '平方米' : 'm²'}`;
+  } else {
+    return `${(squareMeters / 10000).toFixed(2)} ${locale.value === 'zh' ? '公顷' : 'ha'}`;
+  }
 };
 
 const canDelete = computed(() => {
@@ -728,9 +1190,57 @@ const handleDelete = async () => {
 
 const handleSelectionChange = (e) => {
   drawSelectedId.value = e.features.length > 0 ? e.features[0].id : null;
+  
+  // 🟢 如果是在编辑模式下，且是点要素，更新几何形状
+  if (isEditingFeature.value && editingFeatureDrawId.value && viewModeFeature.value) {
+    const selectedFeature = e.features.find(f => f.id === editingFeatureDrawId.value);
+    if (selectedFeature && viewModeFeature.value.geometry.type === 'Point') {
+      // 更新点要素的几何形状（点要素在 simple_select 模式下可以通过拖拽移动）
+      viewModeFeature.value.geometry = selectedFeature.geometry;
+    }
+  }
+};
+
+// 🟢 处理测量要素的创建
+const handleMeasurementCreate = (e) => {
+  if (!measurementMode.value) return;
+  
+  const feature = e.features[0];
+  measurementFeatureId.value = feature.id;
+  
+  // 计算距离或面积
+  if (measurementMode.value === 'distance' && feature.geometry.type === 'LineString') {
+    const length = turf.length(feature, { units: 'meters' });
+    measurementDistance.value = length;
+  } else if (measurementMode.value === 'area' && feature.geometry.type === 'Polygon') {
+    const area = turf.area(feature);
+    measurementArea.value = area;
+  }
+};
+
+// 🟢 处理测量要素的更新
+const handleMeasurementUpdate = (e) => {
+  if (!measurementMode.value) return;
+  
+  const feature = e.features.find(f => f.id === measurementFeatureId.value);
+  if (!feature) return;
+  
+  // 重新计算距离或面积
+  if (measurementMode.value === 'distance' && feature.geometry.type === 'LineString') {
+    const length = turf.length(feature, { units: 'meters' });
+    measurementDistance.value = length;
+  } else if (measurementMode.value === 'area' && feature.geometry.type === 'Polygon') {
+    const area = turf.area(feature);
+    measurementArea.value = area;
+  }
 };
 
 const handleDrawCreate = async (e) => {
+  // 🟢 如果是测量模式，不处理数据录入
+  if (measurementMode.value) {
+    return;
+  }
+  
   if (!isAdmin.value) {
     if (e.features.length > 0) {
       draw.value.delete(e.features[0].id);
@@ -849,6 +1359,27 @@ const buildColorMatchExpression = (geometryType) => {
   return expression;
 };
 
+// 🟢 为交互图层添加鼠标悬停效果
+const addLayerHoverEffects = () => {
+  if (!map.value) return;
+  
+  const interactLayers = ['market-points', 'market-lines', 'market-polygons'];
+  interactLayers.forEach(layerId => {
+    if (map.value.getLayer(layerId)) {
+      // 移除旧的事件监听器（如果存在）
+      map.value.off('mouseenter', layerId);
+      map.value.off('mouseleave', layerId);
+      
+      map.value.on('mouseenter', layerId, () => {
+        map.value.getCanvas().style.cursor = 'pointer';
+      });
+      map.value.on('mouseleave', layerId, () => {
+        map.value.getCanvas().style.cursor = '';
+      });
+    }
+  });
+};
+
 const fetchFeatures = async () => {
   try {
     const res = await axios.get(`/api/mapbox/features?t=${new Date().getTime()}`);
@@ -869,7 +1400,7 @@ const fetchFeatures = async () => {
           paint: {
             'fill-color': buildColorMatchExpression('Polygon'),
             'fill-opacity': 0.3
-          }
+          },
         });
         map.value.addLayer({
           id: 'market-polygons-label',
@@ -899,7 +1430,7 @@ const fetchFeatures = async () => {
           paint: {
             'line-color': buildColorMatchExpression('LineString'),
             'line-width': 4
-          }
+          },
         });
         map.value.addLayer({
           id: 'market-lines-label',
@@ -929,8 +1460,9 @@ const fetchFeatures = async () => {
           paint: {
             'circle-radius': 6,
             'circle-color': buildColorMatchExpression('Point'),
-            'circle-stroke-width': 1, 'circle-stroke-color': '#fff'
-          }
+            'circle-stroke-width': 1, 
+            'circle-stroke-color': '#fff'
+          },
         });
         map.value.addLayer({
           id: 'market-points-label',
@@ -950,6 +1482,9 @@ const fetchFeatures = async () => {
             'text-halo-width': 1
           }
         });
+        
+        // 🟢 图层创建后添加悬停效果
+        addLayerHoverEffects();
 
         if (geojson.features.length > 0) {
           const bounds = new mapboxgl.LngLatBounds();
@@ -1024,6 +1559,418 @@ const getCategoryColor = (val) => {
   const type = dictionaryConfig.value.find(t => t && t.type_code === val);
   return type?.color || '#999';
 };
+
+// 🟢 获取详情面板要显示的所有字段（根据字典配置）
+const detailFields = computed(() => {
+  if (!viewModeFeature.value || !viewModeFeature.value.properties) {
+    return [];
+  }
+  
+  const category = viewModeFeature.value.properties.category;
+  if (!category) {
+    return [];
+  }
+  
+  // 查找对应的类型配置
+  const typeConfig = dictionaryConfig.value.find(t => t && t.type_code === category);
+  if (!typeConfig || !typeConfig.fields) {
+    return [];
+  }
+  
+  // 返回所有字段，按 sort_order 排序
+  return [...typeConfig.fields].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+});
+
+// 🟢 格式化字段值显示（转译原始值）
+const formatFieldValue = (field, value) => {
+  // 如果值为空，返回空字符串
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  
+  // 根据字段类型转译
+  switch (field.field_type) {
+    case 'boolean':
+      // 布尔值转译
+      if (value === true || value === 'true' || value === 1 || value === '1') {
+        return locale.value === 'zh' ? '是' : 'Yes';
+      } else if (value === false || value === 'false' || value === 0 || value === '0') {
+        return locale.value === 'zh' ? '否' : 'No';
+      }
+      return String(value);
+    
+    case 'select':
+      // 下拉选择值转译
+      let options = field.options;
+      // 如果 options 是字符串，尝试解析
+      if (typeof options === 'string') {
+        try {
+          options = JSON.parse(options);
+        } catch (e) {
+          console.error('解析 options 失败:', e);
+          options = null;
+        }
+      }
+      if (options && Array.isArray(options)) {
+        const option = options.find(opt => opt && (opt.value === String(value) || opt.value === value));
+        if (option) {
+          return locale.value === 'zh' ? option.label_zh : option.label_en;
+        }
+      }
+      return String(value);
+    
+    case 'date':
+      // 日期格式化
+      if (value) {
+        try {
+          const date = new Date(value);
+          if (!isNaN(date.getTime())) {
+            // 根据语言格式化日期
+            if (locale.value === 'zh') {
+              return date.toLocaleDateString('zh-CN', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit' 
+              });
+            } else {
+              return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit' 
+              });
+            }
+          }
+        } catch (e) {
+          console.error('日期格式化失败:', e);
+        }
+      }
+      return String(value);
+    
+    case 'rate':
+      // 评分显示：显示星级
+      const rateValue = Number(value) || 0;
+      const stars = '★'.repeat(Math.floor(rateValue)) + '☆'.repeat(5 - Math.floor(rateValue));
+      return `${stars} (${rateValue})`;
+    
+    case 'number':
+      // 数字格式化：如果有后缀，添加后缀
+      const numValue = Number(value);
+      if (isNaN(numValue)) {
+        return String(value);
+      }
+      if (field.suffix) {
+        return `${numValue}${field.suffix}`;
+      }
+      return numValue.toLocaleString(locale.value === 'zh' ? 'zh-CN' : 'en-US');
+    
+    case 'url':
+      // URL 显示为链接文本
+      return String(value);
+    
+    case 'textarea':
+    case 'text':
+    default:
+      // 文本类型直接显示
+      return String(value);
+  }
+};
+
+// 🟢 开始编辑要素
+const startEditFeature = () => {
+  if (!viewModeFeature.value || !map.value || !draw.value) return;
+  
+  // 初始化编辑表单数据
+  editFormData.name = viewModeFeature.value.properties.name || '';
+  editFormData.category = viewModeFeature.value.properties.category || '';
+  editFormData.properties = { ...viewModeFeature.value.properties };
+  
+  // 移除系统字段
+  delete editFormData.properties.id;
+  delete editFormData.properties.name;
+  delete editFormData.properties.category;
+  delete editFormData.properties.feature_type;
+  
+  // 初始化字段默认值
+  editFormFields.value.forEach(field => {
+    if (editFormData.properties[field.key] === undefined || editFormData.properties[field.key] === null) {
+      if (field.type === 'rate') {
+        editFormData.properties[field.key] = 0;
+      } else if (field.type === 'boolean') {
+        editFormData.properties[field.key] = false;
+      } else if (field.type === 'number') {
+        editFormData.properties[field.key] = null;
+      } else {
+        editFormData.properties[field.key] = '';
+      }
+    }
+  });
+  
+  // 🟢 将当前要素添加到 Draw 中，使其可编辑
+  try {
+    const geometryType = viewModeFeature.value.geometry.type;
+    
+    // 创建 Draw 格式的要素
+    const drawFeature = {
+      type: 'Feature',
+      id: `edit-${viewModeFeature.value.properties.id}`,
+      geometry: { ...viewModeFeature.value.geometry },
+      properties: {}
+    };
+    
+    // 添加到 Draw
+    draw.value.add(drawFeature);
+    editingFeatureDrawId.value = drawFeature.id;
+    
+    // 🟢 根据几何类型选择不同的编辑模式
+    if (geometryType === 'Point') {
+      // 点要素使用 simple_select 模式，通过拖拽来移动
+      draw.value.changeMode('simple_select', { featureIds: [drawFeature.id] });
+      
+      // 🟢 确保点要素编辑控制点显示在最上层
+      // 通过调整图层顺序，将 Draw 的图层移到所有市场数据图层之后
+      setTimeout(() => {
+        if (map.value) {
+          // 获取所有市场数据图层 ID（作为参考点）
+          const marketLayers = [
+            'market-polygons',
+            'market-polygons-label',
+            'market-lines',
+            'market-lines-label',
+            'market-points',
+            'market-points-label'
+          ];
+          
+          // 找到最后一个存在的市场数据图层
+          let lastMarketLayer = null;
+          for (let i = marketLayers.length - 1; i >= 0; i--) {
+            if (map.value.getLayer(marketLayers[i])) {
+              lastMarketLayer = marketLayers[i];
+              break;
+            }
+          }
+          
+          // 获取所有 Draw 相关的图层 ID（按顺序，确保控制点图层在最后）
+          const drawLayers = [
+            'gl-draw-line',
+            'gl-draw-polygon-fill',
+            'gl-draw-polygon-stroke-active',
+            'gl-draw-point-inactive',
+            'gl-draw-polygon-and-line-vertex-active',
+            'gl-draw-point-active' // 点要素控制点放在最后，确保在最上层
+          ];
+          
+          // 将 Draw 图层移到最后一个市场数据图层之后
+          drawLayers.forEach(layerId => {
+            if (map.value.getLayer(layerId)) {
+              if (lastMarketLayer) {
+                // 移到最后一个市场数据图层之后
+                map.value.moveLayer(layerId, lastMarketLayer);
+                // 更新 lastMarketLayer 为当前图层，这样下一个图层会在这个图层之后
+                lastMarketLayer = layerId;
+              } else {
+                // 如果没有市场数据图层，直接移到最上层
+                map.value.moveLayer(layerId);
+              }
+            }
+          });
+        }
+      }, 200);
+    } else {
+      // 线和面要素使用 direct_select 模式，可以编辑节点
+      draw.value.changeMode('direct_select', { featureId: drawFeature.id });
+      
+      // 🟢 确保编辑控制点显示在最上层
+      setTimeout(() => {
+        if (map.value) {
+          // 获取所有市场数据图层 ID（作为参考点）
+          const marketLayers = [
+            'market-polygons',
+            'market-polygons-label',
+            'market-lines',
+            'market-lines-label',
+            'market-points',
+            'market-points-label'
+          ];
+          
+          // 找到最后一个存在的市场数据图层
+          let lastMarketLayer = null;
+          for (let i = marketLayers.length - 1; i >= 0; i--) {
+            if (map.value.getLayer(marketLayers[i])) {
+              lastMarketLayer = marketLayers[i];
+              break;
+            }
+          }
+          
+          const drawLayers = [
+            'gl-draw-polygon-fill',
+            'gl-draw-polygon-stroke-active',
+            'gl-draw-line',
+            'gl-draw-polygon-and-line-vertex-active' // 控制点图层放在最后，确保在最上层
+          ];
+          
+          // 将 Draw 图层移到最后一个市场数据图层之后
+          drawLayers.forEach(layerId => {
+            if (map.value.getLayer(layerId)) {
+              if (lastMarketLayer) {
+                // 移到最后一个市场数据图层之后
+                map.value.moveLayer(layerId, lastMarketLayer);
+                // 更新 lastMarketLayer 为当前图层，这样下一个图层会在这个图层之后
+                lastMarketLayer = layerId;
+              } else {
+                // 如果没有市场数据图层，直接移到最上层
+                map.value.moveLayer(layerId);
+              }
+            }
+          });
+        }
+      }, 200);
+    }
+    
+    isEditingFeature.value = true;
+  } catch (err) {
+    console.error('添加要素到 Draw 失败:', err);
+    ElMessage.error(locale.value === 'zh' ? '无法启用编辑模式' : 'Failed to enable edit mode');
+  }
+};
+
+// 🟢 关闭详情面板
+const handleCloseDetailPanel = () => {
+  // 如果正在编辑，先取消编辑
+  if (isEditingFeature.value) {
+    cancelEditFeature();
+  }
+  // 关闭详情面板
+  viewModeFeature.value = null;
+};
+
+// 🟢 取消编辑
+const cancelEditFeature = () => {
+  // 🟢 从 Draw 中移除编辑的要素
+  if (editingFeatureDrawId.value && draw.value) {
+    try {
+      draw.value.delete(editingFeatureDrawId.value);
+    } catch (err) {
+      console.error('移除 Draw 要素失败:', err);
+    }
+    editingFeatureDrawId.value = null;
+  }
+  
+  // 🟢 切换回简单选择模式
+  if (draw.value) {
+    draw.value.changeMode('simple_select', { featureIds: [] });
+  }
+  
+  isEditingFeature.value = false;
+  editFormData.name = '';
+  editFormData.category = '';
+  editFormData.properties = {};
+};
+
+// 🟢 处理 Draw 更新事件（几何形状被修改时）
+const handleDrawUpdate = (e) => {
+  // 如果是在编辑模式下，更新 viewModeFeature 的几何形状
+  if (isEditingFeature.value && editingFeatureDrawId.value) {
+    const updatedFeature = e.features.find(f => f.id === editingFeatureDrawId.value);
+    if (updatedFeature && viewModeFeature.value) {
+      // 更新几何形状
+      viewModeFeature.value.geometry = updatedFeature.geometry;
+    }
+  }
+};
+
+// 🟢 处理 Draw 选择变化事件（用于点要素的拖拽更新）
+const handleDrawSelectionChange = (e) => {
+  // 如果是在编辑模式下，且是点要素，监听拖拽
+  if (isEditingFeature.value && editingFeatureDrawId.value && viewModeFeature.value) {
+    const selectedFeature = e.features.find(f => f.id === editingFeatureDrawId.value);
+    if (selectedFeature && viewModeFeature.value.geometry.type === 'Point') {
+      // 更新点要素的几何形状
+      viewModeFeature.value.geometry = selectedFeature.geometry;
+    }
+  }
+  
+  // 🟢 调用原有的选择变化处理函数
+  handleSelectionChange(e);
+};
+
+// 🟢 保存编辑
+const saveEditFeature = async () => {
+  if (!viewModeFeature.value || !viewModeFeature.value.properties.id) {
+    ElMessage.error(locale.value === 'zh' ? '要素ID不存在' : 'Feature ID not found');
+    return;
+  }
+  
+  savingEdit.value = true;
+  try {
+    const featureId = viewModeFeature.value.properties.id;
+    
+    // 🟢 从 Draw 中获取更新后的几何形状
+    let updatedGeometry = viewModeFeature.value.geometry;
+    if (editingFeatureDrawId.value && draw.value) {
+      try {
+        const drawFeature = draw.value.get(editingFeatureDrawId.value);
+        if (drawFeature) {
+          updatedGeometry = drawFeature.geometry;
+        }
+      } catch (err) {
+        console.warn('获取 Draw 要素失败，使用原始几何形状:', err);
+      }
+    }
+    
+    // 准备更新数据（包含几何形状）
+    const updateData = {
+      name: editFormData.name,
+      category: editFormData.category,
+      properties: { ...editFormData.properties },
+      geometry: updatedGeometry
+    };
+    
+    const res = await axios.put(`/api/mapbox/features/${featureId}`, updateData);
+    
+    if (res.data.code === 200) {
+      ElMessage.success(locale.value === 'zh' ? '更新成功' : 'Update successful');
+      
+      // 🟢 从 Draw 中移除编辑的要素
+      if (editingFeatureDrawId.value && draw.value) {
+        try {
+          draw.value.delete(editingFeatureDrawId.value);
+        } catch (err) {
+          console.error('移除 Draw 要素失败:', err);
+        }
+        editingFeatureDrawId.value = null;
+      }
+      
+      // 🟢 切换回简单选择模式
+      if (draw.value) {
+        draw.value.changeMode('simple_select', { featureIds: [] });
+      }
+      
+      // 刷新地图数据
+      await fetchFeatures();
+      
+      // 更新当前查看的要素数据
+      if (map.value && map.value.getSource('market-data')) {
+        const updatedFeature = map.value.getSource('market-data')._data.features.find(
+          f => f.properties.id === featureId
+        );
+        if (updatedFeature) {
+          viewModeFeature.value = updatedFeature;
+        }
+      }
+      
+      // 退出编辑模式
+      isEditingFeature.value = false;
+    } else {
+      ElMessage.error(res.data.msg || (locale.value === 'zh' ? '更新失败' : 'Update failed'));
+    }
+  } catch (err) {
+    console.error('保存编辑失败:', err);
+    ElMessage.error(err.response?.data?.msg || (locale.value === 'zh' ? '更新失败' : 'Update failed'));
+  } finally {
+    savingEdit.value = false;
+  }
+};
+
 const parseProperties = (props) => {
   const { id, name, category, feature_type, ...rest } = props;
   return rest;
@@ -1074,6 +2021,16 @@ const add3DBuildings = () => {
 const updateTime = () => {
   const now = new Date();
   currentTime.value = now.toLocaleTimeString('en-US', { hour12: false });
+};
+
+// 🟢 进入人口构成分析模式
+const enterDemographicsAnalysis = () => {
+  isDemographicsAnalysisMode.value = true;
+};
+
+// 🟢 退出人口构成分析模式
+const exitDemographicsAnalysis = () => {
+  isDemographicsAnalysisMode.value = false;
 };
 
 // 🟢 监听字典配置更新事件（从字典管理页面触发）
@@ -1182,6 +2139,58 @@ onActivated(async () => {
   font-size: 0.8rem;
 }
 
+.hud-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 420px;
+}
+
+.search-box :deep(.el-input__wrapper) {
+  background-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  border: 1px solid rgba(64, 158, 255, 0.3);
+}
+
+.search-box :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #409EFF;
+  border-color: #409EFF;
+}
+
+.search-box :deep(.el-input__inner) {
+  color: #fff;
+}
+
+.search-box :deep(.el-select__wrapper) {
+  background-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  border: 1px solid rgba(64, 158, 255, 0.3);
+}
+
+.search-box :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #409EFF;
+  border-color: #409EFF;
+}
+
+.search-box :deep(.el-select__placeholder) {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.search-box :deep(.el-select__selected-item) {
+  color: #fff;
+}
+
+.search-box :deep(.el-select__caret) {
+  color: rgba(255, 255, 255, 0.6);
+}
+
 .hud-right .time {
   font-family: monospace;
   font-size: 1.2rem;
@@ -1255,6 +2264,70 @@ onActivated(async () => {
 .tool-btn:hover {
   border-color: #409EFF !important;
   background: rgba(64, 158, 255, 0.1) !important;
+}
+
+/* 🟢 测量结果显示样式 */
+.measurement-result {
+  margin-top: 15px;
+  padding: 12px;
+  background: rgba(64, 158, 255, 0.1);
+  border: 1px solid rgba(64, 158, 255, 0.3);
+  border-radius: 6px;
+}
+
+.measurement-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.measurement-item:last-child {
+  margin-bottom: 0;
+}
+
+.measurement-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.measurement-value {
+  color: #409EFF;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* 🟢 测量结果显示样式 */
+.measurement-result {
+  margin-top: 15px;
+  padding: 12px;
+  background: rgba(64, 158, 255, 0.1);
+  border: 1px solid rgba(64, 158, 255, 0.3);
+  border-radius: 6px;
+}
+
+.measurement-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.measurement-item:last-child {
+  margin-bottom: 0;
+}
+
+.measurement-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.measurement-value {
+  color: #409EFF;
+  font-weight: bold;
+  font-size: 14px;
 }
 
 .tool-icon {
@@ -1384,6 +2457,61 @@ onActivated(async () => {
 
 .stat-row strong {
   color: #fff;
+}
+
+/* 🟢 编辑表单样式 */
+.feature-edit {
+  padding: 10px 0;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.feature-edit :deep(.el-form-item__label) {
+  color: #409EFF !important;
+  font-size: 0.85rem;
+}
+
+.feature-edit :deep(.el-input__wrapper) {
+  background-color: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.feature-edit :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #409EFF;
+  border-color: #409EFF;
+}
+
+.feature-edit :deep(.el-input__inner) {
+  color: #fff;
+}
+
+.feature-edit :deep(.el-select__wrapper) {
+  background-color: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.feature-edit :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #409EFF;
+  border-color: #409EFF;
+}
+
+.feature-edit :deep(.el-select__placeholder) {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.feature-edit :deep(.el-select__selected-item) {
+  color: #fff;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 :deep(.cyber-dialog) {
