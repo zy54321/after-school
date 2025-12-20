@@ -95,12 +95,12 @@ const routes = [
         component: () => import('../systems/analytics/views/StrategyMap.vue'),
         meta: { requiresAuth: true } // 子路由也需要登录
       },
-      {
-        path: 'demographics',
-        name: 'DemographicsAnalysis',
-        component: () => import('../systems/analytics/views/DemographicsAnalysisView.vue'),
-        meta: { requiresAuth: true }
-      },
+      // {
+      //   path: 'demographics',
+      //   name: 'DemographicsAnalysis',
+      //   component: () => import('../systems/analytics/views/DemographicsAnalysisView.vue'),
+      //   meta: { requiresAuth: true }
+      // },
       { 
         path: 'dictionary', 
         name: 'DictionaryManagement', 
