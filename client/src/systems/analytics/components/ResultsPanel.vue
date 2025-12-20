@@ -2,6 +2,14 @@
   <div class="results-panel glass-panel">
     <div class="panel-header">
       <h3>{{ locale === 'zh' ? '步骤 3/3: 查看结果与调整' : 'Step 3/3: View Results & Adjust' }}</h3>
+      <el-tooltip :content="locale === 'zh' ? '查看算法原理' : 'Algorithm Principles'" placement="top">
+        <el-button link type="primary" size="small" @click="showAlgoModal = true" style="padding: 0; font-size: 14px;">
+          <el-icon style="margin-right: 4px;">
+            <InfoFilled />
+          </el-icon>
+          {{ locale === 'zh' ? '算法原理' : 'Algorithm' }}
+        </el-button>
+      </el-tooltip>
     </div>
 
     <div class="panel-content">
@@ -9,13 +17,8 @@
       <div class="communities-section" v-if="communityNames.length > 0">
         <div class="section-title">{{ locale === 'zh' ? '分析小区' : 'Analyzed Communities' }}</div>
         <div class="communities-list">
-          <el-tag 
-            v-for="(name, index) in communityNames" 
-            :key="index"
-            class="community-tag"
-            effect="dark"
-            :color="getTagColor(index)"
-          >
+          <el-tag v-for="(name, index) in communityNames" :key="index" class="community-tag" effect="dark"
+            :color="getTagColor(index)">
             {{ name }}
           </el-tag>
         </div>
@@ -30,12 +33,8 @@
         <div class="summary-item">
           <div class="summary-label">{{ locale === 'zh' ? '置信度' : 'Confidence' }}</div>
           <div class="summary-value">
-            <el-progress 
-              :percentage="aggregatedConfidence" 
-              :color="confidenceColor"
-              :stroke-width="10"
-              :show-text="true"
-            />
+            <el-progress :percentage="aggregatedConfidence" :color="confidenceColor" :stroke-width="10"
+              :show-text="true" />
           </div>
         </div>
       </div>
@@ -49,50 +48,21 @@
       <!-- 数据表格 -->
       <div class="table-section">
         <div class="section-title">{{ locale === 'zh' ? '详细数据' : 'Detailed Data' }}</div>
-        <el-table 
-          :data="ageDistributionTable" 
-          stripe
-          border
-          size="small"
-          style="width: 100%"
-        >
-          <el-table-column 
-            prop="ageGroup" 
-            :label="locale === 'zh' ? '年龄组' : 'Age Group'"
-            width="100"
-          />
-          <el-table-column 
-            prop="count" 
-            :label="locale === 'zh' ? '人数' : 'Count'"
-            width="100"
-            align="right"
-          >
+        <el-table :data="ageDistributionTable" stripe border size="small" style="width: 100%">
+          <el-table-column prop="ageGroup" :label="locale === 'zh' ? '年龄组' : 'Age Group'" width="100" />
+          <el-table-column prop="count" :label="locale === 'zh' ? '人数' : 'Count'" width="100" align="right">
             <template #default="{ row }">
               {{ formatNumber(row.count) }}
             </template>
           </el-table-column>
-          <el-table-column 
-            prop="percentage" 
-            :label="locale === 'zh' ? '占比' : 'Percentage'"
-            width="100"
-            align="right"
-          >
+          <el-table-column prop="percentage" :label="locale === 'zh' ? '占比' : 'Percentage'" width="100" align="right">
             <template #default="{ row }">
               {{ row.percentage }}%
             </template>
           </el-table-column>
-          <el-table-column 
-            prop="confidence" 
-            :label="locale === 'zh' ? '置信度' : 'Confidence'"
-            width="120"
-            align="right"
-          >
+          <el-table-column prop="confidence" :label="locale === 'zh' ? '置信度' : 'Confidence'" width="120" align="right">
             <template #default="{ row }">
-              <el-progress 
-                :percentage="row.confidence" 
-                :stroke-width="6"
-                :show-text="false"
-              />
+              <el-progress :percentage="row.confidence" :stroke-width="6" :show-text="false" />
             </template>
           </el-table-column>
         </el-table>
@@ -109,7 +79,7 @@
           <div class="parameter-info-item">
             <span class="info-label">{{ locale === 'zh' ? '户均人数' : 'Avg People per Household' }}:</span>
             <span class="info-value">
-              {{ parameters.avgPeoplePerHousehold !== null && parameters.avgPeoplePerHousehold !== undefined 
+              {{ parameters.avgPeoplePerHousehold !== null && parameters.avgPeoplePerHousehold !== undefined
                 ? parameters.avgPeoplePerHousehold.toFixed(1) + (locale === 'zh' ? ' 人/户' : ' people/household')
                 : (locale === 'zh' ? '自动估算' : 'Auto estimated') }}
             </span>
@@ -125,12 +95,10 @@
       <el-button @click="handleBack">
         {{ locale === 'zh' ? '上一步' : 'Previous' }}
       </el-button>
-      <el-button 
-        type="primary"
-        @click="handleComplete"
-      >
+      <el-button type="primary" @click="handleComplete">
         {{ locale === 'zh' ? '完成' : 'Complete' }}
       </el-button>
+      <AlgorithmGuideModal v-model:visible="showAlgoModal" />
     </div>
   </div>
 </template>
@@ -140,6 +108,8 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import * as echarts from 'echarts';
+import { InfoFilled } from '@element-plus/icons-vue';
+import AlgorithmGuideModal from './AlgorithmGuideModal.vue';
 
 const props = defineProps({
   analysisResult: {
@@ -159,6 +129,7 @@ const props = defineProps({
 const emit = defineEmits(['back', 'complete']);
 
 const { locale } = useI18n();
+const showAlgoModal = ref(false);
 
 // 图表容器
 const pyramidChartContainer = ref(null);
@@ -188,7 +159,7 @@ const communityNames = computed(() => {
     }
     return [];
   }
-  
+
   // 从 selectedCommunities 中提取名称
   return props.selectedCommunities.map(community => {
     if (typeof community === 'object' && community.properties) {
@@ -238,7 +209,7 @@ const aggregatedResult = computed(() => {
   // 汇总年龄分布
   const ageDistribution = {};
   const ageGroups = ['0-6', '7-18', '19-35', '36-59', '60+'];
-  
+
   ageGroups.forEach(group => {
     let totalCount = 0;
     results.forEach(r => {
@@ -265,7 +236,7 @@ const aggregatedResult = computed(() => {
 // 聚合置信度
 const aggregatedConfidence = computed(() => {
   if (!props.analysisResult || !props.analysisResult.results) return 0;
-  
+
   const results = props.analysisResult.results.filter(r => r.success);
   if (results.length === 0) return 0;
 
@@ -280,7 +251,7 @@ const aggregatedConfidence = computed(() => {
   const avgConfidence = totalConfidence / results.length;
   const percentage = Math.round(avgConfidence * 100);
   console.log('聚合置信度:', { totalConfidence, resultsLength: results.length, avgConfidence, percentage });
-  
+
   return percentage;
 });
 
@@ -296,7 +267,7 @@ const confidenceColor = computed(() => {
 const ageDistributionTable = computed(() => {
   const distribution = aggregatedResult.value.age_distribution || {};
   const ageGroups = ['0-6', '7-18', '19-35', '36-59', '60+'];
-  
+
   return ageGroups.map(group => ({
     ageGroup: group,
     count: distribution[group]?.count || 0,
@@ -320,7 +291,7 @@ const initPyramidChart = () => {
   // 准备数据
   const distribution = aggregatedResult.value.age_distribution || {};
   const ageGroups = ['0-6', '7-18', '19-35', '36-59', '60+'];
-  
+
   const maleData = [];
   const femaleData = [];
   const categories = [];
@@ -330,7 +301,7 @@ const initPyramidChart = () => {
     // 假设男女比例 1:1（实际应该根据数据计算）
     const maleCount = Math.round(count * 0.5);
     const femaleCount = count - maleCount;
-    
+
     maleData.push(maleCount);
     femaleData.push(femaleCount);
     categories.push(group);
@@ -459,7 +430,7 @@ onUnmounted(() => {
     pyramidChart.dispose();
     pyramidChart = null;
   }
-  window.removeEventListener('resize', () => {});
+  window.removeEventListener('resize', () => { });
 });
 </script>
 
@@ -752,4 +723,3 @@ onUnmounted(() => {
   font-style: italic;
 }
 </style>
-
