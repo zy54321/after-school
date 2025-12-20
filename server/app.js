@@ -32,6 +32,10 @@ const mapboxRoutes = require('./src/systems/analytics/routes/mapboxRoutes');
 const dictionaryRoutes = require('./src/systems/analytics/routes/dictionaryRoutes');
 const demographicsRoutes = require('./src/systems/analytics/routes/demographicsRoutes');
 
+// 🔥 信任反向代理 (Cloudflare/Nginx)
+// 如果没有这一行，Express 认为当前是 HTTP，导致 secure: true 的 Cookie 发不出去
+app.set('trust proxy', 1);
+
 // 中间件
 app.use(cors({
   // 👇 改成数组，允许多个来源
@@ -55,10 +59,13 @@ app.use(session({
   secret: 'my_super_secret_key_123', // 建议改个复杂的字符串
   resave: false,
   saveUninitialized: false, // 没登录时不创建 session，节省空间
+  // 🔥 修改：Cookie 策略升级
   cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30天过期
-    httpOnly: true, // 前端 JS 无法读取，防 XSS
-    // secure: false // 如果是 HTTPS 需要设为 true
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    // 判断环境：生产环境强制开启 Secure 和 SameSite: None
+    secure: process.env.NODE_ENV === 'production', 
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' 
   }
 }));
 
