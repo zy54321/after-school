@@ -1026,14 +1026,12 @@ const initMap = () => {
 
     viewModeFeature.value = feature;
 
+    // 🟢 只移动到中心位置，不缩放
+    let center;
     if (feature.geometry.type === 'Point') {
-      map.value.flyTo({
-        center: feature.geometry.coordinates,
-        zoom: 15,
-        speed: 1.2,
-        curve: 1
-      });
+      center = feature.geometry.coordinates;
     } else {
+      // 对于线要素和面要素，计算中心点
       const bounds = new mapboxgl.LngLatBounds();
       const geom = feature.geometry;
 
@@ -1045,12 +1043,16 @@ const initMap = () => {
         });
       }
 
-      map.value.fitBounds(bounds, {
-        padding: 150,
-        maxZoom: 15,
-        duration: 1500
-      });
+      // 获取边界框的中心点
+      center = bounds.getCenter().toArray();
     }
+
+    // 移动到中心位置，保持当前缩放级别
+    map.value.flyTo({
+      center: center,
+      speed: 1.2,
+      curve: 1
+    });
   });
 
 };
@@ -2464,6 +2466,29 @@ onActivated(async () => {
   padding: 10px 0;
   max-height: calc(100vh - 200px);
   overflow-y: auto;
+  overflow-x: hidden;
+  /* Firefox 滚动条样式 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}
+
+/* 统一滚动条样式 - WebKit 浏览器 */
+.feature-edit::-webkit-scrollbar {
+  width: 6px;
+}
+
+.feature-edit::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.feature-edit::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.feature-edit::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .feature-edit :deep(.el-form-item__label) {
