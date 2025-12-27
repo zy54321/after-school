@@ -49,6 +49,12 @@
             <span>{{ $t('menu.users') }}</span>
           </el-menu-item>
 
+          <el-menu-item index="/system/daily-workflow">
+            <el-icon>
+              <DataBoard />
+            </el-icon> <span>特训工作台</span>
+          </el-menu-item>
+
           <el-menu-item index="PORTAL_LINK" @click="goHome">
             <el-icon>
               <HomeFilled />
@@ -173,4 +179,3 @@ const handleLangCommand = (command) => {
   height: 100%;
 }
 </style>
-

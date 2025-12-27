@@ -74,13 +74,24 @@ const routes = [
         name: 'Users', 
         component: () => import('../systems/education/views/UserList.vue') 
       },
-      // 原 "生源热力图" 现已归入系统作为基础 "网格化管理"
       { 
         path: 'grid-map', 
         name: 'GridMap', 
         component: () => import('../systems/education/views/StudentMap.vue') 
       },
+      {
+        path: 'daily-workflow',
+        name: 'DailyWorkflow',
+        component: () => import('../systems/education/views/DailyWorkflow.vue'),
+        meta: { title: '特训工作台' }
+      },
     ]
+  },
+  {
+    path: '/report/view',
+    name: 'ReportView',
+    component: () => import('../systems/education/views/ReportView.vue'),
+    meta: { title: '成长日报' }
   },
 
   // 4. 商业分析层 (Analytics System) - 需鉴权

@@ -26,6 +26,7 @@ const attendanceRoutes = require('./src/systems/education/routes/attendanceRoute
 const dashboardRoutes = require('./src/systems/education/routes/dashboardRoutes');
 const userRoutes = require('./src/systems/education/routes/userRoutes');
 const amapRoutes = require('./src/systems/education/routes/amapRoutes');
+const dailyReportRoutes = require('./src/systems/education/routes/dailyReportRoutes');
 
 // Analytics System 路由（商业分析系统）
 const mapboxRoutes = require('./src/systems/analytics/routes/mapboxRoutes');
@@ -80,6 +81,9 @@ app.use('/api/classes', checkAuth, classRoutes);
 app.use('/api/orders', checkAuth, orderRoutes);
 app.use('/api/attendance', checkAuth, attendanceRoutes);
 app.use('/api/dashboard', checkAuth, dashboardRoutes);
+app.use('/api/reports', checkAuth, dailyReportRoutes);
+// ⭐公开接口 (家长看日报，不需要登录) ⭐
+app.use('/api/public/reports', dailyReportRoutes);
 
 // 🗺️ Education System 地图服务路由
 app.use('/api/amap', checkAuth, amapRoutes);
