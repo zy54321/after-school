@@ -22,7 +22,7 @@
             <el-tag size="small" type="info" class="ml-2">家长日报必显</el-tag>
           </div>
           <div class="flex gap-2 mb-2">
-            <el-input v-model="menu.menu_content" placeholder="输入今日菜谱" class="flex-1">
+            <el-input v-model="menu.menu_content" placeholder="自动同步今日食谱..." class="flex-1" readonly>
               <template #prepend>今日菜谱</template>
             </el-input>
           </div>
