@@ -1,12 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const dailyReportController = require('../controllers/dailyReportController');
+const controller = require('../controllers/dailyReportController');
 
-// 老师用的接口
-router.get('/workflow', dailyReportController.getDailyWorkflowData);
-router.post('/workflow', dailyReportController.saveDailyWorkflow);
+const checkAuth = require('../../../shared/middleware/authMiddleware');
 
-// ⭐ 家长用的接口 (查询)
-router.get('/view', dailyReportController.getStudentReportByToken);
+// ⭐ 1. 公开接口 (不需要登录)
+// 家长查看日报 (对应前端 /api/reports/view)
+router.get('/view', controller.getStudentReportByToken);
+
+// ⭐ 2. 鉴权中间件 (在此之后的接口都需要登录)
+router.use(checkAuth);
+
+// ⭐ 3. 受保护接口 (老师/管理员用的)
+router.get('/workflow', controller.getDailyWorkflowData);
+router.post('/workflow', controller.saveDailyWorkflow);
 
 module.exports = router;
