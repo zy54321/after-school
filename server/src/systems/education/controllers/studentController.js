@@ -81,15 +81,16 @@ const createStudent = async (req, res) => {
   try {
     const query = `
       INSERT INTO students (
-        name, gender, parent_name, parent_phone, balance, address, longitude, latitude,
+        name, gender, grade, parent_name, parent_phone, balance, address, longitude, latitude,
         allergies, authorized_pickups, habit_goals, agreements_signed
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) -- 注意参数对应
       RETURNING *;
     `;
     const values = [
       name,
       gender,
+      req.body.grade || null,
       parent_name,
       parent_phone,
       balance || 0,
@@ -139,15 +140,16 @@ const updateStudent = async (req, res) => {
   try {
     const query = `
       UPDATE students 
-      SET name = $1, gender = $2, parent_name = $3, parent_phone = $4, balance = $5, 
-          address = $6, longitude = $7, latitude = $8,
-          allergies = $9, authorized_pickups = $10, habit_goals = $11, agreements_signed = $12
-      WHERE id = $13 AND status = 1
+      SET name = $1, gender = $2, grade = $3, parent_name = $4, parent_phone = $5, balance = $6, 
+          address = $7, longitude = $8, latitude = $9,
+          allergies = $10, authorized_pickups = $11, habit_goals = $12, agreements_signed = $13
+      WHERE id = $14 AND status = 1
       RETURNING *;
     `;
     const values = [
       name,
       gender,
+      req.body.grade || null,
       parent_name,
       parent_phone,
       balance || 0,
