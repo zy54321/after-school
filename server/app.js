@@ -85,9 +85,9 @@ app.use('/api/classes', checkAuth, classRoutes);
 app.use('/api/orders', checkAuth, orderRoutes);
 app.use('/api/attendance', checkAuth, attendanceRoutes);
 app.use('/api/dashboard', checkAuth, dashboardRoutes);
-app.use('/api/reports', checkAuth, dailyReportRoutes);
 // ⭐公开接口 (家长看日报，不需要登录) ⭐
-app.use('/api/public/reports', dailyReportRoutes);
+app.use('/api/reports', dailyReportRoutes);
+// app.use('/api/public/reports', dailyReportRoutes);
 app.use('/api/catering', cateringRoutes);
 
 // 🗺️ Education System 地图服务路由
