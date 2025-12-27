@@ -49,6 +49,29 @@
             <span>{{ $t('menu.users') }}</span>
           </el-menu-item>
 
+          <el-sub-menu index="/system/catering">
+            <template #title>
+              <el-icon>
+                <Food />
+              </el-icon> <span>餐饮管理</span>
+            </template>
+            <el-menu-item index="/system/catering/ingredients">
+              <el-icon>
+                <Apple />
+              </el-icon> 食材库
+            </el-menu-item>
+            <el-menu-item index="/system/catering/dishes">
+              <el-icon>
+                <Dish />
+              </el-icon> 菜品库
+            </el-menu-item>
+            <el-menu-item index="/system/catering/weekly-menu">
+              <el-icon>
+                <Calendar />
+              </el-icon> 食谱排期
+            </el-menu-item>
+          </el-sub-menu>
+
           <el-menu-item index="/system/daily-workflow">
             <el-icon>
               <DataBoard />
@@ -94,7 +117,7 @@
 </template>
 
 <script setup>
-import { Odometer, User, Calendar, Money, School, Tools, MapLocation, HomeFilled } from '@element-plus/icons-vue';
+import { Odometer, User, Calendar, Money, School, Tools, MapLocation, HomeFilled, Food, Apple, Dish } from '@element-plus/icons-vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { ref } from 'vue';

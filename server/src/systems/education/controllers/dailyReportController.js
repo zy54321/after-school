@@ -6,11 +6,50 @@ exports.getDailyWorkflowData = async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
 
-    // 1. 获取菜单
-    const menuRes = await pool.query(
+    // 1. 获取今日实录菜单 (老师手动填写的)
+    let menuRes = await pool.query(
       'SELECT * FROM daily_menus WHERE report_date = $1',
       [today]
     );
+
+    let menuData = menuRes.rows[0];
+
+    // ⭐ 核心闭环逻辑：如果今天还没录菜单，就去食谱排期里“偷”数据
+    if (!menuData) {
+      const planRes = await pool.query(
+        `
+        SELECT wm.meal_type, d.name 
+        FROM weekly_menus wm
+        JOIN dishes d ON wm.dish_id = d.id
+        WHERE wm.plan_date = $1
+        ORDER BY wm.meal_type
+      `,
+        [today]
+      );
+
+      if (planRes.rows.length > 0) {
+        // 自动拼装文案
+        // 目标格式：【午餐】菜A、菜B 【晚餐】菜C
+        const meals = {};
+        planRes.rows.forEach((row) => {
+          const typeName = { lunch: '午餐', dinner: '晚餐', snack: '加餐' }[
+            row.meal_type
+          ];
+          if (!meals[typeName]) meals[typeName] = [];
+          meals[typeName].push(row.name);
+        });
+
+        const autoContent = Object.entries(meals)
+          .map(([type, dishes]) => `【${type}】${dishes.join('、')}`)
+          .join(' ');
+
+        // 构造一个临时对象返回给前端 (evidence_photo_url 为空)
+        menuData = { menu_content: autoContent, evidence_photo_url: '' };
+      } else {
+        // 排期里也没数据，这就没办法了
+        menuData = { menu_content: '', evidence_photo_url: '' };
+      }
+    }
 
     // 2. 获取学生及今日日报状态
     const studentsRes = await pool.query(
@@ -33,7 +72,7 @@ exports.getDailyWorkflowData = async (req, res) => {
       code: 200,
       data: {
         date: today,
-        menu: menuRes.rows[0] || { menu_content: '', evidence_photo_url: '' },
+        menu: menuData, // ⭐ 这里传回去的可能是自动生成的
         students: studentsRes.rows,
       },
     });
@@ -45,7 +84,7 @@ exports.getDailyWorkflowData = async (req, res) => {
   }
 };
 
-// 保存日报数据 (生成 Token)
+// 保存日报数据 (保持不变)
 exports.saveDailyWorkflow = async (req, res) => {
   const { date, menu, students } = req.body;
   const client = await pool.connect();
@@ -71,14 +110,12 @@ exports.saveDailyWorkflow = async (req, res) => {
     }
 
     // 2. 保存学生日报
-    const generatedLinks = []; // 用于返回给前端展示
+    const generatedLinks = [];
 
     for (const student of students) {
-      // 生成随机 Token (如果之前没有)
-      // 逻辑：尝试读取旧 Token，如果没有传过来，就新生成一个
       let token = student.token;
       if (!token) {
-        token = crypto.randomBytes(16).toString('hex'); // 生成 32位 随机字符
+        token = crypto.randomBytes(16).toString('hex');
       }
 
       const upsertQuery = `
@@ -110,20 +147,17 @@ exports.saveDailyWorkflow = async (req, res) => {
         student.homework_tags,
         token,
         student.discipline_rating || 'A',
-        student.habit_rating || 'A'
+        student.habit_rating || 'A',
       ]);
 
-      // 收集生成好的 Token
       generatedLinks.push({
         student_id: student.id,
-        name: student.name || '学生', // 这里最好前端传name过来，或者只传id
+        name: student.name || '学生',
         token: res.rows[0].token,
       });
     }
 
     await client.query('COMMIT');
-
-    // ⭐ 返回生成的 Token 列表，方便前端生成链接
     res.json({ code: 200, msg: '保存成功', data: generatedLinks });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -134,14 +168,13 @@ exports.saveDailyWorkflow = async (req, res) => {
   }
 };
 
-// ⭐ 新增：公开查询接口 (凭 Token 查日报)
+// 公开查询接口 (保持不变)
 exports.getStudentReportByToken = async (req, res) => {
   const { token } = req.query;
 
   if (!token) return res.status(400).json({ code: 400, msg: '凭证无效' });
 
   try {
-    // 1. 先查出当前的日报详情 (为了拿到 student_id)
     const reportQuery = `
       SELECT 
         dr.*, 
@@ -160,13 +193,12 @@ exports.getStudentReportByToken = async (req, res) => {
 
     const currentReport = reportRes.rows[0];
 
-    // 2. ⭐ 新增：查询该学生最近 7 天的专注力数据 (用于画折线图)
     const historyQuery = `
       SELECT report_date, focus_minutes, homework_rating
       FROM daily_reports
       WHERE student_id = $1 
       AND report_date <= $2
-      ORDER BY report_date ASC -- 按时间正序，方便前端画图
+      ORDER BY report_date ASC
       LIMIT 7
     `;
     const historyRes = await pool.query(historyQuery, [
@@ -174,7 +206,6 @@ exports.getStudentReportByToken = async (req, res) => {
       currentReport.report_date,
     ]);
 
-    // 3. 自动生成评语 (逻辑保持不变)
     if (!currentReport.teacher_comment) {
       if (
         currentReport.distraction_count === 0 &&
@@ -196,7 +227,7 @@ exports.getStudentReportByToken = async (req, res) => {
       code: 200,
       data: {
         ...currentReport,
-        history: historyRes.rows, // 把历史数据塞进去
+        history: historyRes.rows,
       },
     });
   } catch (err) {

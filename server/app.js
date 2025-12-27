@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const pool = require('./src/shared/config/db');
@@ -27,6 +28,7 @@ const dashboardRoutes = require('./src/systems/education/routes/dashboardRoutes'
 const userRoutes = require('./src/systems/education/routes/userRoutes');
 const amapRoutes = require('./src/systems/education/routes/amapRoutes');
 const dailyReportRoutes = require('./src/systems/education/routes/dailyReportRoutes');
+const cateringRoutes = require('./src/systems/catering/routes/cateringRoutes');
 
 // Analytics System 路由（商业分析系统）
 const mapboxRoutes = require('./src/systems/analytics/routes/mapboxRoutes');
@@ -49,6 +51,8 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+// 静态文件托管 (上传的图片)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // === 配置 Session ===
 app.use(session({
@@ -84,6 +88,7 @@ app.use('/api/dashboard', checkAuth, dashboardRoutes);
 app.use('/api/reports', checkAuth, dailyReportRoutes);
 // ⭐公开接口 (家长看日报，不需要登录) ⭐
 app.use('/api/public/reports', dailyReportRoutes);
+app.use('/api/catering', cateringRoutes);
 
 // 🗺️ Education System 地图服务路由
 app.use('/api/amap', checkAuth, amapRoutes);

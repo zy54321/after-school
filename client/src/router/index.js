@@ -85,6 +85,28 @@ const routes = [
         component: () => import('../systems/education/views/DailyWorkflow.vue'),
         meta: { title: '特训工作台' }
       },
+      {
+        path: 'students/:id',
+        component: () => import('../systems/education/views/StudentDetail.vue')
+      },
+      {
+        path: 'catering/ingredients',
+        name: 'Ingredients',
+        component: () => import('../systems/catering/views/Ingredients.vue'),
+        meta: { title: '食材库' }
+      },
+      {
+        path: 'catering/dishes',
+        name: 'Dishes',
+        component: () => import('../systems/catering/views/Dishes.vue'),
+        meta: { title: '菜品库' }
+      },
+      {
+        path: 'catering/weekly-menu',
+        name: 'WeeklyMenu',
+        component: () => import('../systems/catering/views/WeeklyMenu.vue'),
+        meta: { title: '食谱排期' }
+      },
     ]
   },
   {
