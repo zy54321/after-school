@@ -4,10 +4,9 @@ const pool = require('../../../shared/config/db');
 // 🥦 1. 食材管理 (Ingredients)
 // ==========================================
 
-// 获取食材列表 (按分类排序，方便前端合并显示)
+// 获取食材列表
 exports.getIngredients = async (req, res) => {
   try {
-    // ⭐ 重点：必须 ORDER BY category，否则前端合并单元格会乱
     const result = await pool.query(
       'SELECT * FROM ingredients ORDER BY category DESC, id ASC'
     );
@@ -19,9 +18,9 @@ exports.getIngredients = async (req, res) => {
   }
 };
 
-// 新增食材 (含 price, source)
+// 新增食材
 exports.createIngredient = async (req, res) => {
-  const { name, category, unit, allergen_type, price, source } = req.body; // 👈 取 source
+  const { name, category, unit, allergen_type, price, source } = req.body;
   try {
     const result = await pool.query(
       `INSERT INTO ingredients (name, category, unit, allergen_type, price, source) 
@@ -41,10 +40,10 @@ exports.createIngredient = async (req, res) => {
   }
 };
 
-// 更新食材 (含 price, source)
+// 更新食材
 exports.updateIngredient = async (req, res) => {
   const { id } = req.params;
-  const { name, category, unit, allergen_type, price, source } = req.body; // 👈 取 source
+  const { name, category, unit, allergen_type, price, source } = req.body;
   try {
     const result = await pool.query(
       `UPDATE ingredients 
@@ -85,7 +84,7 @@ exports.deleteIngredient = async (req, res) => {
 // 🍲 2. 菜品管理 (Dishes)
 // ==========================================
 
-// 获取菜品库 (含食材详情)
+// 获取菜品库
 exports.getDishes = async (req, res) => {
   try {
     const query = `
@@ -110,21 +109,18 @@ exports.getDishes = async (req, res) => {
     const result = await pool.query(query);
     res.json({ code: 200, data: result.rows });
   } catch (err) {
-    console.error(err);
     res
       .status(500)
       .json({ code: 500, msg: '获取菜品失败', error: err.message });
   }
 };
 
-// 新增菜品
+// 新增菜品 (带事务)
 exports.createDish = async (req, res) => {
   const { name, photo_url, description, tags, ingredients } = req.body;
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
     const dishRes = await client.query(
       `INSERT INTO dishes (name, photo_url, description, tags) VALUES ($1, $2, $3, $4) RETURNING id`,
       [name, photo_url, description, tags || []]
@@ -139,7 +135,6 @@ exports.createDish = async (req, res) => {
         );
       }
     }
-
     await client.query('COMMIT');
     res.json({ code: 200, msg: '菜品创建成功', data: { id: dishId } });
   } catch (err) {
@@ -152,27 +147,22 @@ exports.createDish = async (req, res) => {
 
 // 图片上传
 exports.uploadImage = (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ code: 400, msg: '未上传文件' });
-  }
+  if (!req.file) return res.status(400).json({ code: 400, msg: '未上传文件' });
   const fileUrl = `/uploads/${req.file.filename}`;
   res.json({ code: 200, msg: '上传成功', url: fileUrl });
 };
 
-// 更新菜品
+// 更新菜品 (带事务)
 exports.updateDish = async (req, res) => {
   const { id } = req.params;
   const { name, photo_url, description, tags, ingredients } = req.body;
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
     await client.query(
       `UPDATE dishes SET name=$1, photo_url=$2, description=$3, tags=$4 WHERE id=$5`,
       [name, photo_url, description, tags || [], id]
     );
-
     await client.query('DELETE FROM dish_ingredients WHERE dish_id = $1', [id]);
 
     if (ingredients && ingredients.length > 0) {
@@ -183,7 +173,6 @@ exports.updateDish = async (req, res) => {
         );
       }
     }
-
     await client.query('COMMIT');
     res.json({ code: 200, msg: '菜品更新成功' });
   } catch (err) {
@@ -256,30 +245,35 @@ exports.addMenuItem = async (req, res) => {
 };
 
 exports.removeMenuItem = async (req, res) => {
-  const { id } = req.params;
   try {
-    await pool.query('DELETE FROM weekly_menus WHERE id = $1', [id]);
+    await pool.query('DELETE FROM weekly_menus WHERE id = $1', [req.params.id]);
     res.json({ code: 200, msg: '移除成功' });
   } catch (err) {
     res.status(500).json({ code: 500, msg: '移除失败' });
   }
 };
+
 // ==========================================
-// 🛒 4. 智能采购 (Shopping List)
+// 🛒 4. 智能采购 (Shopping List) - 修正版
 // ==========================================
 exports.getShoppingList = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
-    // 核心聚合查询：按 货源 > 分类 > 食材名 分组求和
+    // 1. 获取当前在读学员人数
+    const countRes = await pool.query(
+      "SELECT count(*) FROM students WHERE status = 'active'"
+    );
+    const studentCount = parseInt(countRes.rows[0].count) || 0;
+
+    // 2. 获取基准食材量 (SUM求和的是10人份的总量)
     const query = `
       SELECT 
         i.source,
         i.category,
         i.name,
         i.unit,
-        SUM(di.quantity) as total_quantity, -- 汇总数量
-        i.price,
-        SUM(di.quantity * i.price) as total_cost -- 估算成本
+        SUM(di.quantity) as benchmark_total, -- 这是一个“10人基准量”的汇总
+        i.price
       FROM weekly_menus wm
       JOIN dish_ingredients di ON wm.dish_id = di.dish_id
       JOIN ingredients i ON di.ingredient_id = i.id
@@ -292,14 +286,12 @@ exports.getShoppingList = async (req, res) => {
           WHEN '麦德龙' THEN 3 
           WHEN '叮咚买菜' THEN 4 
           ELSE 5 
-        END,
-        i.category, 
-        i.name
+        END, i.category, i.name
     `;
 
     const result = await pool.query(query, [start_date, end_date]);
 
-    // 在后端直接把数据按“source”分组，方便前端渲染
+    // 3. 内存计算：应用 (基准量 / 10 * 实际人数) 公式
     const groupedData = {};
     result.rows.forEach((row) => {
       if (!groupedData[row.source]) {
@@ -309,20 +301,34 @@ exports.getShoppingList = async (req, res) => {
           totalCost: 0,
         };
       }
-      // 格式化数字，保留2位小数，去掉末尾无效的0
-      row.total_quantity = parseFloat(
-        parseFloat(row.total_quantity).toFixed(2)
-      );
-      row.total_cost = parseFloat(parseFloat(row.total_cost).toFixed(2));
 
-      groupedData[row.source].items.push(row);
-      groupedData[row.source].totalCost += row.total_cost;
+      // ⭐ 核心修正：
+      // row.benchmark_total 是数据库里存的量（我们定义为10人份）
+      // 实际需求 = (基准量 / 10) * 实际人数
+      const actualQuantity =
+        (parseFloat(row.benchmark_total) / 10) * studentCount;
+      const actualCost = actualQuantity * parseFloat(row.price);
+
+      const item = {
+        category: row.category,
+        name: row.name,
+        unit: row.unit,
+        price: row.price,
+        // 这里返回给前端的是已经乘过人数的“实际采购量”
+        total_quantity: parseFloat(actualQuantity.toFixed(2)),
+        total_cost: parseFloat(actualCost.toFixed(2)),
+      };
+
+      groupedData[row.source].items.push(item);
+      groupedData[row.source].totalCost += item.total_cost;
     });
 
-    // 转为数组返回
-    const responseData = Object.values(groupedData);
+    // 格式化总金额
+    Object.values(groupedData).forEach((g) => {
+      g.totalCost = parseFloat(g.totalCost.toFixed(2));
+    });
 
-    res.json({ code: 200, data: responseData });
+    res.json({ code: 200, data: Object.values(groupedData) });
   } catch (err) {
     console.error(err);
     res
@@ -330,56 +336,62 @@ exports.getShoppingList = async (req, res) => {
       .json({ code: 500, msg: '生成采购单失败', error: err.message });
   }
 };
+
 // ==========================================
-// 💰 5. 成本分析 (Cost Analysis)
+// 💰 5. 成本分析 (Cost Analysis) - 修正版
 // ==========================================
 exports.getCostAnalysis = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
-    // 1. 获取每日实际上课/用餐人数 (基于 daily_reports)
+    // 1. 获取兜底人数 (当前在读)
+    const activeRes = await pool.query(
+      "SELECT count(*) FROM students WHERE status = 'active'"
+    );
+    const activeCount = parseInt(activeRes.rows[0].count) || 0;
+
+    // 2. 获取每日实际打卡人数 (历史数据更准)
     const studentRes = await pool.query(
-      `
-      SELECT to_char(report_date, 'YYYY-MM-DD') as date, COUNT(*) as count
-      FROM daily_reports
-      WHERE report_date >= $1 AND report_date <= $2
-      GROUP BY date
-    `,
+      `SELECT to_char(report_date, 'YYYY-MM-DD') as date, COUNT(*) as count
+       FROM daily_reports
+       WHERE report_date >= $1 AND report_date <= $2
+       GROUP BY date`,
       [start_date, end_date]
     );
-
     const studentCounts = {};
     studentRes.rows.forEach((r) => (studentCounts[r.date] = parseInt(r.count)));
 
-    // 2. 计算每日食谱的理论总成本
-    // 逻辑：菜单上的菜 -> 对应配方 -> 食材单价 * 数量
+    // 3. 计算“10人基准成本”
     const costRes = await pool.query(
-      `
-      SELECT 
-        to_char(wm.plan_date, 'YYYY-MM-DD') as date,
-        SUM(di.quantity * i.price) as total_cost
-      FROM weekly_menus wm
-      JOIN dish_ingredients di ON wm.dish_id = di.dish_id
-      JOIN ingredients i ON di.ingredient_id = i.id
-      WHERE wm.plan_date >= $1 AND wm.plan_date <= $2
-      GROUP BY date
-      ORDER BY date
-    `,
+      `SELECT 
+         to_char(wm.plan_date, 'YYYY-MM-DD') as date,
+         SUM(di.quantity * i.price) as benchmark_cost_10
+       FROM weekly_menus wm
+       JOIN dish_ingredients di ON wm.dish_id = di.dish_id
+       JOIN ingredients i ON di.ingredient_id = i.id
+       WHERE wm.plan_date >= $1 AND wm.plan_date <= $2
+       GROUP BY date
+       ORDER BY date`,
       [start_date, end_date]
     );
 
-    // 3. 合并数据
+    // 4. 合并计算
     const data = costRes.rows.map((row) => {
-      const count = studentCounts[row.date] || 0; // 当天用餐人数
-      const total = parseFloat(parseFloat(row.total_cost).toFixed(2));
+      // 优先用打卡人数，没有则用在读人数
+      const count = studentCounts[row.date] || activeCount;
+      const benchmarkTotal = parseFloat(row.benchmark_cost_10);
 
-      // 如果没人打卡，人均成本就没法算(分母为0)，暂记为0或等于总成本
-      const avg = count > 0 ? parseFloat((total / count).toFixed(2)) : 0;
+      // ⭐ 核心修正：
+      // 实际总成本 = (10人份成本 / 10) * 实际人数
+      const realTotalCost = (benchmarkTotal / 10) * count;
+
+      // 人均成本 = 实际总成本 / 实际人数 = (benchmarkTotal / 10)
+      const avg = count > 0 ? realTotalCost / count : 0;
 
       return {
         date: row.date,
-        total_cost: total,
+        total_cost: parseFloat(realTotalCost.toFixed(2)),
         student_count: count,
-        avg_cost: avg,
+        avg_cost: parseFloat(avg.toFixed(2)),
       };
     });
 
@@ -391,20 +403,19 @@ exports.getCostAnalysis = async (req, res) => {
       .json({ code: 500, msg: '获取成本数据失败', error: err.message });
   }
 };
+
 // ==========================================
 // 📱 6. 家长端公开食谱 (Public Weekly Menu)
 // ==========================================
 exports.getPublicWeeklyMenu = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
-    // 1. 查询食谱及菜品基础信息
     const menuQuery = `
       SELECT 
         to_char(wm.plan_date, 'YYYY-MM-DD') as date, 
         wm.meal_type, 
         d.name as dish_name, 
         d.photo_url, 
-        d.description,
         d.tags,
         d.id as dish_id
       FROM weekly_menus wm
@@ -414,14 +425,11 @@ exports.getPublicWeeklyMenu = async (req, res) => {
     `;
     const menuRes = await pool.query(menuQuery, [start_date, end_date]);
 
-    // 2. 查询这些菜品用到的食材和货源 (去重)
-    // 技巧：一次性查出该时间段所有相关食材，在内存里匹配，减少数据库压力
     const sourcingQuery = `
       SELECT DISTINCT
         wm.dish_id,
         i.name as ingredient_name,
-        i.source,
-        i.category
+        i.source
       FROM weekly_menus wm
       JOIN dish_ingredients di ON wm.dish_id = di.dish_id
       JOIN ingredients i ON di.ingredient_id = i.id
@@ -429,9 +437,7 @@ exports.getPublicWeeklyMenu = async (req, res) => {
     `;
     const sourcingRes = await pool.query(sourcingQuery, [start_date, end_date]);
 
-    // 3. 数据组装：把食材挂载到对应的菜品上
     const menuList = menuRes.rows.map((dish) => {
-      // 找到这道菜用到的所有食材
       const ingredients = sourcingRes.rows.filter(
         (s) => s.dish_id === dish.dish_id
       );
@@ -440,14 +446,11 @@ exports.getPublicWeeklyMenu = async (req, res) => {
         ingredients: ingredients.map((i) => ({
           name: i.ingredient_name,
           source: i.source,
-          category: i.category,
         })),
       };
     });
 
-    // 4. 按日期分组 (Frontend 需要 Mon-Sun 的结构)
     const groupedByDate = {};
-    // 初始化每一天，确保即使某天没饭也有空结构
     let curr = new Date(start_date);
     const end = new Date(end_date);
     while (curr <= end) {
@@ -461,7 +464,6 @@ exports.getPublicWeeklyMenu = async (req, res) => {
 
     menuList.forEach((item) => {
       if (groupedByDate[item.date]) {
-        // 容错处理：防止 meal_type 是未知类型
         const type = ['lunch', 'dinner', 'snack'].includes(item.meal_type)
           ? item.meal_type
           : 'lunch';
@@ -471,7 +473,6 @@ exports.getPublicWeeklyMenu = async (req, res) => {
 
     res.json({ code: 200, data: Object.values(groupedByDate) });
   } catch (err) {
-    console.error(err);
     res
       .status(500)
       .json({ code: 500, msg: '获取公开食谱失败', error: err.message });

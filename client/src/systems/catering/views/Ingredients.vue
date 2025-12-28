@@ -75,19 +75,16 @@
         <el-form-item label="食材名称" required>
           <el-input v-model="form.name" placeholder="如: 鸡蛋" />
         </el-form-item>
-
         <el-form-item label="分类" required>
           <el-select v-model="form.category" placeholder="请选择" style="width:100%">
             <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
           </el-select>
         </el-form-item>
-
         <el-form-item label="采购单位" required>
           <el-select v-model="form.unit" placeholder="请选择" style="width:100%">
             <el-option v-for="u in unitOptions" :key="u.value" :label="u.label" :value="u.value" />
           </el-select>
         </el-form-item>
-
         <el-form-item label="推荐货源" required>
           <el-select v-model="form.source" placeholder="选择采购渠道" style="width:100%">
             <el-option label="🔵 盒马鲜生" value="盒马鲜生" />
@@ -98,14 +95,12 @@
             <el-option label="⚪ 菜市场/其他" value="其他" />
           </el-select>
         </el-form-item>
-
         <el-form-item label="参考单价" required>
           <el-input-number v-model="form.price" :min="0" :precision="2" :step="0.5" controls-position="right"
             style="width: 100%">
             <template #prefix>¥</template>
           </el-input-number>
         </el-form-item>
-
         <el-form-item label="风险标签">
           <el-select v-model="form.allergen_type" placeholder="是否含常见过敏源?" style="width:100%">
             <el-option label="无 (安全)" value="无" />
@@ -159,15 +154,12 @@ const getUnitLabel = (val) => {
   return target ? target.label : val;
 };
 
-// 货源颜色映射
 const getSourceTagType = (source) => {
-  if (['盒马鲜生', '山姆', '麦德龙'].includes(source)) return 'primary'; // 蓝
-  if (['叮咚买菜', '朴朴'].includes(source)) return 'success'; // 绿
-  return 'info'; // 灰
+  if (['盒马鲜生', '山姆', '麦德龙'].includes(source)) return 'primary';
+  if (['叮咚买菜', '朴朴'].includes(source)) return 'success';
+  return 'info';
 };
 
-// ⭐ 核心逻辑：自动计算合并行
-// 目的：让相同 category 的行，在第一列合并显示
 const spanArr = ref([]);
 const calculateSpans = (data) => {
   spanArr.value = [];
@@ -177,7 +169,6 @@ const calculateSpans = (data) => {
       spanArr.value.push(1);
       pos = 0;
     } else {
-      // 如果当前行和上一行的分类相同，则合并
       if (data[i].category === data[i - 1].category) {
         spanArr.value[pos] += 1;
         spanArr.value.push(0);
@@ -189,9 +180,8 @@ const calculateSpans = (data) => {
   }
 };
 
-// Element Plus 表格合并回调
 const objectSpanMethod = ({ row, column, rowIndex, columnIndex }) => {
-  if (columnIndex === 0) { // 只合并第 0 列 (分类列)
+  if (columnIndex === 0) {
     const _row = spanArr.value[rowIndex];
     const _col = _row > 0 ? 1 : 0;
     return { rowspan: _row, colspan: _col };
@@ -204,7 +194,6 @@ const fetchData = async () => {
     const res = await axios.get('/api/catering/ingredients');
     if (res.data.code === 200) {
       tableData.value = res.data.data;
-      // 数据回来后，计算合并规则
       calculateSpans(tableData.value);
     }
   } catch (err) { ElMessage.error('获取失败'); }
@@ -213,17 +202,13 @@ const fetchData = async () => {
 
 const openAddDialog = () => {
   isEdit.value = false;
-  // 重置表单，默认货源为盒马
-  Object.assign(form, {
-    id: null, name: '', category: '蔬菜水果', unit: '斤', allergen_type: '无', price: 0, source: '盒马鲜生'
-  });
+  Object.assign(form, { id: null, name: '', category: '蔬菜水果', unit: '斤', allergen_type: '无', price: 0, source: '盒马鲜生' });
   dialogVisible.value = true;
 };
 
 const openEditDialog = (row) => {
   isEdit.value = true;
   Object.assign(form, row);
-  // 防止旧数据 source 为空
   if (!form.source) form.source = '其他';
   dialogVisible.value = true;
 };
@@ -232,12 +217,8 @@ const handleSubmit = async () => {
   if (!form.name) return ElMessage.warning('请输入名称');
   try {
     let res;
-    if (isEdit.value) {
-      res = await axios.put(`/api/catering/ingredients/${form.id}`, form);
-    } else {
-      res = await axios.post('/api/catering/ingredients', form);
-    }
-
+    if (isEdit.value) res = await axios.put(`/api/catering/ingredients/${form.id}`, form);
+    else res = await axios.post('/api/catering/ingredients', form);
     if (res.data.code === 200) {
       ElMessage.success(isEdit.value ? '更新成功' : '添加成功');
       dialogVisible.value = false;
@@ -250,13 +231,8 @@ const handleDelete = async (row) => {
   try {
     await ElMessageBox.confirm(`确定删除 ${row.name} 吗?`);
     const res = await axios.delete(`/api/catering/ingredients/${row.id}`);
-    if (res.data.code === 200) {
-      ElMessage.success('删除成功');
-      fetchData();
-    }
-  } catch (err) {
-    if (err !== 'cancel') ElMessage.error(err.response?.data?.msg || '删除失败');
-  }
+    if (res.data.code === 200) { ElMessage.success('删除成功'); fetchData(); }
+  } catch (err) { if (err !== 'cancel') ElMessage.error('删除失败'); }
 };
 
 onMounted(fetchData);
