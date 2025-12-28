@@ -46,5 +46,7 @@ router.delete('/dishes/:id', controller.deleteDish);
 router.get('/menus', controller.getMenus);      
 router.post('/menus', controller.addMenuItem);
 router.delete('/menus/:id', controller.removeMenuItem);
+router.get('/shopping-list', controller.getShoppingList);
+router.get('/cost-analysis', controller.getCostAnalysis);
 
 module.exports = router;

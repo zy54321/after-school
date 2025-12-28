@@ -70,6 +70,16 @@
                 <Calendar />
               </el-icon> 食谱排期
             </el-menu-item>
+            <el-menu-item index="/system/catering/shopping-list">
+              <el-icon>
+                <ShoppingCart />
+              </el-icon> 智能采购
+            </el-menu-item>
+            <el-menu-item index="/system/catering/cost-analysis">
+              <el-icon>
+                <Money />
+              </el-icon> 成本控制
+            </el-menu-item>
           </el-sub-menu>
 
           <el-menu-item index="/system/daily-workflow">
@@ -117,7 +127,7 @@
 </template>
 
 <script setup>
-import { Odometer, User, Calendar, Money, School, Tools, MapLocation, HomeFilled, Food, Apple, Dish } from '@element-plus/icons-vue';
+import { Odometer, User, Calendar, Money, School, Tools, MapLocation, HomeFilled, Food, Apple, Dish, ShoppingCart } from '@element-plus/icons-vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { ref } from 'vue';
