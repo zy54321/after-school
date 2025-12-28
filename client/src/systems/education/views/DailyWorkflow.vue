@@ -1,326 +1,332 @@
 <template>
-  <div class="workflow-container p-4" v-loading="loading">
-    <el-card shadow="hover" class="mb-4 control-bar">
-      <div class="flex justify-between items-center flex-wrap gap-4">
-        <div class="timer-section text-center min-w-[150px]">
-          <div class="text-gray-500 text-sm mb-1">班级专注计时</div>
-          <div class="text-4xl font-mono font-bold text-blue-600 mb-2 tracking-wider">
-            {{ formatTime(timer) }}
-          </div>
-          <el-button-group>
-            <el-button :type="isRunning ? 'warning' : 'primary'" size="small" @click="toggleTimer"
-              :icon="isRunning ? VideoPause : VideoPlay">
-              {{ isRunning ? '暂停' : '开始' }}
-            </el-button>
-            <el-button size="small" @click="resetTimer" :icon="Refresh">重置</el-button>
-          </el-button-group>
-        </div>
-
-        <div class="menu-section flex-1 border-l pl-8 border-gray-200">
-          <div class="text-sm font-bold text-gray-700 mb-2 flex items-center">
-            🍽️ 今日菜单 & 留样证据
-            <el-tag size="small" type="info" class="ml-2">家长日报必显</el-tag>
-          </div>
-          <div class="flex gap-2 mb-2">
-            <el-input v-model="menu.menu_content" placeholder="自动同步今日食谱..." class="flex-1" readonly>
-              <template #prepend>今日菜谱</template>
-            </el-input>
-          </div>
-          <el-input v-model="menu.evidence_photo_url" placeholder="粘贴图片URL" size="small">
-            <template #prepend>证据图 URL</template>
-          </el-input>
-        </div>
+  <div class="p-4" v-loading="loading">
+    <div
+      class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex justify-between items-center sticky top-0 z-20 backdrop-blur-md bg-white/90">
+      <div class="flex items-center gap-4 flex-1">
+        <h2 class="text-xl font-bold flex items-center text-gray-800">
+          <span class="mr-2 text-2xl">⚡</span> 特训工作台
+        </h2>
+        <el-date-picker v-model="currentDate" type="date" placeholder="选择日期" :disabled-date="(d) => d > new Date()"
+          @change="fetchData" class="!w-40 shadow-sm" />
+        <el-input v-model="menu.menu_content" placeholder="今日菜谱 (自动同步中...)" class="flex-1 max-w-xl shadow-sm">
+          <template #prepend>🍱 今日菜谱</template>
+        </el-input>
       </div>
-    </el-card>
 
-    <el-row :gutter="15">
-      <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="stu in students" :key="stu.id" class="mb-4">
-        <el-card :body-style="{ padding: '0px' }" :class="['student-card', getCardBorderClass(stu)]" shadow="hover">
-          <div class="p-3 border-b flex justify-between items-start bg-gray-50 relative overflow-hidden h-[72px]">
-            <div>
-              <div class="font-bold text-lg text-gray-800 flex items-center">
-                {{ stu.name }}
-                <el-tooltip v-if="stu.habit_goals && stu.habit_goals.length"
-                  :content="'特训: ' + stu.habit_goals.join(',')" placement="top">
-                  <span class="ml-1 text-xs cursor-help text-blue-500">🎯</span>
-                </el-tooltip>
-              </div>
-              <div class="text-xs text-gray-500 mt-1">
-                {{ stu.grade || '未知' }} |
-                <span :class="getScoreColor(240 - stu.distraction_count * 5)">
-                  {{ 240 - stu.distraction_count * 5 }}m
-                </span>
-              </div>
-            </div>
-            <el-tooltip v-if="stu.allergies" :content="'⚠️ 过敏: ' + stu.allergies" placement="top">
-              <div class="bg-red-100 text-red-600 text-xs px-2 py-1 rounded font-bold animate-pulse cursor-help">
-                🚫 {{ stu.allergies }}
-              </div>
-            </el-tooltip>
-          </div>
+      <div class="flex gap-3 items-center">
+        <el-upload action="/api/catering/upload" :show-file-list="false" :on-success="handleUploadSuccess"
+          :before-upload="beforeUpload" name="file" class="flex items-center">
+          <el-button :icon="Camera" size="large" :type="menu.evidence_photo_url ? 'success' : 'info'" plain
+            class="!rounded-xl">
+            {{ menu.evidence_photo_url ? '照片已上传' : '上传留样' }}
+          </el-button>
+        </el-upload>
 
-          <div class="bg-white">
-            <div class="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
-              <div class="action-item p-2 text-center cursor-pointer hover:bg-red-50 transition"
-                @click="stu.distraction_count++">
-                <div class="text-xl mb-1 relative inline-block">
-                  ⚡️
-                  <span v-if="stu.distraction_count > 0"
-                    class="absolute -top-1 -right-2 bg-red-500 text-white text-[9px] px-1 rounded-full">
-                    -{{ stu.distraction_count * 5 }}
-                  </span>
-                </div>
-                <div class="text-xs text-gray-500">走神</div>
-              </div>
-
-              <div class="action-item p-2 text-center cursor-pointer hover:bg-yellow-50 transition"
-                @click="toggleMeal(stu)">
-                <div class="text-xl mb-1">{{ getMealIcon(stu.meal_status) }}</div>
-                <div class="text-xs text-gray-500">{{ getMealText(stu.meal_status) }}</div>
-              </div>
-
-              <div class="action-item p-2 text-center cursor-pointer hover:bg-blue-50 transition"
-                @click="openHomework(stu)">
-                <div class="text-xl mb-1">{{ getRatingIcon(stu.homework_rating) }}</div>
-                <div class="text-xs text-gray-500">作业 {{ stu.homework_rating }}</div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 divide-x divide-gray-100">
-              <div class="action-item p-2 text-center cursor-pointer hover:bg-purple-50 transition"
-                @click="toggleRating(stu, 'discipline_rating')">
-                <div class="text-xl mb-1">{{ getRatingIcon(stu.discipline_rating) }}</div>
-                <div class="text-xs text-gray-500">纪律 {{ stu.discipline_rating }}</div>
-              </div>
-
-              <div class="action-item p-2 text-center cursor-pointer hover:bg-green-50 transition"
-                @click="toggleRating(stu, 'habit_rating')">
-                <div class="text-xl mb-1">{{ getRatingIcon(stu.habit_rating) }}</div>
-                <div class="text-xs text-gray-500">习惯 {{ stu.habit_rating }}</div>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <div class="fixed-footer flex justify-between items-center">
-      <div class="text-sm text-gray-500">
-        学生: <span class="font-bold text-gray-800">{{ students.length }}</span> 人
-        <span class="mx-2">|</span>
-        时长: <span class="font-bold text-blue-600">{{ formatTime(timer) }}</span>
+        <el-button type="primary" size="large" @click="handleSaveAll"
+          class="!rounded-xl shadow-blue-200 shadow-lg font-bold">
+          🚀 一键生成日报
+        </el-button>
       </div>
-      <el-button type="primary" size="large" @click="saveAll" :loading="saving" :icon="Check" round
-        class="px-8 shadow-lg shadow-blue-500/30">
-        🚀 一键生成今日日报
-      </el-button>
     </div>
 
-    <el-dialog v-model="hwDialog.visible" title="作业评分" width="360px" center destroy-on-close>
-      <div class="text-center" v-if="hwDialog.student">
-        <h3 class="mb-4 font-bold text-gray-700">{{ hwDialog.student.name }} 的作业情况</h3>
-        <el-radio-group v-model="hwDialog.rating" size="large" class="mb-6">
-          <el-radio-button label="A"><span class="px-2">优 ⭐</span></el-radio-button>
-          <el-radio-button label="B"><span class="px-2">良 🙂</span></el-radio-button>
-          <el-radio-button label="C"><span class="px-2 text-red-500 font-bold">差 ❌</span></el-radio-button>
-        </el-radio-group>
-        <el-divider>问题标签</el-divider>
-        <el-checkbox-group v-model="hwDialog.tags" class="flex flex-col gap-2 items-start pl-8">
-          <el-checkbox label="粗心计算" />
-          <el-checkbox label="字迹潦草" />
-          <el-checkbox label="审题不清" />
-          <el-checkbox label="拖拉磨蹭" />
-        </el-checkbox-group>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+      <div v-for="student in students" :key="student.id"
+        class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative group">
+
+        <div
+          class="bg-gradient-to-r from-slate-800 to-slate-700 px-5 py-4 flex justify-between items-center relative overflow-hidden">
+          <div class="absolute -right-4 -top-4 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
+
+          <div>
+            <div class="text-white font-bold text-lg tracking-wide">{{ student.name }}</div>
+            <div class="text-slate-300 text-xs mt-0.5 bg-slate-600/50 inline-block px-2 py-0.5 rounded">{{ student.grade
+              }}
+            </div>
+          </div>
+
+          <div v-if="student.token"
+            class="bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs px-2 py-1 rounded rotate-2 backdrop-blur-sm font-bold shadow-inner">
+            ✅ 已生成
+          </div>
+          <div v-else class="text-slate-500 text-xs bg-slate-900/50 px-2 py-1 rounded border border-slate-600">
+            ⏳ 待生成
+          </div>
+        </div>
+
+        <div class="p-4 grid grid-cols-2 gap-3">
+          <div
+            class="bg-blue-50 rounded-xl p-2 flex flex-col justify-center items-center relative overflow-hidden border border-blue-100">
+            <el-icon class="absolute top-1 right-1 text-blue-200 text-3xl">
+              <Timer />
+            </el-icon>
+            <div class="text-xs text-blue-500 font-bold z-10 mb-1">专注时长</div>
+            <div class="flex items-baseline z-10 w-full px-1">
+              <el-input-number v-model="student.focus_minutes" :min="0" :step="10" controls-position="right"
+                class="!w-full enhanced-input-number" size="large" />
+            </div>
+            <div class="text-[10px] text-blue-400 mt-1">分钟</div>
+          </div>
+
+          <div
+            class="bg-orange-50 rounded-xl p-2 flex flex-col justify-center items-center relative overflow-hidden border border-orange-100">
+            <el-icon class="absolute top-1 right-1 text-orange-200 text-3xl">
+              <WarnTriangleFilled />
+            </el-icon>
+            <div class="text-xs text-orange-500 font-bold z-10 mb-1">走神次数</div>
+            <div class="flex items-baseline z-10 w-full px-1">
+              <el-input-number v-model="student.distraction_count" :min="0" controls-position="right"
+                class="!w-full enhanced-input-number" size="large" />
+            </div>
+            <div class="text-[10px] text-orange-400 mt-1">次</div>
+          </div>
+        </div>
+
+        <div class="px-5 pb-5 space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <div class="text-xs text-gray-400 mb-1.5 flex items-center"><el-icon class="mr-1">
+                  <Notebook />
+                </el-icon>作业评级</div>
+              <el-select v-model="student.homework_rating" size="large" class="w-full">
+                <el-option label="A 🌟 优秀" value="A" />
+                <el-option label="B 👍 良好" value="B" />
+                <el-option label="C 🔨 待改进" value="C" />
+              </el-select>
+            </div>
+            <div>
+              <div class="text-xs text-gray-400 mb-1.5 flex items-center"><el-icon class="mr-1">
+                  <Trophy />
+                </el-icon>行为习惯</div>
+              <el-select v-model="student.habit_rating" size="large" class="w-full">
+                <el-option label="A 🌟 模范" value="A" />
+                <el-option label="B 👍 遵守" value="B" />
+                <el-option label="C 🔔 提醒" value="C" />
+              </el-select>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 p-2 rounded-lg border border-gray-100">
+            <div class="text-xs text-gray-400 mb-2 flex items-center justify-between">
+              <span><el-icon class="mr-1 relative top-0.5">
+                  <Food />
+                </el-icon>用餐情况</span>
+              <span class="text-[10px] text-gray-300">点击切换</span>
+            </div>
+            <el-radio-group v-model="student.meal_status" size="default" class="w-full flex">
+              <el-radio-button label="finished" class="flex-1 text-center">🥣 光盘</el-radio-button>
+              <el-radio-button label="leftovers" class="flex-1 text-center">🥡 剩菜</el-radio-button>
+              <el-radio-button label="little" class="flex-1 text-center">🤐 挑食</el-radio-button>
+            </el-radio-group>
+          </div>
+
+          <div>
+            <div class="text-xs text-gray-400 mb-1.5">存在问题 (可多选)</div>
+            <el-select v-model="student.homework_tags" multiple placeholder="无明显问题..." size="large" style="width:100%"
+              class="custom-tag-select">
+              <el-option label="✍️ 书写潦草" value="书写潦草" />
+              <el-option label="🧮 计算粗心" value="计算粗心" />
+              <el-option label="🐌 拖拉磨蹭" value="拖拉磨蹭" />
+              <el-option label="❌ 错题未改" value="错题未改" />
+              <el-option label="📖 阅读不专心" value="阅读不专心" />
+            </el-select>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <el-dialog v-model="resultVisible" title="🎉 日报生成成功" width="600px" class="rounded-2xl">
+      <div class="bg-green-50 text-green-700 p-3 rounded-lg mb-4 text-sm flex items-center">
+        <el-icon class="mr-2 text-lg">
+          <CircleCheckFilled />
+        </el-icon>
+        所有日报已保存至云端，家长链接已更新。
+      </div>
+      <div class="max-h-[400px] overflow-y-auto border border-gray-100 rounded-xl bg-gray-50">
+        <div v-for="item in generatedLinks" :key="item.student_id"
+          class="flex justify-between items-center bg-white p-4 border-b border-gray-100 last:border-0 hover:bg-blue-50 transition group">
+          <div class="flex flex-col overflow-hidden mr-4">
+            <span class="font-bold text-gray-800 text-base mb-1">{{ item.name }}</span>
+            <a :href="getReportUrl(item.token)" target="_blank"
+              class="text-xs text-blue-500 truncate hover:underline block w-full bg-blue-50 px-2 py-1 rounded">
+              {{ getReportUrl(item.token) }}
+            </a>
+          </div>
+
+          <el-button type="primary" plain :icon="CopyDocument" @click="copyToClipboard(getReportUrl(item.token))"
+            class="!rounded-lg">
+            复制
+          </el-button>
+        </div>
       </div>
       <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="hwDialog.visible = false">取消</el-button>
-          <el-button type="primary" @click="confirmHomework">确定</el-button>
-        </span>
+        <div class="flex justify-center pt-2">
+          <el-button type="primary" size="large" @click="resultVisible = false"
+            class="!rounded-xl px-10">完成工作</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import axios from 'axios';
-import { ElMessage, ElMessageBox } from 'element-plus';
-import { VideoPlay, VideoPause, Refresh, Check } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus';
+import {
+  Camera, CopyDocument, Timer, WarnTriangleFilled,
+  Notebook, Trophy, Food, CircleCheckFilled
+} from '@element-plus/icons-vue';
 
 const loading = ref(false);
-const saving = ref(false);
+const currentDate = ref(new Date());
+const resultVisible = ref(false);
+const generatedLinks = ref([]);
+
+// 核心数据
+const menu = reactive({ menu_content: '', evidence_photo_url: '' });
 const students = ref([]);
-const menu = ref({ menu_content: '', evidence_photo_url: '' });
 
-// 计时器
-const timer = ref(0);
-const isRunning = ref(false);
-let intervalId = null;
+const getReportUrl = (token) => `${window.location.origin}/report/view?token=${token}`;
 
-// 弹窗
-const hwDialog = ref({ visible: false, student: null, rating: 'A', tags: [] });
-
-const formatTime = (seconds) => {
-  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
-};
-
-const toggleTimer = () => {
-  if (isRunning.value) clearInterval(intervalId);
-  else intervalId = setInterval(() => timer.value++, 1000);
-  isRunning.value = !isRunning.value;
-};
-
-const resetTimer = () => {
-  clearInterval(intervalId);
-  isRunning.value = false;
-  timer.value = 0;
-};
-
-// --- 卡片逻辑 ---
-const getCardBorderClass = (stu) => {
-  if (stu.distraction_count > 0 || stu.homework_rating === 'C' || stu.discipline_rating === 'C') return 'border-l-4 border-red-500';
-  if (stu.meal_status !== 'finished' || stu.homework_rating === 'B' || stu.habit_rating === 'B') return 'border-l-4 border-yellow-400';
-  return 'border-l-4 border-green-500';
-};
-const getScoreColor = (score) => score >= 240 ? 'text-green-600 font-bold' : (score >= 200 ? 'text-blue-600' : 'text-red-500 font-bold');
-
-const getMealIcon = (s) => ({ finished: '🥣', leftovers: '🌭', little: '🤢' }[s] || '🥣');
-const getMealText = (s) => ({ finished: '光盘', leftovers: '剩菜', little: '挑食' }[s] || '光盘');
-const toggleMeal = (stu) => {
-  const states = ['finished', 'leftovers', 'little'];
-  stu.meal_status = states[(states.indexOf(stu.meal_status) + 1) % 3];
-};
-
-const getRatingIcon = (r) => ({ A: '🌟', B: '🙂', C: '💣' }[r] || '🌟');
-
-// ⭐ 通用评分切换 (用于纪律和习惯)
-const toggleRating = (stu, field) => {
-  const ratings = ['A', 'B', 'C'];
-  // 获取当前值，默认为 A
-  const current = stu[field] || 'A';
-  // 轮转
-  stu[field] = ratings[(ratings.indexOf(current) + 1) % 3];
-};
-
-const openHomework = (stu) => {
-  hwDialog.value.student = stu;
-  hwDialog.value.rating = stu.homework_rating || 'A';
-  hwDialog.value.tags = stu.homework_tags ? [...stu.homework_tags] : [];
-  hwDialog.value.visible = true;
-};
-const confirmHomework = () => {
-  if (hwDialog.value.student) {
-    hwDialog.value.student.homework_rating = hwDialog.value.rating;
-    hwDialog.value.student.homework_tags = hwDialog.value.tags;
+const copyToClipboard = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    ElMessage.success({ message: '🔗 链接已复制', type: 'success' });
+  } catch (err) {
+    ElMessage.error('复制失败');
   }
-  hwDialog.value.visible = false;
 };
 
-// --- API ---
 const fetchData = async () => {
   loading.value = true;
   try {
-    const res = await axios.get('/api/reports/workflow');
+    const dateStr = new Date(currentDate.value.getTime() + 8 * 3600 * 1000).toISOString().split('T')[0];
+    const res = await axios.get(`/api/reports/workflow?date=${dateStr}`);
     if (res.data.code === 200) {
-      students.value = res.data.data.students.map(s => ({
+      const data = res.data.data;
+      menu.menu_content = data.menu.menu_content;
+      menu.evidence_photo_url = data.menu.evidence_photo_url;
+
+      students.value = data.students.map(s => ({
         ...s,
-        distraction_count: s.distraction_count || 0,
-        meal_status: s.meal_status || 'finished',
+        focus_minutes: s.focus_minutes !== null ? s.focus_minutes : 0,
+        distraction_count: s.distraction_count !== null ? s.distraction_count : 0,
         homework_rating: s.homework_rating || 'A',
-        // ⭐ 初始化新字段
-        discipline_rating: s.discipline_rating || 'A',
         habit_rating: s.habit_rating || 'A',
-        homework_tags: s.homework_tags || []
+        meal_status: s.meal_status || 'finished',
+        homework_tags: s.homework_tags || [],
       }));
-      if (res.data.data.menu) menu.value = res.data.data.menu;
     }
-  } catch (err) { ElMessage.error('加载失败'); }
-  finally { loading.value = false; }
+  } catch (err) {
+    ElMessage.error('数据加载失败');
+  } finally {
+    loading.value = false;
+  }
 };
 
-const saveAll = async () => {
-  saving.value = true;
-  const today = new Date().toISOString().split('T')[0];
-  const payload = {
-    date: today,
-    menu: menu.value,
-    students: students.value.map(s => ({
-      id: s.id,
-      name: s.name,
-      focus_minutes: 240 - (s.distraction_count * 5),
-      distraction_count: s.distraction_count,
-      meal_status: s.meal_status,
-      homework_rating: s.homework_rating,
-      homework_tags: s.homework_tags,
-      // ⭐ 提交新字段
-      discipline_rating: s.discipline_rating,
-      habit_rating: s.habit_rating
-    }))
-  };
-
+const handleSaveAll = async () => {
+  if (!students.value.length) return;
+  loading.value = true;
   try {
+    const dateStr = new Date(currentDate.value.getTime() + 8 * 3600 * 1000).toISOString().split('T')[0];
+    const payload = { date: dateStr, menu: menu, students: students.value };
+
     const res = await axios.post('/api/reports/workflow', payload);
     if (res.data.code === 200) {
-      const links = res.data.data;
-      const baseUrl = window.location.origin + '/report/view?token=';
-      let msgHtml = '<div style="text-align: left; max-height: 300px; overflow-y: auto;">';
-      links.forEach(l => {
-        msgHtml += `<div style="margin-bottom:10px;border-bottom:1px dashed #eee;padding-bottom:5px;">
-          <div style="font-weight:bold;">${l.name}</div>
-          <div style="font-size:12px;color:#409EFF;word-break:break-all;">${baseUrl + l.token}</div>
-        </div>`;
-      });
-      msgHtml += '</div>';
-      ElMessageBox.alert(msgHtml, '日报已生成', { dangerouslyUseHTMLString: true, customStyle: { maxWidth: '500px' } });
-    } else { ElMessage.error(res.data.msg); }
-  } catch (err) { ElMessage.error('保存失败'); }
-  finally { saving.value = false; }
+      ElMessage.success('🎉 所有日报已生成！');
+      generatedLinks.value = res.data.data;
+      resultVisible.value = true;
+      fetchData();
+    }
+  } catch (err) {
+    ElMessage.error('保存失败');
+  } finally {
+    loading.value = false;
+  }
+};
+
+const beforeUpload = (file) => {
+  if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
+    ElMessage.error('只能上传 JPG/PNG');
+    return false;
+  }
+  if (file.size / 1024 / 1024 > 5) {
+    ElMessage.error('图片不能超过 5MB');
+    return false;
+  }
+  return true;
+};
+
+const handleUploadSuccess = (res) => {
+  if (res.code === 200) {
+    menu.evidence_photo_url = res.url;
+    ElMessage.success('上传成功');
+  } else {
+    ElMessage.error('上传失败');
+  }
 };
 
 onMounted(fetchData);
-onUnmounted(() => { if (intervalId) clearInterval(intervalId); });
 </script>
 
 <style scoped>
-.workflow-container {
-  padding-bottom: 90px;
+/* 👇 深度定制输入框样式 */
+:deep(.enhanced-input-number .el-input__wrapper) {
+  box-shadow: none !important;
+  /* 去掉边框 */
+  background-color: transparent !important;
+  padding-left: 0;
+  padding-right: 55px !important;
+  /* 给右侧大按钮留出空间 */
 }
 
-.student-card {
-  transition: all 0.2s;
+:deep(.enhanced-input-number .el-input__inner) {
+  font-size: 1.8rem;
+  /* 增大数字字体 */
+  font-weight: 800;
+  /* 加粗 */
+  text-align: center;
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-.student-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+/* 👇 核心：加宽右侧控制按钮 */
+:deep(.enhanced-input-number.is-controls-right .el-input-number__decrease),
+:deep(.enhanced-input-number.is-controls-right .el-input-number__increase) {
+  width: 50px !important;
+  /* 强制加宽到 50px */
+  background-color: rgba(0, 0, 0, 0.03);
+  /* 微微的背景色方便识别 */
+  border-left: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.fixed-footer {
-  position: fixed;
-  bottom: 0;
-  right: 0;
-  left: 200px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(5px);
-  padding: 15px 40px;
-  border-top: 1px solid #eee;
-  z-index: 50;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+/* 按钮里的图标也放大 */
+:deep(.enhanced-input-number .el-icon) {
+  font-size: 18px;
+  font-weight: bold;
 }
 
-@media (max-width: 768px) {
-  .fixed-footer {
-    left: 0;
-    padding: 15px 20px;
-  }
+/* 调整单选按钮样式 */
+:deep(.el-radio-button__inner) {
+  border: none !important;
+  background-color: #f9fafb;
+  border-radius: 6px !important;
+  margin: 2px;
+  font-size: 13px;
+  box-shadow: none !important;
+  padding: 8px 15px;
+  /* 加大点击区域 */
+}
 
-  .menu-section {
-    border-left: none;
-    padding-left: 0;
-    margin-top: 15px;
-  }
+:deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* 修复 tag 样式，让多选标签看起来更协调 */
+:deep(.custom-tag-select .el-select__tags) {
+  padding-left: 4px;
 }
 </style>
