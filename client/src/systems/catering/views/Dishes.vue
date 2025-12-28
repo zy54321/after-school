@@ -1,6 +1,7 @@
 <template>
-  <div class="p-4">
-    <el-card shadow="hover" class="mb-4">
+  <div class="h-[calc(100vh-110px)] flex flex-col p-4">
+
+    <el-card shadow="hover" class="mb-4 flex-shrink-0">
       <div class="flex justify-between items-center">
         <div class="text-lg font-bold flex items-center">
           <span class="mr-2">🍲</span> 菜品库
@@ -9,47 +10,49 @@
       </div>
     </el-card>
 
-    <el-row :gutter="20">
-      <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="dish in dishes" :key="dish.id" class="mb-4">
-        <el-card :body-style="{ padding: '0px' }" class="hover:shadow-lg transition-all relative group">
+    <div class="flex-1 overflow-y-auto pr-2">
+      <el-row :gutter="20">
+        <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="dish in dishes" :key="dish.id" class="mb-4">
+          <el-card :body-style="{ padding: '0px' }" class="hover:shadow-lg transition-all relative group">
 
-          <div class="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition flex gap-1">
-            <el-button type="primary" circle size="small" icon="Edit" @click="openEditDialog(dish)" />
-            <el-button type="danger" circle size="small" icon="Delete" @click="handleDelete(dish)" />
-          </div>
-
-          <div class="h-40 bg-gray-100 overflow-hidden relative">
-            <img v-if="dish.photo_url" :src="dish.photo_url" class="w-full h-full object-cover" />
-            <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-4xl">🥘</div>
-
-            <div class="absolute bottom-2 left-2 flex gap-1">
-              <el-tag v-for="t in dish.tags" :key="t" size="small" effect="dark" type="success">{{ t }}</el-tag>
+            <div class="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition flex gap-1">
+              <el-button type="primary" circle size="small" icon="Edit" @click="openEditDialog(dish)" />
+              <el-button type="danger" circle size="small" icon="Delete" @click="handleDelete(dish)" />
             </div>
-          </div>
 
-          <div class="p-4">
-            <div class="font-bold text-lg mb-2">{{ dish.name }}</div>
+            <div class="h-40 bg-gray-100 overflow-hidden relative">
+              <img v-if="dish.photo_url" :src="dish.photo_url" class="w-full h-full object-cover" />
+              <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-4xl">🥘</div>
 
-            <div class="bg-gray-50 rounded p-2 text-xs text-gray-600 mb-2">
-              <div class="font-bold mb-1">配方表:</div>
-              <div v-for="ing in dish.ingredients" :key="ing.ingredient_id"
-                class="flex justify-between border-b border-gray-200 py-1 last:border-0">
-                <span>{{ ing.name }}</span>
-                <span>
-                  {{ ing.quantity }}{{ ing.unit }}
-                  <span v-if="ing.allergen_type !== '无'" class="text-red-500 font-bold ml-1">
-                    ({{ ing.allergen_type }})
-                  </span>
-                </span>
+              <div class="absolute bottom-2 left-2 flex gap-1">
+                <el-tag v-for="t in dish.tags" :key="t" size="small" effect="dark" type="success">{{ t }}</el-tag>
               </div>
-              <div v-if="!dish.ingredients.length" class="text-gray-400">暂无配方</div>
             </div>
 
-            <div class="text-gray-400 text-xs line-clamp-2">{{ dish.description || '暂无描述' }}</div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+            <div class="p-4">
+              <div class="font-bold text-lg mb-2">{{ dish.name }}</div>
+
+              <div class="bg-gray-50 rounded p-2 text-xs text-gray-600 mb-2">
+                <div class="font-bold mb-1">配方表:</div>
+                <div v-for="ing in dish.ingredients" :key="ing.ingredient_id"
+                  class="flex justify-between border-b border-gray-200 py-1 last:border-0">
+                  <span>{{ ing.name }}</span>
+                  <span>
+                    {{ ing.quantity }}{{ ing.unit }}
+                    <span v-if="ing.allergen_type !== '无'" class="text-red-500 font-bold ml-1">
+                      ({{ ing.allergen_type }})
+                    </span>
+                  </span>
+                </div>
+                <div v-if="!dish.ingredients.length" class="text-gray-400">暂无配方</div>
+              </div>
+
+              <div class="text-gray-400 text-xs line-clamp-2">{{ dish.description || '暂无描述' }}</div>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑菜品' : '研发新菜'" width="600px">
       <el-form :model="form" label-width="80px">

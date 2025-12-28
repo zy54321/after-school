@@ -1,6 +1,7 @@
 <template>
-  <div class="p-4">
-    <el-card shadow="hover" class="mb-4">
+  <div class="h-[calc(100vh-110px)] flex flex-col p-4">
+
+    <el-card shadow="hover" class="mb-4 flex-shrink-0">
       <div class="flex justify-between items-center">
         <div class="text-lg font-bold flex items-center">
           <span class="mr-2">🥦</span> 食材库管理
@@ -9,8 +10,9 @@
       </div>
     </el-card>
 
-    <el-card shadow="never">
-      <el-table :data="tableData" stripe v-loading="loading" border :span-method="objectSpanMethod">
+    <div class="flex-1 overflow-hidden bg-white rounded border border-gray-200 shadow-sm">
+      <el-table :data="tableData" stripe v-loading="loading" border :span-method="objectSpanMethod" height="100%"
+        style="width: 100%">
         <el-table-column prop="category" label="分类" width="120" align="center">
           <template #default="{ row }">
             <el-tag effect="dark" type="info" size="large">{{ row.category }}</el-tag>
@@ -66,7 +68,7 @@
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑食材' : '新增食材'" width="500px" destroy-on-close>
       <el-form :model="form" label-width="100px">
