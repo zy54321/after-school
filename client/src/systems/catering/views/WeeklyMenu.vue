@@ -1,28 +1,34 @@
 <template>
   <div class="p-4">
     <el-card shadow="hover" class="mb-4">
-      <div class="flex justify-between items-center">
-        <div class="flex items-center gap-4">
-          <div class="text-lg font-bold mr-4 flex items-center">
+      <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+        <div class="flex items-center gap-4 w-full md:w-auto">
+          <div class="text-lg font-bold mr-4 flex items-center whitespace-nowrap">
             <span class="mr-2">📅</span> 食谱排期
           </div>
-          <el-button-group>
+          <el-button-group class="flex-shrink-0">
             <el-button :icon="ArrowLeft" @click="changeWeek(-1)">上周</el-button>
             <el-button @click="resetToToday">本周</el-button>
             <el-button :icon="ArrowRight" @click="changeWeek(1)">下周</el-button>
           </el-button-group>
-          <div class="text-sm font-bold text-gray-600">
+          <div class="hidden md:block text-sm font-bold text-gray-600">
             {{ formatDate(weekDates[0]) }} ~ {{ formatDate(weekDates[6]) }}
           </div>
         </div>
 
-        <el-button type="success" icon="List" @click="calculateShoppingList" :disabled="menuList.length === 0">
-          📋 生成本周采购清单
-        </el-button>
+        <div class="flex gap-2 w-full md:w-auto justify-end">
+          <el-button type="warning" plain icon="Share" @click="openShareDialog">
+            分享给家长
+          </el-button>
+
+          <el-button type="success" icon="List" @click="calculateShoppingList" :disabled="menuList.length === 0">
+            采购清单
+          </el-button>
+        </div>
       </div>
     </el-card>
 
-    <div class="grid grid-cols-7 gap-2 mb-4">
+    <div class="grid grid-cols-7 gap-2 mb-4 min-w-[800px] overflow-x-auto">
       <div v-for="(date, index) in weekDates" :key="index" class="text-center p-2 rounded-t-lg font-bold"
         :class="isToday(date) ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'">
         {{ getWeekDayName(index) }}
@@ -83,7 +89,6 @@
       <el-alert type="info" show-icon :closable="false" class="mb-4">
         系统已根据本周食谱自动汇总所需食材总量。
       </el-alert>
-
       <el-table :data="shoppingList" stripe height="400" border>
         <el-table-column prop="category" label="分类" width="100" />
         <el-table-column prop="name" label="食材" min-width="120">
@@ -107,6 +112,21 @@
         <el-button type="primary" @click="shoppingListVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="shareDialogVisible" title="📤 分享食谱给家长" width="400px">
+      <div class="text-center p-4">
+        <div
+          class="bg-gray-50 border border-gray-200 p-3 rounded-lg text-sm text-blue-600 break-all mb-4 font-mono select-all">
+          {{ publicLink }}
+        </div>
+        <el-button type="primary" size="large" @click="copyLink" class="w-full font-bold">
+          复制链接
+        </el-button>
+        <div class="text-xs text-gray-400 mt-3">
+          提示：该链接无需登录，可直接发到家长群。
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -114,29 +134,31 @@
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
-import { ArrowLeft, ArrowRight, Plus, Close, List } from '@element-plus/icons-vue';
+import { ArrowLeft, ArrowRight, Plus, Close, List, Share } from '@element-plus/icons-vue';
 
 // ---------------------------
 // 状态定义
 // ---------------------------
-const currentStartDate = ref(new Date()); // 当前周的周一
-const menuList = ref([]); // 后端返回的排期数据
-const dishLibrary = ref([]); // 菜品库供选择
+const currentStartDate = ref(new Date());
+const menuList = ref([]);
+const dishLibrary = ref([]);
 const dialogVisible = ref(false);
 const shoppingListVisible = ref(false);
 const shoppingList = ref([]);
+
+// 分享相关
+const shareDialogVisible = ref(false);
+const publicLink = ref('');
 
 const form = ref({ dateStr: '', type: '', dish_id: null });
 
 // ---------------------------
 // 日历逻辑
 // ---------------------------
-// 获取当前周的7天日期对象
 const weekDates = computed(() => {
   const dates = [];
   const start = new Date(currentStartDate.value);
-  // 调整到周一 (如果今天是周三，就退回周一)
-  const day = start.getDay() || 7; // 周日是0，改为7
+  const day = start.getDay() || 7;
   start.setDate(start.getDate() - day + 1);
 
   for (let i = 0; i < 7; i++) {
@@ -158,7 +180,6 @@ const getWeekDayName = (idx) => ['周一', '周二', '周三', '周四', '周五
 const getMealTypeName = (type) => ({ lunch: '午餐', dinner: '晚餐', snack: '加餐' }[type]);
 const isToday = (date) => formatDate(date) === formatDate(new Date());
 
-// 切换周
 const changeWeek = (offset) => {
   const newDate = new Date(currentStartDate.value);
   newDate.setDate(newDate.getDate() + (offset * 7));
@@ -173,7 +194,6 @@ const resetToToday = () => {
 // ---------------------------
 // 核心业务逻辑
 // ---------------------------
-// 1. 获取本周食谱
 const fetchMenus = async () => {
   const start = formatDate(weekDates.value[0]);
   const end = formatDate(weekDates.value[6]);
@@ -183,7 +203,6 @@ const fetchMenus = async () => {
   } catch (err) { ElMessage.error('加载食谱失败'); }
 };
 
-// 2. 获取菜品库
 const fetchDishes = async () => {
   try {
     const res = await axios.get('/api/catering/dishes');
@@ -191,13 +210,11 @@ const fetchDishes = async () => {
   } catch (err) { console.error(err); }
 };
 
-// 3. 筛选某天某餐的菜
 const getMenuItems = (date, type) => {
   const dStr = formatDate(date);
   return menuList.value.filter(m => m.plan_date.startsWith(dStr) && m.meal_type === type);
 };
 
-// 4. 添加菜品
 const openAddDialog = (date, type) => {
   form.value = { dateStr: formatDate(date), type, dish_id: null };
   if (dishLibrary.value.length === 0) fetchDishes();
@@ -221,54 +238,51 @@ const confirmAdd = async () => {
   } catch (err) { ElMessage.error('排入失败'); }
 };
 
-// 5. 移除菜品
 const handleRemove = async (item) => {
   try {
     await axios.delete(`/api/catering/menus/${item.id}`);
-    fetchMenus(); // 重新加载
+    fetchMenus();
   } catch (err) { ElMessage.error('移除失败'); }
 };
 
-// 6. 🛒 智能计算采购单
 const calculateShoppingList = async () => {
-  // 这里我们需要所有菜品的详细配方。
-  // 简单起见，我们直接遍历当前 menuList，在 dishLibrary 里找到对应的配方进行累加。
-  // 注意：真实场景下可能需要后端专门接口，但在数据量不大时前端算也行。
-
   if (dishLibrary.value.length === 0) await fetchDishes();
-
-  const summary = {}; // Map: ingredient_id -> { name, quantity, unit ... }
-
+  const summary = {};
   menuList.value.forEach(menuItem => {
-    // 在库里找到这道菜的详情（含配方）
     const fullDish = dishLibrary.value.find(d => d.id === menuItem.dish_id);
     if (fullDish && fullDish.ingredients) {
       fullDish.ingredients.forEach(ing => {
         if (!summary[ing.ingredient_id]) {
           summary[ing.ingredient_id] = {
-            name: ing.name,
-            category: '默认', // 如果需要分类，需要后端接口返回更全的信息
-            unit: ing.unit,
-            allergen_type: ing.allergen_type,
-            totalQuantity: 0
+            name: ing.name, category: '默认', unit: ing.unit,
+            allergen_type: ing.allergen_type, totalQuantity: 0
           };
         }
-        // 累加
         summary[ing.ingredient_id].totalQuantity += Number(ing.quantity);
       });
     }
   });
-
-  // 转为数组并整理格式
   shoppingList.value = Object.values(summary).map(item => ({
-    ...item,
-    totalQuantity: parseFloat(item.totalQuantity.toFixed(2)) // 保留2位小数
-  })).sort((a, b) => a.allergen_type === '无' ? 1 : -1); // 把有过敏源的排前面
+    ...item, totalQuantity: parseFloat(item.totalQuantity.toFixed(2))
+  })).sort((a, b) => a.allergen_type === '无' ? 1 : -1);
 
-  if (shoppingList.value.length === 0) {
-    ElMessage.info('本周食谱中的菜品暂未录入配方，无法计算。');
-  } else {
-    shoppingListVisible.value = true;
+  if (shoppingList.value.length === 0) ElMessage.info('暂无配方数据');
+  else shoppingListVisible.value = true;
+};
+
+// ⭐ 分享逻辑
+const openShareDialog = () => {
+  publicLink.value = `${window.location.origin}/weekly-menu`;
+  shareDialogVisible.value = true;
+};
+
+const copyLink = async () => {
+  try {
+    await navigator.clipboard.writeText(publicLink.value);
+    ElMessage.success('链接已复制，可发给家长');
+    shareDialogVisible.value = false;
+  } catch (err) {
+    ElMessage.error('复制失败，请手动复制');
   }
 };
 
@@ -277,10 +291,3 @@ onMounted(() => {
   fetchDishes();
 });
 </script>
-
-<style scoped>
-/* 隐藏滚动条 */
-::-webkit-scrollbar {
-  width: 0;
-}
-</style>

@@ -91,6 +91,26 @@
               <div class="text-center text-gray-400 text-[10px] mt-3 font-mono tracking-widest">2025 DAILY MENU</div>
             </div>
           </div>
+
+          <div v-if="report.sourcing_data && report.sourcing_data.length > 0"
+            class="mt-5 pt-4 border-t border-gray-100">
+            <div class="text-xs text-gray-400 mb-2 flex items-center">
+              <el-icon class="mr-1">
+                <ShoppingCart />
+              </el-icon> 食材来源追溯 (只选大牌 严控品质)
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span v-for="(item, idx) in report.sourcing_data" :key="idx"
+                class="inline-flex items-center bg-gray-50 text-gray-600 text-xs px-2 py-1 rounded border border-gray-100">
+                <span class="font-medium mr-1.5">{{ item.name }}</span>
+                <span :class="getSourceBadgeClass(item.source)"
+                  class="text-[10px] px-1 py-0.5 rounded transform scale-90 origin-left">
+                  {{ item.source }}
+                </span>
+              </span>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -132,7 +152,7 @@ import { ref, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import * as echarts from 'echarts';
-import { Food, ChatDotRound, TrendCharts, DocumentDelete, DataAnalysis } from '@element-plus/icons-vue';
+import { Food, ChatDotRound, TrendCharts, DocumentDelete, DataAnalysis, ShoppingCart } from '@element-plus/icons-vue';
 
 const route = useRoute();
 const loading = ref(true);
@@ -172,7 +192,13 @@ const parseMenu = (content) => {
   return result.length ? result : [{ type: '今日菜单', content: content }];
 };
 
-// 初始化雷达图
+// 货源标签样式
+const getSourceBadgeClass = (source) => {
+  if (['盒马鲜生', '山姆', '麦德龙'].includes(source)) return 'bg-blue-100 text-blue-600';
+  if (['叮咚买菜', '朴朴'].includes(source)) return 'bg-green-100 text-green-600';
+  return 'bg-gray-200 text-gray-500';
+};
+
 const initRadarChart = () => {
   if (!radarChartRef.value) return;
   const chart = echarts.init(radarChartRef.value);
@@ -214,7 +240,6 @@ const initRadarChart = () => {
   chart.setOption(option);
 };
 
-// ⭐ 初始化折线图 (已锁定最大值 240)
 const initLineChart = () => {
   if (!lineChartRef.value || !report.value.history) return;
   const chart = echarts.init(lineChartRef.value);
@@ -233,7 +258,7 @@ const initLineChart = () => {
     },
     yAxis: {
       type: 'value',
-      max: 240, // ⭐⭐⭐ 核心修改：固定最大值为 240 分钟 ⭐⭐⭐
+      max: 240,
       splitLine: { lineStyle: { type: 'dashed', color: '#eee' } }
     },
     series: [{

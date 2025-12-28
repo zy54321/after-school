@@ -128,6 +128,12 @@ const routes = [
     component: () => import('../systems/education/views/ReportView.vue'),
     meta: { title: '成长日报' },
   },
+  {
+    path: '/weekly-menu',
+    name: 'PublicWeeklyMenu',
+    component: () => import('../systems/catering/views/PublicWeeklyMenu.vue'),
+    meta: { title: '本周食谱' }
+  },
 
   // 4. 商业分析层 (Analytics System) - 需鉴权
   {

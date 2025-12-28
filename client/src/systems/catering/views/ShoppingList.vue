@@ -94,28 +94,32 @@ import { ElMessage } from 'element-plus';
 const loading = ref(false);
 const list = ref([]);
 
-// 默认选中下周一到周五
+// ⭐ 修改逻辑：默认选中下周一到周日 (7天)
 const getNextWeekRange = () => {
   const today = new Date();
   const day = today.getDay() || 7; // 获取今天是周几 (1-7)
   const nextMonday = new Date(today);
   nextMonday.setDate(today.getDate() + (8 - day)); // 下周一
-  const nextFriday = new Date(nextMonday);
-  nextFriday.setDate(nextMonday.getDate() + 4); // 下周五
-  return [nextMonday, nextFriday];
+
+  const nextSunday = new Date(nextMonday);
+  // 从周一往后推6天就是周日 (例如：1号是周一，1+6=7号是周日)
+  nextSunday.setDate(nextMonday.getDate() + 6);
+  return [nextMonday, nextSunday];
 };
 
 const dateRange = ref(getNextWeekRange());
 
 const shortcuts = [
-  { text: '下周 (周一至周五)', value: getNextWeekRange },
+  // ⭐ 修改文案和计算逻辑：覆盖周一至周日
+  { text: '下周 (周一至周日)', value: getNextWeekRange },
   {
-    text: '本周 (周一至周五)', value: () => {
+    text: '本周 (周一至周日)', value: () => {
       const today = new Date();
       const day = today.getDay() || 7;
-      const monday = new Date(today.setDate(today.getDate() - day + 1));
-      const friday = new Date(new Date(monday).setDate(monday.getDate() + 4));
-      return [monday, friday];
+      const monday = new Date(today.setDate(today.getDate() - day + 1)); // 本周一
+      // +6天得到本周日
+      const sunday = new Date(new Date(monday).setDate(monday.getDate() + 6));
+      return [monday, sunday];
     }
   },
   {

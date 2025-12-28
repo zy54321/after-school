@@ -48,5 +48,6 @@ router.post('/menus', controller.addMenuItem);
 router.delete('/menus/:id', controller.removeMenuItem);
 router.get('/shopping-list', controller.getShoppingList);
 router.get('/cost-analysis', controller.getCostAnalysis);
+router.get('/public/weekly-menu', controller.getPublicWeeklyMenu);
 
 module.exports = router;

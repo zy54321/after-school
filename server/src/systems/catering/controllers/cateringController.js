@@ -337,19 +337,23 @@ exports.getCostAnalysis = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
     // 1. 获取每日实际上课/用餐人数 (基于 daily_reports)
-    const studentRes = await pool.query(`
+    const studentRes = await pool.query(
+      `
       SELECT to_char(report_date, 'YYYY-MM-DD') as date, COUNT(*) as count
       FROM daily_reports
       WHERE report_date >= $1 AND report_date <= $2
       GROUP BY date
-    `, [start_date, end_date]);
-    
+    `,
+      [start_date, end_date]
+    );
+
     const studentCounts = {};
-    studentRes.rows.forEach(r => studentCounts[r.date] = parseInt(r.count));
+    studentRes.rows.forEach((r) => (studentCounts[r.date] = parseInt(r.count)));
 
     // 2. 计算每日食谱的理论总成本
     // 逻辑：菜单上的菜 -> 对应配方 -> 食材单价 * 数量
-    const costRes = await pool.query(`
+    const costRes = await pool.query(
+      `
       SELECT 
         to_char(wm.plan_date, 'YYYY-MM-DD') as date,
         SUM(di.quantity * i.price) as total_cost
@@ -359,13 +363,15 @@ exports.getCostAnalysis = async (req, res) => {
       WHERE wm.plan_date >= $1 AND wm.plan_date <= $2
       GROUP BY date
       ORDER BY date
-    `, [start_date, end_date]);
+    `,
+      [start_date, end_date]
+    );
 
     // 3. 合并数据
-    const data = costRes.rows.map(row => {
+    const data = costRes.rows.map((row) => {
       const count = studentCounts[row.date] || 0; // 当天用餐人数
       const total = parseFloat(parseFloat(row.total_cost).toFixed(2));
-      
+
       // 如果没人打卡，人均成本就没法算(分母为0)，暂记为0或等于总成本
       const avg = count > 0 ? parseFloat((total / count).toFixed(2)) : 0;
 
@@ -373,13 +379,101 @@ exports.getCostAnalysis = async (req, res) => {
         date: row.date,
         total_cost: total,
         student_count: count,
-        avg_cost: avg
+        avg_cost: avg,
       };
     });
 
     res.json({ code: 200, data });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ code: 500, msg: '获取成本数据失败', error: err.message });
+    res
+      .status(500)
+      .json({ code: 500, msg: '获取成本数据失败', error: err.message });
+  }
+};
+// ==========================================
+// 📱 6. 家长端公开食谱 (Public Weekly Menu)
+// ==========================================
+exports.getPublicWeeklyMenu = async (req, res) => {
+  const { start_date, end_date } = req.query;
+  try {
+    // 1. 查询食谱及菜品基础信息
+    const menuQuery = `
+      SELECT 
+        to_char(wm.plan_date, 'YYYY-MM-DD') as date, 
+        wm.meal_type, 
+        d.name as dish_name, 
+        d.photo_url, 
+        d.description,
+        d.tags,
+        d.id as dish_id
+      FROM weekly_menus wm
+      JOIN dishes d ON wm.dish_id = d.id
+      WHERE wm.plan_date >= $1 AND wm.plan_date <= $2
+      ORDER BY wm.plan_date, wm.meal_type
+    `;
+    const menuRes = await pool.query(menuQuery, [start_date, end_date]);
+
+    // 2. 查询这些菜品用到的食材和货源 (去重)
+    // 技巧：一次性查出该时间段所有相关食材，在内存里匹配，减少数据库压力
+    const sourcingQuery = `
+      SELECT DISTINCT
+        wm.dish_id,
+        i.name as ingredient_name,
+        i.source,
+        i.category
+      FROM weekly_menus wm
+      JOIN dish_ingredients di ON wm.dish_id = di.dish_id
+      JOIN ingredients i ON di.ingredient_id = i.id
+      WHERE wm.plan_date >= $1 AND wm.plan_date <= $2
+    `;
+    const sourcingRes = await pool.query(sourcingQuery, [start_date, end_date]);
+
+    // 3. 数据组装：把食材挂载到对应的菜品上
+    const menuList = menuRes.rows.map((dish) => {
+      // 找到这道菜用到的所有食材
+      const ingredients = sourcingRes.rows.filter(
+        (s) => s.dish_id === dish.dish_id
+      );
+      return {
+        ...dish,
+        ingredients: ingredients.map((i) => ({
+          name: i.ingredient_name,
+          source: i.source,
+          category: i.category,
+        })),
+      };
+    });
+
+    // 4. 按日期分组 (Frontend 需要 Mon-Sun 的结构)
+    const groupedByDate = {};
+    // 初始化每一天，确保即使某天没饭也有空结构
+    let curr = new Date(start_date);
+    const end = new Date(end_date);
+    while (curr <= end) {
+      const dateStr = curr.toISOString().split('T')[0];
+      groupedByDate[dateStr] = {
+        date: dateStr,
+        meals: { lunch: [], dinner: [], snack: [] },
+      };
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    menuList.forEach((item) => {
+      if (groupedByDate[item.date]) {
+        // 容错处理：防止 meal_type 是未知类型
+        const type = ['lunch', 'dinner', 'snack'].includes(item.meal_type)
+          ? item.meal_type
+          : 'lunch';
+        groupedByDate[item.date].meals[type].push(item);
+      }
+    });
+
+    res.json({ code: 200, data: Object.values(groupedByDate) });
+  } catch (err) {
+    console.error(err);
+    res
+      .status(500)
+      .json({ code: 500, msg: '获取公开食谱失败', error: err.message });
   }
 };
