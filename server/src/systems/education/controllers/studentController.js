@@ -20,12 +20,9 @@ const getStudents = async (req, res) => {
           ) as has_signed_today
         FROM student_course_balance scb
         JOIN classes c ON scb.class_id = c.id
-        -- ⭐ 核心修改：增加过滤条件，排除掉无效课程
         WHERE (
-          -- 情况A: 包月课，必须没过期
           (c.billing_type = 'time' AND scb.expired_at >= CURRENT_DATE)
           OR
-          -- 情况B: 按次课，必须还有剩余次数 (即使有效期没到，次数用完了也不算在读)
           (COALESCE(c.billing_type, 'count') != 'time' AND scb.remaining_lessons > 0)
         )
       )
@@ -45,7 +42,8 @@ const getStudents = async (req, res) => {
         ) as courses
       FROM students s
       LEFT JOIN course_data cd ON s.id = cd.student_id
-      WHERE s.status = 1
+      -- ⭐ 修复点：status = 'active'
+      WHERE s.status = 'active'
       GROUP BY s.id
       ORDER BY s.joined_at DESC;
     `;
@@ -79,12 +77,13 @@ const createStudent = async (req, res) => {
   } = req.body;
 
   try {
+    // 插入时使用默认值 'active' (数据库已设默认值，无需显式插入)
     const query = `
       INSERT INTO students (
         name, gender, grade, parent_name, parent_phone, balance, address, longitude, latitude,
         allergies, authorized_pickups, habit_goals, agreements_signed
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) -- 注意参数对应
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *;
     `;
     const values = [
@@ -97,10 +96,9 @@ const createStudent = async (req, res) => {
       address || null,
       longitude || null,
       latitude || null,
-      // ⭐ 2. 插入新字段的值
       allergies || null,
       authorized_pickups || null,
-      habit_goals || [], // 数组类型默认空数组
+      habit_goals || [],
       agreements_signed || false,
     ];
 
@@ -138,12 +136,13 @@ const updateStudent = async (req, res) => {
   } = req.body;
 
   try {
+    // ⭐ 修复点：status = 'active'
     const query = `
       UPDATE students 
       SET name = $1, gender = $2, grade = $3, parent_name = $4, parent_phone = $5, balance = $6, 
           address = $7, longitude = $8, latitude = $9,
           allergies = $10, authorized_pickups = $11, habit_goals = $12, agreements_signed = $13
-      WHERE id = $14 AND status = 1
+      WHERE id = $14 AND status = 'active'
       RETURNING *;
     `;
     const values = [
@@ -156,7 +155,6 @@ const updateStudent = async (req, res) => {
       address || null,
       longitude || null,
       latitude || null,
-      // ⭐ 2. 更新新字段
       allergies || null,
       authorized_pickups || null,
       habit_goals || [],
@@ -186,7 +184,6 @@ const deleteStudent = async (req, res) => {
   const { id } = req.params;
 
   try {
-    // 检查是否有未完成的订单或有效的课程余额
     const checkRelations = await pool.query(
       `
       SELECT COUNT(*) as count FROM student_course_balance
@@ -203,10 +200,10 @@ const deleteStudent = async (req, res) => {
       });
     }
 
-    // 软删除：设置 status = 0
+    // ⭐ 修复点：软删除改为 status = 'inactive'
     const query = `
       UPDATE students 
-      SET status = 0 
+      SET status = 'inactive' 
       WHERE id = $1
       RETURNING *;
     `;
@@ -228,13 +225,12 @@ const deleteStudent = async (req, res) => {
   }
 };
 
-// 获取单个学员详情 (聚合查询)
+// 获取单个学员详情
 const getStudentDetail = async (req, res) => {
   const { id } = req.params;
   const client = await pool.connect();
 
   try {
-    // 1. 查基本信息
     const studentRes = await client.query(
       'SELECT * FROM students WHERE id = $1',
       [id]
@@ -244,8 +240,6 @@ const getStudentDetail = async (req, res) => {
     }
     const student = studentRes.rows[0];
 
-    // 2. 查在读课程 (关联班级表)
-    // ⭐ 核心修改：同样增加过滤条件
     const courseRes = await client.query(
       `
       SELECT scb.*, c.class_name, c.tuition_fee
@@ -261,7 +255,6 @@ const getStudentDetail = async (req, res) => {
       [id]
     );
 
-    // 3. 查最近 50 条签到记录
     const attendanceRes = await client.query(
       `
       SELECT a.*, c.class_name, u.real_name as operator_name
@@ -275,7 +268,6 @@ const getStudentDetail = async (req, res) => {
       [id]
     );
 
-    // 4. 查缴费记录
     const orderRes = await client.query(
       `
       SELECT o.*, c.class_name
@@ -304,9 +296,9 @@ const getStudentDetail = async (req, res) => {
   }
 };
 
-// ⭐ 新增/替换：办理退课/退费
+// 办理退课/退费
 const dropClass = async (req, res) => {
-  const { id } = req.params; // 学生ID
+  const { id } = req.params;
   const { class_id, refund_amount, remark } = req.body;
 
   if (!class_id) {
@@ -318,9 +310,7 @@ const dropClass = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // 1. 如果有退费金额，插入一条负数订单 (财务平账)
     if (refund_amount && refund_amount > 0) {
-      // 前端传的是"元"，转成"分"存库，并取负数
       const amountInCents = -Math.abs(parseFloat(refund_amount) * 100);
 
       await client.query(
@@ -332,7 +322,6 @@ const dropClass = async (req, res) => {
       );
     }
 
-    // 2. 清理该课程的余额 (设为 0 且过期)
     const updateRes = await client.query(
       `
       UPDATE student_course_balance
@@ -349,10 +338,6 @@ const dropClass = async (req, res) => {
       throw new Error('未找到该学员的该课程记录');
     }
 
-    // 3. 检查该学员是否还有其他在读课程
-    // 如果没有其他课程了，是否要把 student.status 改为 0 (退学)？
-    // 这里建议保留 status=1，因为只要档案还在，随时可能报新班。
-    // 我们只返回一个标志位给前端提示即可。
     const checkOther = await client.query(
       `
       SELECT count(*) FROM student_course_balance 
@@ -371,7 +356,7 @@ const dropClass = async (req, res) => {
       code: 200,
       msg: '退课办理成功' + (refund_amount > 0 ? '，退费记录已生成' : ''),
       data: {
-        hasOtherCourses, // 告诉前端他是否还有别的课
+        hasOtherCourses,
       },
     });
   } catch (err) {
@@ -383,21 +368,19 @@ const dropClass = async (req, res) => {
   }
 };
 
-// ⭐ 获取学员位置数据 (GeoJSON 格式)
+// 获取学员位置数据
 const getStudentLocations = async (req, res) => {
   try {
-    // 只查询状态正常且有坐标的学员
+    // ⭐ 修复点：status = 'active'
     const query = `
       SELECT id, name, longitude, latitude 
       FROM students 
-      WHERE status = 1 
+      WHERE status = 'active' 
       AND longitude IS NOT NULL 
       AND latitude IS NOT NULL
     `;
     const result = await pool.query(query);
 
-    // 转换为 GeoJSON FeatureCollection 格式
-    // 这是 GIS 地图库（OpenLayers/Mapbox/Leaflet）通用的数据格式
     const geoJsonData = {
       type: 'FeatureCollection',
       features: result.rows.map((student) => ({
@@ -407,12 +390,12 @@ const getStudentLocations = async (req, res) => {
           coordinates: [
             parseFloat(student.longitude),
             parseFloat(student.latitude),
-          ], // 注意：GeoJSON 是 [经度, 纬度]
+          ],
         },
         properties: {
           id: student.id,
           name: student.name,
-          weight: 1, // 权重，未来可以根据"剩余课时"或"消费金额"来调整热力权重
+          weight: 1,
         },
       })),
     };
@@ -427,11 +410,11 @@ const getStudentLocations = async (req, res) => {
     res.status(500).json({ code: 500, msg: '获取数据失败' });
   }
 };
-// 获取周边生源 (PostGIS 核心功能)
+
+// 获取周边生源
 const getNearbyStudents = async (req, res) => {
   const { lng, lat, radius } = req.query;
 
-  // 1. 参数校验
   if (!lng || !lat || !radius) {
     return res
       .status(400)
@@ -439,25 +422,23 @@ const getNearbyStudents = async (req, res) => {
   }
 
   try {
-    // 2. PostGIS 查询 SQL
-    // ST_MakePoint(longitude, latitude): 把经纬度字段变成一个"点"
-    // ST_DistanceSphere(A, B): 计算 A 点和 B 点在地球表面的距离(米)
+    // ⭐ 修复点：status = 'active'
     const query = `
       SELECT 
         id, name, gender, parent_name, parent_phone, address, longitude, latitude,
         ROUND(ST_DistanceSphere(
-          ST_MakePoint($1, $2),          -- 中心点 (用户选的点)
-          ST_MakePoint(longitude, latitude) -- 目标点 (学生的位置)
+          ST_MakePoint($1, $2),
+          ST_MakePoint(longitude, latitude)
         )) as distance
       FROM students
-      WHERE status = 1 
+      WHERE status = 'active' 
         AND longitude IS NOT NULL 
         AND latitude IS NOT NULL
         AND ST_DistanceSphere(
           ST_MakePoint($1, $2),
           ST_MakePoint(longitude, latitude)
-        ) <= $3 -- 筛选半径内的
-      ORDER BY distance ASC; -- 按距离由近到远排序
+        ) <= $3
+      ORDER BY distance ASC;
     `;
 
     const values = [parseFloat(lng), parseFloat(lat), parseFloat(radius)];
@@ -466,7 +447,7 @@ const getNearbyStudents = async (req, res) => {
     res.json({
       code: 200,
       msg: 'success',
-      data: result.rows, // 返回的数据里会多一个 distance 字段
+      data: result.rows,
       meta: {
         center: { lng, lat },
         radius: radius,

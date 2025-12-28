@@ -58,6 +58,7 @@ exports.getDailyWorkflowData = async (req, res) => {
     }
 
     // 获取学生数据
+    // ⭐ 修复点：WHERE s.status = 'active' (原为 1)
     const studentsRes = await pool.query(
       `
       SELECT 
@@ -68,7 +69,7 @@ exports.getDailyWorkflowData = async (req, res) => {
         dr.habit_rating
       FROM students s
       LEFT JOIN daily_reports dr ON s.id = dr.student_id AND dr.report_date = $1
-      WHERE s.status = 1
+      WHERE s.status = 'active' 
       ORDER BY s.id ASC
     `,
       [today]
@@ -172,7 +173,7 @@ exports.saveDailyWorkflow = async (req, res) => {
   }
 };
 
-// ⭐ 家长查看日报接口 (更新：增加食材溯源查询)
+// 家长查看日报接口
 exports.getStudentReportByToken = async (req, res) => {
   const { token } = req.query;
 
@@ -210,9 +211,6 @@ exports.getStudentReportByToken = async (req, res) => {
       currentReport.report_date,
     ]);
 
-    // ⭐⭐⭐ 新增：查询当日用到的食材和货源 ⭐⭐⭐
-    // 逻辑：根据日报日期 -> 查 weekly_menus -> 查关联的 ingredients
-    // 使用 DISTINCT 去重 (例如两道菜都用了鸡蛋，只显示一次)
     const sourcingQuery = `
       SELECT DISTINCT
         i.name,
@@ -224,7 +222,6 @@ exports.getStudentReportByToken = async (req, res) => {
       WHERE wm.plan_date = $1
       ORDER BY i.source, i.name
     `;
-    // 注意：这里我们只查 name 和 source，绝对不查 price
     const sourcingRes = await pool.query(sourcingQuery, [
       currentReport.report_date,
     ]);
@@ -251,7 +248,6 @@ exports.getStudentReportByToken = async (req, res) => {
       data: {
         ...currentReport,
         history: historyRes.rows,
-        // 将溯源数据附加到返回结果中
         sourcing_data: sourcingRes.rows,
       },
     });
