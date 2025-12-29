@@ -58,7 +58,6 @@ exports.getDailyWorkflowData = async (req, res) => {
     }
 
     // 获取学生数据
-    // ⭐ 修复点：WHERE s.status = 'active' (原为 1)
     const studentsRes = await pool.query(
       `
       SELECT 
@@ -180,9 +179,13 @@ exports.getStudentReportByToken = async (req, res) => {
   if (!token) return res.status(400).json({ code: 400, msg: '凭证无效' });
 
   try {
+    // ⭐ 修复点：显式列出 dr 的所有字段，确保 focus_minutes 被选中
+    // 之前使用 dr.* 可能导致字段隐式丢失或冲突
     const reportQuery = `
       SELECT 
-        dr.*, 
+        dr.id, dr.student_id, dr.report_date, dr.token,
+        dr.focus_minutes, dr.distraction_count, dr.meal_status, 
+        dr.homework_rating, dr.homework_tags, dr.discipline_rating, dr.habit_rating, dr.teacher_comment,
         s.name as student_name, s.grade, s.habit_goals,
         dm.menu_content, dm.evidence_photo_url
       FROM daily_reports dr

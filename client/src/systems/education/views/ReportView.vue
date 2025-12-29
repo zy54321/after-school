@@ -204,8 +204,11 @@ const initRadarChart = () => {
   const chart = echarts.init(radarChartRef.value);
 
   const r = report.value;
-  // ⭐ 修复点：强制转换为 Number 并提供默认值，防止 NaN
-  const focusMin = Number(r.focus_minutes || 0);
+  // ⭐ 调试：请在浏览器控制台查看 focus_minutes 的值
+  console.log('Report Data for Radar:', r);
+
+  // ⭐ 修复：加强数值转换
+  const focusMin = parseInt(r.focus_minutes) || 0;
 
   const scores = [
     // 假设 240分钟（4小时）为满分。如果您的标准不同，可在此调整分母
@@ -249,7 +252,6 @@ const initLineChart = () => {
   const chart = echarts.init(lineChartRef.value);
 
   const dates = report.value.history.map(h => formatDateShort(h.report_date));
-  // ⭐ 修复点：强制转换为 Number
   const values = report.value.history.map(h => Number(h.focus_minutes || 0));
 
   const option = {
