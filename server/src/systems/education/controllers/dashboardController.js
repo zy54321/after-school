@@ -3,10 +3,13 @@ const pool = require('../../../shared/config/db');
 const getSummary = async (req, res) => {
   try {
     const client = await pool.connect();
-    
+
     // 1. 在读学员总数 (状态正常的)
-    const studentRes = await client.query('SELECT COUNT(*) FROM students WHERE status = 1');
-    
+    // ⭐ 修复点：status 改为字符串 'active'
+    const studentRes = await client.query(
+      "SELECT COUNT(*) FROM students WHERE status = 'active'"
+    );
+
     // 2. 今日签到人数 (去重，一个人签两节课算一次还是两次？这里算人次)
     const checkinRes = await client.query(`
       SELECT COUNT(*) FROM attendance 
@@ -28,7 +31,7 @@ const getSummary = async (req, res) => {
         AND expired_at < CURRENT_DATE + INTERVAL '7 days'
         AND expired_at >= CURRENT_DATE
     `);
-    
+
     // 5. 获取需要续费的学员列表（有效期小于7天）
     const lowBalanceListRes = await client.query(`
       SELECT 
@@ -67,15 +70,14 @@ const getSummary = async (req, res) => {
         todayCheckins: parseInt(checkinRes.rows[0].count),
         todayIncome: parseInt(incomeRes.rows[0].total), // 单位：分
         lowBalanceCount: parseInt(warningRes.rows[0].count),
-        lowBalanceList: lowBalanceListRes.rows.map(row => ({
+        lowBalanceList: lowBalanceListRes.rows.map((row) => ({
           name: row.name,
           className: row.class_name,
-          expired_at: row.expired_at
+          expired_at: row.expired_at,
         })),
-        activities: activityRes.rows
-      }
+        activities: activityRes.rows,
+      },
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ code: 500, msg: '获取数据失败' });
@@ -83,4 +85,3 @@ const getSummary = async (req, res) => {
 };
 
 module.exports = { getSummary };
-

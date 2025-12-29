@@ -87,6 +87,7 @@ exports.deleteIngredient = async (req, res) => {
 // 获取菜品库
 exports.getDishes = async (req, res) => {
   try {
+    // ⭐ 核心修改：在 json_build_object 中增加 'source', i.source
     const query = `
       SELECT d.*, 
         COALESCE(
@@ -96,7 +97,8 @@ exports.getDishes = async (req, res) => {
               'name', i.name,
               'allergen_type', i.allergen_type,
               'quantity', di.quantity,
-              'unit', i.unit
+              'unit', i.unit,
+              'source', i.source  -- 👈 新增这一行
             )
           ) FILTER (WHERE i.id IS NOT NULL), '[]'
         ) as ingredients
@@ -115,7 +117,7 @@ exports.getDishes = async (req, res) => {
   }
 };
 
-// 新增菜品 (带事务)
+// 新增菜品
 exports.createDish = async (req, res) => {
   const { name, photo_url, description, tags, ingredients } = req.body;
   const client = await pool.connect();
@@ -152,7 +154,7 @@ exports.uploadImage = (req, res) => {
   res.json({ code: 200, msg: '上传成功', url: fileUrl });
 };
 
-// 更新菜品 (带事务)
+// 更新菜品
 exports.updateDish = async (req, res) => {
   const { id } = req.params;
   const { name, photo_url, description, tags, ingredients } = req.body;
@@ -254,25 +256,21 @@ exports.removeMenuItem = async (req, res) => {
 };
 
 // ==========================================
-// 🛒 4. 智能采购 (Shopping List) - 修正版
+// 🛒 4. 智能采购 (Shopping List)
 // ==========================================
 exports.getShoppingList = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
-    // 1. 获取当前在读学员人数
-    const countRes = await pool.query(
-      "SELECT count(*) FROM students WHERE status = 'active'"
-    );
+    const countRes = await pool.query('SELECT count(*) FROM students');
     const studentCount = parseInt(countRes.rows[0].count) || 0;
 
-    // 2. 获取基准食材量 (SUM求和的是10人份的总量)
     const query = `
       SELECT 
         i.source,
         i.category,
         i.name,
         i.unit,
-        SUM(di.quantity) as benchmark_total, -- 这是一个“10人基准量”的汇总
+        SUM(di.quantity) as benchmark_total,
         i.price
       FROM weekly_menus wm
       JOIN dish_ingredients di ON wm.dish_id = di.dish_id
@@ -291,7 +289,6 @@ exports.getShoppingList = async (req, res) => {
 
     const result = await pool.query(query, [start_date, end_date]);
 
-    // 3. 内存计算：应用 (基准量 / 10 * 实际人数) 公式
     const groupedData = {};
     result.rows.forEach((row) => {
       if (!groupedData[row.source]) {
@@ -302,9 +299,6 @@ exports.getShoppingList = async (req, res) => {
         };
       }
 
-      // ⭐ 核心修正：
-      // row.benchmark_total 是数据库里存的量（我们定义为10人份）
-      // 实际需求 = (基准量 / 10) * 实际人数
       const actualQuantity =
         (parseFloat(row.benchmark_total) / 10) * studentCount;
       const actualCost = actualQuantity * parseFloat(row.price);
@@ -314,7 +308,6 @@ exports.getShoppingList = async (req, res) => {
         name: row.name,
         unit: row.unit,
         price: row.price,
-        // 这里返回给前端的是已经乘过人数的“实际采购量”
         total_quantity: parseFloat(actualQuantity.toFixed(2)),
         total_cost: parseFloat(actualCost.toFixed(2)),
       };
@@ -323,7 +316,6 @@ exports.getShoppingList = async (req, res) => {
       groupedData[row.source].totalCost += item.total_cost;
     });
 
-    // 格式化总金额
     Object.values(groupedData).forEach((g) => {
       g.totalCost = parseFloat(g.totalCost.toFixed(2));
     });
@@ -338,18 +330,14 @@ exports.getShoppingList = async (req, res) => {
 };
 
 // ==========================================
-// 💰 5. 成本分析 (Cost Analysis) - 修正版
+// 💰 5. 成本分析 (Cost Analysis)
 // ==========================================
 exports.getCostAnalysis = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
-    // 1. 获取兜底人数 (当前在读)
-    const activeRes = await pool.query(
-      "SELECT count(*) FROM students WHERE status = 'active'"
-    );
+    const activeRes = await pool.query('SELECT count(*) FROM students');
     const activeCount = parseInt(activeRes.rows[0].count) || 0;
 
-    // 2. 获取每日实际打卡人数 (历史数据更准)
     const studentRes = await pool.query(
       `SELECT to_char(report_date, 'YYYY-MM-DD') as date, COUNT(*) as count
        FROM daily_reports
@@ -360,7 +348,6 @@ exports.getCostAnalysis = async (req, res) => {
     const studentCounts = {};
     studentRes.rows.forEach((r) => (studentCounts[r.date] = parseInt(r.count)));
 
-    // 3. 计算“10人基准成本”
     const costRes = await pool.query(
       `SELECT 
          to_char(wm.plan_date, 'YYYY-MM-DD') as date,
@@ -374,17 +361,10 @@ exports.getCostAnalysis = async (req, res) => {
       [start_date, end_date]
     );
 
-    // 4. 合并计算
     const data = costRes.rows.map((row) => {
-      // 优先用打卡人数，没有则用在读人数
       const count = studentCounts[row.date] || activeCount;
       const benchmarkTotal = parseFloat(row.benchmark_cost_10);
-
-      // ⭐ 核心修正：
-      // 实际总成本 = (10人份成本 / 10) * 实际人数
       const realTotalCost = (benchmarkTotal / 10) * count;
-
-      // 人均成本 = 实际总成本 / 实际人数 = (benchmarkTotal / 10)
       const avg = count > 0 ? realTotalCost / count : 0;
 
       return {

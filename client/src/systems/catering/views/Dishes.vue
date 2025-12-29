@@ -35,8 +35,16 @@
               <div class="bg-gray-50 rounded p-2 text-xs text-gray-600 mb-2">
                 <div class="font-bold mb-1">配方表 (基准:10人):</div>
                 <div v-for="ing in dish.ingredients" :key="ing.ingredient_id"
-                  class="flex justify-between border-b border-gray-200 py-1 last:border-0">
-                  <span>{{ ing.name }}</span>
+                  class="flex justify-between items-center border-b border-gray-200 py-1 last:border-0">
+
+                  <div class="flex items-center gap-1">
+                    <span>{{ ing.name }}</span>
+                    <el-tag v-if="ing.source" size="small" effect="plain" :type="getSourceTagType(ing.source)"
+                      class="scale-75 origin-left px-1 h-5">
+                      {{ ing.source }}
+                    </el-tag>
+                  </div>
+
                   <span>
                     {{ ing.quantity }}{{ ing.unit }}
                     <span v-if="ing.allergen_type !== '无'" class="text-red-500 font-bold ml-1">
@@ -166,6 +174,12 @@ const standardData = [
   { category: '🥛 豆制品', standard: '1 ~ 2 斤', remark: '豆腐/干子，优质蛋白。' },
 ];
 
+const getSourceTagType = (source) => {
+  if (['盒马鲜生', '山姆', '麦德龙'].includes(source)) return 'primary'; // 蓝
+  if (['叮咚买菜', '朴朴'].includes(source)) return 'success'; // 绿
+  return 'info'; // 灰
+};
+
 const handleAvatarSuccess = (response) => {
   if (response.code === 200) { form.photo_url = response.url; ElMessage.success('上传成功'); }
   else ElMessage.error('上传失败');
@@ -179,9 +193,12 @@ const beforeAvatarUpload = (file) => {
 
 const fetchData = async () => {
   try {
-    const [resD, resI] = await Promise.all([axios.get('/api/catering/dishes'), axios.get('/api/catering/ingredients')]);
-    if (resD.data.code === 200) dishes.value = resD.data.data;
-    if (resI.data.code === 200) ingredientList.value = resI.data.data;
+    const [resDishes, resIngs] = await Promise.all([
+      axios.get('/api/catering/dishes'),
+      axios.get('/api/catering/ingredients')
+    ]);
+    if (resDishes.data.code === 200) dishes.value = resDishes.data.data;
+    if (resIngs.data.code === 200) ingredientList.value = resIngs.data.data;
   } catch (e) { console.error(e); }
 };
 
