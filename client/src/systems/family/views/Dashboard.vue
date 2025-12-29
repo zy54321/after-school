@@ -181,8 +181,8 @@ onMounted(initData);
 
           <div class="category-title">☀️ 生活与家务</div>
           <div class="grid">
-            <div v-for="t in tasks.filter(x => ['life', 'chore'].includes(x.category))" :key="t.id" class="card task-card"
-              @click="handleTask(t)">
+            <div v-for="t in tasks.filter(x => ['life', 'chore'].includes(x.category))" :key="t.id"
+              class="card task-card" @click="handleTask(t)">
               <div class="icon">{{ t.icon || '🧹' }}</div>
               <div class="info">
                 <div class="t-name">{{ t.title }}</div>
@@ -286,12 +286,19 @@ onMounted(initData);
 .family-dashboard {
   background: #fdf6ec;
   /* 浅米色背景 */
-  min-height: 100vh;
-  padding-bottom: 40px;
+  /* 🟢 修改 1: 固定高度并使用 Flex 布局 */
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* 隐藏整个页面的滚动条 */
 }
 
 /* 顶部孩子栏 */
 .member-bar {
+  /* 🟢 修改 2: 防止头部被压缩 */
+  flex-shrink: 0;
+
   background: #fff;
   padding: 15px;
   display: flex;
@@ -307,6 +314,8 @@ onMounted(initData);
   opacity: 0.6;
   transition: all 0.3s;
   cursor: pointer;
+  /* 🟢 新增: 防止头像在小屏下被挤压 */
+  flex-shrink: 0;
 }
 
 .member-avatar.active {
@@ -321,8 +330,11 @@ onMounted(initData);
   font-weight: bold;
 }
 
-/* 总分 */
+/* 总分区域 */
 .score-header {
+  /* 🟢 修改 2: 防止头部被压缩 */
+  flex-shrink: 0;
+
   padding: 30px;
   text-align: center;
   background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
@@ -354,12 +366,38 @@ onMounted(initData);
   cursor: pointer;
 }
 
+/* 🟢 修改 3: 改造 Tabs 布局，让它撑满剩余空间 */
+.action-tabs {
+  flex: 1;
+  /* 占据剩余高度 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* 关键：禁止自身撑开页面 */
+  border-bottom: none;
+  /* 去掉底边框，视觉更干净 */
+}
+
+/* 🟢 修改 4: 穿透 Element Plus 样式，让内容区独立滚动 */
+:deep(.el-tabs__content) {
+  flex: 1;
+  /* 占据 Tabs 内部剩余高度 */
+  overflow-y: auto;
+  /* 开启垂直滚动 */
+  padding: 15px;
+  /* 保持内边距 */
+
+  /* 增加滚动条顺滑度 (iOS) */
+  -webkit-overflow-scrolling: touch;
+}
+
 /* 网格布局 */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(45%, 1fr));
   gap: 12px;
-  padding: 10px;
+  padding: 5px;
+  /* 微调 padding */
 }
 
 /* 卡片通用 */

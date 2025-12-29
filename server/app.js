@@ -30,6 +30,9 @@ const amapRoutes = require('./src/systems/education/routes/amapRoutes');
 const dailyReportRoutes = require('./src/systems/education/routes/dailyReportRoutes');
 const cateringRoutes = require('./src/systems/catering/routes/cateringRoutes');
 
+// 家庭积分路由
+const familyRoutes = require('./src/systems/family/routes/familyRoutes');
+
 // Analytics System 路由（商业分析系统）
 const mapboxRoutes = require('./src/systems/analytics/routes/mapboxRoutes');
 const dictionaryRoutes = require('./src/systems/analytics/routes/dictionaryRoutes');
@@ -102,6 +105,9 @@ app.use('/api/mapbox/dictionary', checkAuth, dictionaryRoutes);
 app.use('/api/mapbox', checkAuth, mapboxRoutes);
 // 🔒 Analytics System 人口构成分析路由（需要登录）
 app.use('/api/analytics/demographics', checkAuth, demographicsRoutes);
+
+// 家庭积分系统路由 (需要登录)
+app.use('/api/family', checkAuth, familyRoutes);
 
 // 启动服务
 app.listen(port, () => {

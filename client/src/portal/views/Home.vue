@@ -112,6 +112,30 @@ const handleStrategyClick = () => {
   }
 };
 
+const handleFamilyClick = () => {
+  // 逻辑：点击卡片 -> 检查登录 -> 跳转到介绍页(FamilyHome)
+  if (isLoggedIn.value) {
+    router.push({
+      name: 'FamilyHome',
+      query: { redirect: '/family/dashboard' }
+    });
+  } else {
+    ElMessageBox.confirm(
+      '请先登录以访问家庭成长银行',
+      '提示',
+      {
+        confirmButtonText: '去登录',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    ).then(() => {
+      redirectTarget.value = '/family/home'; // 登录后去介绍页
+      shouldRedirectAfterLogin.value = true;
+      loginVisible.value = true;
+    }).catch(() => { });
+  }
+};
+
 const fillVisitor = () => {
   loginForm.username = 'visitor';
   loginForm.password = '123456';
@@ -134,7 +158,7 @@ const handleLogin = async () => {
 
           ElMessage.success('登录成功');
           loginVisible.value = false;
-          
+
           // 根据来源决定是否跳转
           if (shouldRedirectAfterLogin.value) {
             // 点击卡片后登录，根据目标路径跳转
@@ -641,7 +665,8 @@ body.el-popup-parent--hidden {
           </el-icon>
           {{ $t('login.navBtn') }}
         </el-button>
-        <el-button v-else round class="nav-login-btn" type="primary" plain @click="showLoginModal" style="margin-left: 15px;">
+        <el-button v-else round class="nav-login-btn" type="primary" plain @click="showLoginModal"
+          style="margin-left: 15px;">
           <el-icon style="margin-right: 5px">
             <User />
           </el-icon>
@@ -691,6 +716,21 @@ body.el-popup-parent--hidden {
           </div>
         </div>
 
+        <div class="app-card" @click="handleFamilyClick">
+          <div class="card-glow" style="background: #f59e0b;"></div>
+          <div class="card-content">
+            <div class="icon-wrapper">🧸</div>
+            <h3>家庭成长银行</h3>
+            <p>做任务、攒积分、换礼物，让好习惯养成更有趣！</p>
+            <div class="card-footer">
+              <span class="tag" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
+                FAMILY
+              </span>
+              <span class="arrow">-></span>
+            </div>
+          </div>
+        </div>
+
         <div class="app-card placeholder">
           <div class="card-content">
             <div class="icon-wrapper">🚧</div>
@@ -710,7 +750,8 @@ body.el-popup-parent--hidden {
     <div class="bg-orb orb-2"></div>
 
     <!-- 🟢 登录对话框 -->
-    <el-dialog v-model="loginVisible" :title="$t('login.loginBtn')" width="400px" align-center class="login-dialog" :lock-scroll="false">
+    <el-dialog v-model="loginVisible" :title="$t('login.loginBtn')" width="400px" align-center class="login-dialog"
+      :lock-scroll="false">
       <div v-if="isLoggedIn" class="welcome-back-card">
         <el-avatar :size="80" src="https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png" />
         <h3>{{ $t('login.identityTitle') }}, {{ displayUserName }}</h3>
@@ -745,4 +786,3 @@ body.el-popup-parent--hidden {
     </el-dialog>
   </div>
 </template>
-

@@ -33,6 +33,13 @@ const routes = [
     component: () => import('../systems/analytics/views/AnalyticsHome.vue'),
   },
 
+  // 2.2 家庭积分系统首页 - 独立页面 (新增)
+  {
+    path: '/family/home',
+    name: 'FamilyHome',
+    component: () => import('../systems/family/views/FamilyHome.vue'),
+  },
+
   // 3. 教务系统层 (Education System) - 需鉴权
   {
     path: '/system',
@@ -132,7 +139,7 @@ const routes = [
     path: '/weekly-menu',
     name: 'PublicWeeklyMenu',
     component: () => import('../systems/catering/views/PublicWeeklyMenu.vue'),
-    meta: { title: '本周食谱' }
+    meta: { title: '本周食谱' },
   },
 
   // 4. 商业分析层 (Analytics System) - 需鉴权
@@ -162,6 +169,21 @@ const routes = [
       },
     ],
   },
+
+  // 5. 家庭积分系统 (Family System) - 需鉴权 (新增)
+  {
+    path: '/family',
+    // 这里暂时复用 PortalLayout，或者您可以新建一个 Layout
+    component: () => import('../portal/layout/PortalLayout.vue'),
+    children: [
+      {
+        path: 'dashboard',
+        name: 'FamilyDashboard',
+        component: () => import('../systems/family/views/Dashboard.vue'),
+        meta: { requiresAuth: true }, // 保护路由
+      },
+    ],
+  },
 ];
 
 const router = createRouter({
@@ -180,6 +202,13 @@ router.beforeEach((to, from, next) => {
       // 商业分析系统，跳转到商业分析系统首页
       next({
         path: '/strategy/home',
+        query: { redirect: to.fullPath },
+      });
+    } else if (to.fullPath.startsWith('/family')) {
+      // (新增)
+      // 家庭系统，跳转到家庭介绍页
+      next({
+        path: '/family/home',
         query: { redirect: to.fullPath },
       });
     } else {
