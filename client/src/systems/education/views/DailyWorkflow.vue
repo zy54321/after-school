@@ -40,7 +40,7 @@
           <div>
             <div class="text-white font-bold text-lg tracking-wide">{{ student.name }}</div>
             <div class="text-slate-300 text-xs mt-0.5 bg-slate-600/50 inline-block px-2 py-0.5 rounded">{{ student.grade
-              }}
+            }}
             </div>
           </div>
 
@@ -75,7 +75,7 @@
             <div class="text-xs text-orange-500 font-bold z-10 mb-1">走神次数</div>
             <div class="flex items-baseline z-10 w-full px-1">
               <el-input-number v-model="student.distraction_count" :min="0" controls-position="right"
-                class="!w-full enhanced-input-number" size="large" />
+                class="!w-full enhanced-input-number" size="large" @change="(val, oldVal) => handleDistractionChange(student, val, oldVal)" />
             </div>
             <div class="text-[10px] text-orange-400 mt-1">次</div>
           </div>
@@ -198,6 +198,23 @@ const copyToClipboard = async (text) => {
   }
 };
 
+const handleDistractionChange = (student, current, old) => {
+  if (old === undefined || old === null) return;
+
+  // 计算走神次数增加了多少（如果是减少，diff就是负数）
+  const diff = current - old;
+  const penaltyPerCount = 10; // 设定：每走神1次，扣10分钟
+
+  // 计算新的专注时长：当前时长 - (变化次数 * 10)
+  let newFocus = (student.focus_minutes || 0) - (diff * penaltyPerCount);
+
+  // 确保时长不小于 0，且不超过 240（可选）
+  if (newFocus < 0) newFocus = 0;
+  if (newFocus > 240) newFocus = 240;
+
+  student.focus_minutes = newFocus;
+};
+
 const fetchData = async () => {
   loading.value = true;
   try {
@@ -210,7 +227,7 @@ const fetchData = async () => {
 
       students.value = data.students.map(s => ({
         ...s,
-        focus_minutes: s.focus_minutes !== null ? s.focus_minutes : 0,
+        focus_minutes: s.focus_minutes !== null ? s.focus_minutes : 240,
         distraction_count: s.distraction_count !== null ? s.distraction_count : 0,
         homework_rating: s.homework_rating || 'A',
         habit_rating: s.habit_rating || 'A',
