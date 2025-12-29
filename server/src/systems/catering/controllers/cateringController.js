@@ -335,7 +335,7 @@ exports.getCostAnalysis = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
     // 1. 获取兜底人数
-    const activeRes = await pool.query('SELECT count(*) FROM students');
+    const activeRes = await pool.query("SELECT count(*) FROM students");
     const activeCount = parseInt(activeRes.rows[0].count) || 0;
 
     // 2. 获取每日实际人数
@@ -347,13 +347,13 @@ exports.getCostAnalysis = async (req, res) => {
       [start_date, end_date]
     );
     const studentCounts = {};
-    studentRes.rows.forEach((r) => (studentCounts[r.date] = parseInt(r.count)));
+    studentRes.rows.forEach(r => studentCounts[r.date] = parseInt(r.count));
 
     // 3. 计算“10人基准成本” (每日总计)
     const costRes = await pool.query(
       `SELECT 
          to_char(wm.plan_date, 'YYYY-MM-DD') as date,
-         SUM(di.quantity * i.price) as benchmark_cost_10
+         COALESCE(SUM(di.quantity * i.price), 0) as benchmark_cost_10
        FROM weekly_menus wm
        JOIN dish_ingredients di ON wm.dish_id = di.dish_id
        JOIN ingredients i ON di.ingredient_id = i.id
@@ -368,8 +368,8 @@ exports.getCostAnalysis = async (req, res) => {
       `SELECT 
          to_char(wm.plan_date, 'YYYY-MM-DD') as date,
          i.category,
-         SUM(di.quantity * i.price) as benchmark_cost_10,
-         SUM(di.quantity) as benchmark_qty_10 -- 👈 新增数量聚合
+         COALESCE(SUM(di.quantity * i.price), 0) as benchmark_cost_10,
+         COALESCE(SUM(di.quantity), 0) as benchmark_qty_10 -- 👈 增加防空处理
        FROM weekly_menus wm
        JOIN dish_ingredients di ON wm.dish_id = di.dish_id
        JOIN ingredients i ON di.ingredient_id = i.id
@@ -377,32 +377,32 @@ exports.getCostAnalysis = async (req, res) => {
        GROUP BY date, i.category`,
       [start_date, end_date]
     );
-
+    
     // 预处理分类数据
     const dailyCats = {};
-    categoryRes.rows.forEach((r) => {
+    categoryRes.rows.forEach(r => {
       if (!dailyCats[r.date]) dailyCats[r.date] = [];
-      dailyCats[r.date].push({
-        category: r.category,
-        cost: parseFloat(r.benchmark_cost_10),
-        qty: parseFloat(r.benchmark_qty_10), // 记录基准数量
+      dailyCats[r.date].push({ 
+        category: r.category, 
+        cost: parseFloat(r.benchmark_cost_10 || 0),
+        qty: parseFloat(r.benchmark_qty_10 || 0) // 👈 增加兜底
       });
     });
 
     // 5. 合并计算
-    const structureMap = {};
-    const structureQtyMap = {}; // 👈 用于累加数量
+    const structureMap = {}; 
+    const structureQtyMap = {}; 
 
-    const trendData = costRes.rows.map((row) => {
+    const trendData = costRes.rows.map(row => {
       const count = studentCounts[row.date] || activeCount;
-      const benchmarkTotal = parseFloat(row.benchmark_cost_10);
+      const benchmarkTotal = parseFloat(row.benchmark_cost_10 || 0);
 
       const realTotalCost = (benchmarkTotal / 10) * count;
-      const avg = count > 0 ? realTotalCost / count : 0;
+      const avg = count > 0 ? (realTotalCost / count) : 0;
 
       // 核心：累加分类成本与数量
       const dayCats = dailyCats[row.date] || [];
-      dayCats.forEach((item) => {
+      dayCats.forEach(item => {
         // 金额累加
         const catRealCost = (item.cost / 10) * count;
         if (!structureMap[item.category]) structureMap[item.category] = 0;
@@ -418,7 +418,7 @@ exports.getCostAnalysis = async (req, res) => {
         date: row.date,
         total_cost: parseFloat(realTotalCost.toFixed(2)),
         student_count: count,
-        avg_cost: parseFloat(avg.toFixed(2)),
+        avg_cost: parseFloat(avg.toFixed(2))
       };
     });
 
@@ -432,20 +432,18 @@ exports.getCostAnalysis = async (req, res) => {
       .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value);
 
-    // 返回新结构: { trend, structure, structureQty }
-    res.json({
-      code: 200,
-      data: {
-        trend: trendData,
-        structure: structureData,
-        structureQty: structureQtyData,
-      },
+    // 返回新结构
+    res.json({ 
+      code: 200, 
+      data: { 
+        trend: trendData, 
+        structure: structureData, 
+        structureQty: structureQtyData 
+      } 
     });
   } catch (err) {
     console.error(err);
-    res
-      .status(500)
-      .json({ code: 500, msg: '获取成本数据失败', error: err.message });
+    res.status(500).json({ code: 500, msg: '获取成本数据失败', error: err.message });
   }
 };
 

@@ -112,7 +112,7 @@ import { Money, Refresh, Wallet, Warning, CircleCheck, TrendCharts, PieChart } f
 
 const chartRef = ref(null);
 const pieChartRef = ref(null);
-const qtyPieChartRef = ref(null); // ⭐ 新增引用
+const qtyPieChartRef = ref(null);
 const loading = ref(false);
 
 const summary = reactive({
@@ -224,6 +224,7 @@ const initPieChart = (data) => {
   const chart = echarts.init(pieChartRef.value);
 
   let total = 0;
+  // ⭐ 修复：增加非空判断
   if (data && data.length > 0) {
     total = data.reduce((sum, item) => sum + item.value, 0).toFixed(2);
   }
@@ -244,14 +245,15 @@ const initPieChart = (data) => {
         itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
         label: { show: true, formatter: '{b}\n¥{c}', fontSize: 12 },
         labelLine: { show: true },
-        data: data.length > 0 ? data : [{ value: 0, name: '暂无数据' }]
+        // ⭐ 修复：增加非空判断
+        data: (data && data.length > 0) ? data : [{ value: 0, name: '暂无数据' }]
       }
     ]
   };
   chart.setOption(option);
 };
 
-// ⭐ 新增：消耗数量饼图
+// 消耗数量饼图
 const initQtyPieChart = (data) => {
   if (!qtyPieChartRef.value) return;
   const existingChart = echarts.getInstanceByDom(qtyPieChartRef.value);
@@ -260,6 +262,7 @@ const initQtyPieChart = (data) => {
   const chart = echarts.init(qtyPieChartRef.value);
 
   let total = 0;
+  // ⭐ 修复：增加非空判断
   if (data && data.length > 0) {
     total = data.reduce((sum, item) => sum + item.value, 0).toFixed(1);
   }
@@ -278,10 +281,10 @@ const initQtyPieChart = (data) => {
       {
         name: '消耗结构', type: 'pie', radius: ['50%', '70%'], avoidLabelOverlap: true,
         itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
-        // 这里的单位混杂，所以只显示数值
         label: { show: true, formatter: '{b}\n{c}', fontSize: 12 },
         labelLine: { show: true },
-        data: data.length > 0 ? data : [{ value: 0, name: '暂无数据' }]
+        // ⭐ 修复：增加非空判断
+        data: (data && data.length > 0) ? data : [{ value: 0, name: '暂无数据' }]
       }
     ]
   };
@@ -303,8 +306,8 @@ const fetchData = async () => {
   try {
     const res = await axios.get(`/api/catering/cost-analysis?start_date=${start}&end_date=${end}`);
     if (res.data.code === 200) {
-      // 获取 cost 和 qty 数据
-      const { trend, structure, structureQty } = res.data.data;
+      // ⭐ 修复：增加默认值兜底，防止结构不匹配导致报错
+      const { trend = [], structure = [], structureQty = [] } = res.data.data || {};
 
       let tCost = 0;
       let tStu = 0;
@@ -320,7 +323,7 @@ const fetchData = async () => {
       nextTick(() => {
         initChart(trend);
         initPieChart(structure);
-        initQtyPieChart(structureQty); // ⭐ 渲染新图
+        initQtyPieChart(structureQty);
       });
     }
   } catch (err) {
@@ -335,7 +338,7 @@ onMounted(() => {
   window.addEventListener('resize', () => {
     const c1 = echarts.getInstanceByDom(chartRef.value);
     const c2 = echarts.getInstanceByDom(pieChartRef.value);
-    const c3 = echarts.getInstanceByDom(qtyPieChartRef.value); // ⭐ Resize
+    const c3 = echarts.getInstanceByDom(qtyPieChartRef.value);
     if (c1) c1.resize();
     if (c2) c2.resize();
     if (c3) c3.resize();
