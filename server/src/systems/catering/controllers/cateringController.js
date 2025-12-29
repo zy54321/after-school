@@ -87,7 +87,6 @@ exports.deleteIngredient = async (req, res) => {
 // 获取菜品库
 exports.getDishes = async (req, res) => {
   try {
-    // ⭐ 核心修改：在 json_build_object 中增加 'source', i.source
     const query = `
       SELECT d.*, 
         COALESCE(
@@ -98,7 +97,7 @@ exports.getDishes = async (req, res) => {
               'allergen_type', i.allergen_type,
               'quantity', di.quantity,
               'unit', i.unit,
-              'source', i.source  -- 👈 新增这一行
+              'source', i.source
             )
           ) FILTER (WHERE i.id IS NOT NULL), '[]'
         ) as ingredients
@@ -330,14 +329,16 @@ exports.getShoppingList = async (req, res) => {
 };
 
 // ==========================================
-// 💰 5. 成本分析 (Cost Analysis)
+// 💰 5. 成本分析 (Cost Analysis) - 双维度升级
 // ==========================================
 exports.getCostAnalysis = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
+    // 1. 获取兜底人数
     const activeRes = await pool.query('SELECT count(*) FROM students');
     const activeCount = parseInt(activeRes.rows[0].count) || 0;
 
+    // 2. 获取每日实际人数
     const studentRes = await pool.query(
       `SELECT to_char(report_date, 'YYYY-MM-DD') as date, COUNT(*) as count
        FROM daily_reports
@@ -348,6 +349,7 @@ exports.getCostAnalysis = async (req, res) => {
     const studentCounts = {};
     studentRes.rows.forEach((r) => (studentCounts[r.date] = parseInt(r.count)));
 
+    // 3. 计算“10人基准成本” (每日总计)
     const costRes = await pool.query(
       `SELECT 
          to_char(wm.plan_date, 'YYYY-MM-DD') as date,
@@ -361,11 +363,56 @@ exports.getCostAnalysis = async (req, res) => {
       [start_date, end_date]
     );
 
-    const data = costRes.rows.map((row) => {
+    // ⭐ 4. 新增：计算分类成本与分类数量 (每日分品类)
+    const categoryRes = await pool.query(
+      `SELECT 
+         to_char(wm.plan_date, 'YYYY-MM-DD') as date,
+         i.category,
+         SUM(di.quantity * i.price) as benchmark_cost_10,
+         SUM(di.quantity) as benchmark_qty_10 -- 👈 新增数量聚合
+       FROM weekly_menus wm
+       JOIN dish_ingredients di ON wm.dish_id = di.dish_id
+       JOIN ingredients i ON di.ingredient_id = i.id
+       WHERE wm.plan_date >= $1 AND wm.plan_date <= $2
+       GROUP BY date, i.category`,
+      [start_date, end_date]
+    );
+
+    // 预处理分类数据
+    const dailyCats = {};
+    categoryRes.rows.forEach((r) => {
+      if (!dailyCats[r.date]) dailyCats[r.date] = [];
+      dailyCats[r.date].push({
+        category: r.category,
+        cost: parseFloat(r.benchmark_cost_10),
+        qty: parseFloat(r.benchmark_qty_10), // 记录基准数量
+      });
+    });
+
+    // 5. 合并计算
+    const structureMap = {};
+    const structureQtyMap = {}; // 👈 用于累加数量
+
+    const trendData = costRes.rows.map((row) => {
       const count = studentCounts[row.date] || activeCount;
       const benchmarkTotal = parseFloat(row.benchmark_cost_10);
+
       const realTotalCost = (benchmarkTotal / 10) * count;
       const avg = count > 0 ? realTotalCost / count : 0;
+
+      // 核心：累加分类成本与数量
+      const dayCats = dailyCats[row.date] || [];
+      dayCats.forEach((item) => {
+        // 金额累加
+        const catRealCost = (item.cost / 10) * count;
+        if (!structureMap[item.category]) structureMap[item.category] = 0;
+        structureMap[item.category] += catRealCost;
+
+        // 数量累加
+        const catRealQty = (item.qty / 10) * count;
+        if (!structureQtyMap[item.category]) structureQtyMap[item.category] = 0;
+        structureQtyMap[item.category] += catRealQty;
+      });
 
       return {
         date: row.date,
@@ -375,7 +422,25 @@ exports.getCostAnalysis = async (req, res) => {
       };
     });
 
-    res.json({ code: 200, data });
+    // 格式化成本饼图数据
+    const structureData = Object.entries(structureMap)
+      .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }))
+      .sort((a, b) => b.value - a.value);
+
+    // 格式化数量饼图数据
+    const structureQtyData = Object.entries(structureQtyMap)
+      .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }))
+      .sort((a, b) => b.value - a.value);
+
+    // 返回新结构: { trend, structure, structureQty }
+    res.json({
+      code: 200,
+      data: {
+        trend: trendData,
+        structure: structureData,
+        structureQty: structureQtyData,
+      },
+    });
   } catch (err) {
     console.error(err);
     res

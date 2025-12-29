@@ -127,7 +127,7 @@
 </template>
 
 <script setup>
-import { Odometer, User, Calendar, Money, School, Tools, MapLocation, HomeFilled, Food, Apple, Dish, ShoppingCart } from '@element-plus/icons-vue';
+import { Odometer, User, Calendar, Money, School, Tools, MapLocation, HomeFilled, Food, Apple, Dish, ShoppingCart, DataBoard } from '@element-plus/icons-vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { ref } from 'vue';
@@ -198,6 +198,8 @@ const handleLangCommand = (command) => {
 .main-content {
   background-color: #f0f2f5;
   padding: 20px;
+  /* ⭐ 核心修改：隐藏溢出，配合子页面的 Flex 布局实现局部滚动 */
+  overflow: hidden;
 }
 
 .lang-switch-dark {
