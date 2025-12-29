@@ -204,12 +204,16 @@ const initRadarChart = () => {
   const chart = echarts.init(radarChartRef.value);
 
   const r = report.value;
+  // ⭐ 修复点：强制转换为 Number 并提供默认值，防止 NaN
+  const focusMin = Number(r.focus_minutes || 0);
+
   const scores = [
-    Math.min(100, (r.focus_minutes / 240) * 100),
+    // 假设 240分钟（4小时）为满分。如果您的标准不同，可在此调整分母
+    Math.min(100, (focusMin / 240) * 100),
     r.homework_rating === 'A' ? 95 : (r.homework_rating === 'B' ? 80 : 60),
     r.habit_rating === 'A' ? 95 : (r.habit_rating === 'B' ? 80 : 60),
     r.discipline_rating === 'A' ? 95 : (r.discipline_rating === 'B' ? 80 : 60),
-    Math.max(60, 100 - (r.distraction_count * 10))
+    Math.max(60, 100 - (Number(r.distraction_count || 0) * 10))
   ];
 
   const option = {
@@ -245,7 +249,8 @@ const initLineChart = () => {
   const chart = echarts.init(lineChartRef.value);
 
   const dates = report.value.history.map(h => formatDateShort(h.report_date));
-  const values = report.value.history.map(h => h.focus_minutes);
+  // ⭐ 修复点：强制转换为 Number
+  const values = report.value.history.map(h => Number(h.focus_minutes || 0));
 
   const option = {
     grid: { top: 20, right: 10, bottom: 20, left: 30, containLabel: true },
