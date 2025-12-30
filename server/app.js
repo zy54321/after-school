@@ -106,6 +106,13 @@ app.use('/api/mapbox', checkAuth, mapboxRoutes);
 // 🔒 Analytics System 人口构成分析路由（需要登录）
 app.use('/api/analytics/demographics', checkAuth, demographicsRoutes);
 
+// 👇👇👇 插入这段调试代码 👇👇👇
+app.use('/api/family', (req, res, next) => {
+  console.log('🔥 [调试] 收到 Family 请求:', req.originalUrl);
+  next();
+});
+// 👆👆👆 插入结束 👆👆👆
+
 // 家庭积分系统路由 (需要登录)
 app.use('/api/family', checkAuth, familyRoutes);
 
