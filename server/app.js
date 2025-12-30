@@ -99,12 +99,11 @@ app.use('/api', authRoutes);
 app.use(checkGuest);
 
 // 业务路由
-console.log('正在注册 Family 路由...'); 
-app.use('/api/family', (req, res, next) => {
-    console.log('>> 进入 Family 路由:', req.url);
-    next();
-}, checkAuth, familyRoutes);
-// app.use('/api/family', checkAuth, familyRoutes);
+// console.log('正在注册 Family 路由...'); 
+// app.use('/api/family', (req, res, next) => {
+//     console.log('>> 进入 Family 路由:', req.url);
+//     next();
+// }, checkAuth, familyRoutes);
 app.use('/api/students', checkAuth, studentRoutes);
 app.use('/api/classes', checkAuth, classRoutes);
 app.use('/api/orders', checkAuth, orderRoutes);
@@ -117,6 +116,7 @@ app.use('/api/users', checkAuth, checkAdmin, userRoutes);
 app.use('/api/mapbox/dictionary', checkAuth, dictionaryRoutes);
 app.use('/api/mapbox', checkAuth, mapboxRoutes);
 app.use('/api/analytics/demographics', checkAuth, demographicsRoutes);
+app.use('/api/family', checkAuth, familyRoutes);
 
 // 启动服务
 app.listen(port, () => {
