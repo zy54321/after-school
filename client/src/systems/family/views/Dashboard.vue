@@ -244,30 +244,59 @@ const handleTouchEnd = () => { clearTimeout(longPressTimer); };
 const showMenu = (x, y, item, type) => { contextMenu.x = x; contextMenu.y = y; contextMenu.item = item; contextMenu.type = type; contextMenu.visible = true; };
 const closeMenu = () => { contextMenu.visible = false; };
 
+// 处理菜单动作 (编辑/删除)
 const handleMenuAction = async (action) => {
   contextMenu.visible = false;
   const { item, type } = contextMenu;
 
+  // 1. 删除逻辑
   if (action === 'delete') {
-    if (type === 'member') { /* 成员删除逻辑省略，保持原样 */ return; }
+    if (type === 'member') {
+      ElMessageBox.confirm(`确定删除成员 "${item.name}" 吗? 积分记录也会清空。`, '警告', { type: 'warning' })
+        .then(async () => {
+          await axios.post('/api/family/member/delete', { id: item.id });
+          ElMessage.success('已删除');
+          // 如果删的是当前选中的人，重置选中状态
+          if (currentMemberId.value === item.id) {
+            currentMemberId.value = null;
+          }
+          initData();
+        });
+      return;
+    }
+
+    // 删除任务/奖品
     ElMessageBox.confirm('确定删除吗?', '提示', { type: 'warning' }).then(async () => {
       await axios.post('/api/family/delete', { id: item.id, type });
-      ElMessage.success('已删除'); initData();
+      ElMessage.success('已删除');
+      initData();
     });
-  } else if (action === 'edit') {
-    if (type === 'member') { /* 成员编辑逻辑省略，保持原样 */ showMemberModal.value = true; return; }
 
+    // 2. 编辑逻辑
+  } else if (action === 'edit') {
+    // 🟢 修复点：处理成员编辑回显
+    if (type === 'member') {
+      memberForm.id = item.id;           // 关键：有了ID才会走更新接口
+      memberForm.name = item.name;       // 回显名字
+      memberForm.avatarPreview = item.avatar; // 回显头像
+      memberForm.avatarFile = null;      // 重置文件流
+      showMemberModal.value = true;
+      return;
+    }
+
+    // 编辑任务/奖品 (保持原有逻辑)
     addForm.id = item.id;
     addForm.name = type === 'task' ? item.title : item.name;
     addForm.category = item.category || (categories.value[0]?.key || 'study');
-    addForm.limitType = item.limit_type || 'unlimited'; addForm.limitMax = item.limit_max || 1;
+    addForm.limitType = item.limit_type || 'unlimited';
+    addForm.limitMax = item.limit_max || 1;
     addForm.targetMembers = item.target_members || [];
 
-    // 🟢 回显逻辑：判断是任务还是扣分
+    // 判断是任务还是扣分
     if (type === 'task') {
       if (item.points < 0) {
-        addForm.type = 'penalty'; // 识别为扣分
-        addForm.points = Math.abs(item.points); // 显示为正数
+        addForm.type = 'penalty';
+        addForm.points = Math.abs(item.points);
       } else {
         addForm.type = 'task';
         addForm.points = item.points;
