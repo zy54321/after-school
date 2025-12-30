@@ -35,6 +35,6 @@ jobs:
             npm install --production
 
             echo "4. 重启 PM2 服务..."
-            pm2 restart server --update-env
+            pm2 restart after-school --update-env
             
             echo "🎉 部署完成！"
