@@ -1,46 +1,46 @@
-name: Deploy Backend to Tencent Cloud
+# name: Deploy Backend to Tencent Cloud
 
-on:
-  push:
-    branches: [ "main" ]
-    paths:
-      - "server/**"
-      - ".github/workflows/deploy-backend.yml"
+# on:
+#   push:
+#     branches: [ "main" ]
+#     paths:
+#       - "server/**"
+#       - ".github/workflows/deploy-backend.yml"
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 🚚 Checkout code
-        uses: actions/checkout@v4
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: 🚚 Checkout code
+#         uses: actions/checkout@v4
 
-      - name: 🚀 Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script: |
-            echo "1. 进入项目根目录..."
-            cd /var/www/after-school
+#       - name: 🚀 Deploy via SSH
+#         uses: appleboy/ssh-action@v1.0.3
+#         with:
+#           host: ${{ secrets.SSH_HOST }}
+#           username: ${{ secrets.SSH_USERNAME }}
+#           key: ${{ secrets.SSH_PRIVATE_KEY }}
+#           port: 22
+#           script: |
+#             echo "1. 进入项目根目录..."
+#             cd /var/www/after-school
 
-            echo "2. 强制同步最新代码..."
-            git fetch --all
-            git reset --hard origin/main
+#             echo "2. 强制同步最新代码..."
+#             git fetch --all
+#             git reset --hard origin/main
 
-            echo "3. 进入后端目录..."
-            cd server
+#             echo "3. 进入后端目录..."
+#             cd server
             
-            echo "4. 安装/更新依赖..."
-            npm install --production
+#             echo "4. 安装/更新依赖..."
+#             npm install --production
 
-            echo "5. 重启 PM2 服务..."
-            # 🟢 修正：使用正确的进程名 "after-school"
-            # 下面这行命令的意思是：尝试重启，如果失败（进程不存在），则启动它
-            pm2 restart after-school --update-env || pm2 start app.js --name "after-school" --log-date-format "YYYY-MM-DD HH:mm:ss"
+#             echo "5. 重启 PM2 服务..."
+#             # 🟢 修正：使用正确的进程名 "after-school"
+#             # 下面这行命令的意思是：尝试重启，如果失败（进程不存在），则启动它
+#             pm2 restart after-school --update-env || pm2 start app.js --name "after-school" --log-date-format "YYYY-MM-DD HH:mm:ss"
             
-            echo "6. 保存当前进程列表..."
-            pm2 save
+#             echo "6. 保存当前进程列表..."
+#             pm2 save
 
-            echo "🎉 部署完成！"
+#             echo "🎉 部署完成！"
