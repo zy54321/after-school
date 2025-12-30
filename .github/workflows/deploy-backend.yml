@@ -5,7 +5,7 @@ on:
     branches: [ "main" ]
     paths:
       - "server/**"
-      - ".github/workflows/deploy-backend.yml" # 建议加上这一行，这样修改 workflow 本身也能触发部署
+      - ".github/workflows/deploy-backend.yml"
 
 jobs:
   deploy:
@@ -26,15 +26,21 @@ jobs:
             cd /var/www/after-school
 
             echo "2. 强制同步最新代码..."
-            # ⬇️ 核心修改：使用强制重置，彻底解决 git pull 失败问题
             git fetch --all
             git reset --hard origin/main
 
-            echo "3. 进入后端目录并安装依赖..."
+            echo "3. 进入后端目录..."
             cd server
+            
+            echo "4. 安装/更新依赖..."
             npm install --production
 
-            echo "4. 重启 PM2 服务..."
-            pm2 restart after-school --update-env
+            echo "5. 重启 PM2 服务..."
+            # 🟢 修正：使用正确的进程名 "after-school"
+            # 下面这行命令的意思是：尝试重启，如果失败（进程不存在），则启动它
+            pm2 restart after-school --update-env || pm2 start app.js --name "after-school" --log-date-format "YYYY-MM-DD HH:mm:ss"
             
+            echo "6. 保存当前进程列表..."
+            pm2 save
+
             echo "🎉 部署完成！"
