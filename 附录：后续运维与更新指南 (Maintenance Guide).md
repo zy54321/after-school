@@ -1,170 +1,105 @@
-# 📖 附录：后续运维与更新指南（Maintenance Guide · 修正版）
+## 安全清理并启动后端流程
 
-项目上线后，难免需要修改代码、修复 BUG 或增加新功能。以下是**经过生产环境验证的标准更新流程**。
-
----
-
-## 1. 如何更新前端？（全自动 ⚡️）
-
-得益于 **Cloudflare Pages** 与 **GitHub** 的深度集成，前端更新是完全自动化的。
-
-### 操作步骤
-
-1. 在本地电脑修改前端代码（`client/` 目录）。
-2. 提交并推送到 GitHub：
-
-```bash
-git add .
-git commit -m "feat: 更新前端功能"
-git push
-```
-
-### 结果说明
-
-* Cloudflare Pages 会自动监听 GitHub 仓库。
-* 检测到 `push` 后，会自动执行：
-
-  * 拉取代码
-  * 安装依赖
-  * 构建项目（`npm run build`）
-  * 发布新版本
-* 整个过程约 1–2 分钟。
-* 构建完成后，直接刷新域名即可看到最新效果。
-* 如构建失败，可前往 **Cloudflare 后台 → Deployments** 查看详细日志。
-
----
-
-## 2. 如何更新后端？（半自动 🛠️）
-
-后端运行在 **腾讯云服务器** 上，需要手动登录服务器进行更新。
-
-### 前提条件
-
-* 后端代码（`server/` 目录）已在本地修改并 **push 到 GitHub**
-* 后端服务由 **PM2 管理**
-
----
-
-### 更新步骤（标准流程）
-
-#### 第一步：SSH 登录服务器
-
-```bash
-ssh ubuntu@你的公网IP
-```
-
-> ⚠️ **不建议长期使用 root 用户运行 Node 服务**
-> 如需一次性权限修复，可临时使用 `sudo`
-
----
-
-#### 第二步：进入后端目录并拉取最新代码
+### 1️⃣ 进入项目目录
 
 ```bash
 cd /var/www/after-school/server
-git pull
 ```
-
-> 如提示冲突，说明服务器上存在未提交的修改
-> 推荐使用 `git stash` 处理，而不是强行覆盖
 
 ---
 
-#### 第三步：安装依赖（仅在有新增依赖时）
-
-如果你在本次更新中 **修改了 `package.json`（新增或升级依赖）**，执行：
+### 2️⃣ 查看 3000 端口占用
 
 ```bash
-npm install
+sudo lsof -i :3000
 ```
 
-如果只是改了业务逻辑代码，这一步可以跳过。
+* 输出示例：
+
+```
+COMMAND   PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+node    2455316 ubuntu  22u  IPv6  12345      0t0  TCP *:3000 (LISTEN)
+```
+
+* 记下 `PID`，这些是残留 Node 进程占用端口。
 
 ---
 
-#### 第四步：重启后端服务（关键）
-
-⚠️ **注意：这里必须使用 PM2 中真实存在的进程名**
-
-推荐的标准做法是：
-
-> **PM2 进程名固定为：`after-school-server`**
+### 3️⃣ 杀掉残留 Node 进程
 
 ```bash
-pm2 restart after-school-server
+# 杀掉端口占用进程
+sudo kill -9 $(sudo lsof -t -i :3000)
+
+# 检查是否清理干净
+sudo lsof -i :3000
 ```
 
-如果不确定进程名，可先查看：
+* 如果没有输出，说明端口已经释放。
+
+---
+
+### 4️⃣ 清理 PM2 中的旧进程
 
 ```bash
+# 列出 PM2 所有进程
+pm2 list
+
+# 删除旧的 after-school 记录
+pm2 delete after-school
+
+# 确认已删除
 pm2 list
 ```
 
 ---
 
-#### 第五步：验证服务状态
+### 5️⃣ 安装依赖（确保最新）
 
 ```bash
-pm2 list
+# 生产环境安装依赖
+npm install --production
 ```
 
-确认：
+* 如果你在开发环境测试，也可以用 `npm install` 安装 devDependencies。
 
-* `status` 为 **online**
-* 无持续重启（↺ 不在快速增长）
+---
 
-如需查看启动日志：
+### 6️⃣ 启动后端服务（PM2 管理）
 
 ```bash
-pm2 logs after-school-server
+pm2 start app.js --name "after-school" --log-date-format "YYYY-MM-DD HH:mm:ss"
 ```
+
+* 参数说明：
+
+  * `--name "after-school"` → 指定 PM2 名称
+  * `--log-date-format` → 日志带日期，便于排查问题
 
 ---
 
-## 3. PM2 启动与命名规范（强烈建议）
-
-### 推荐的首次启动方式（只做一次）
+### 7️⃣ 验证服务状态
 
 ```bash
-pm2 start npm --name after-school-server -- start
-pm2 save
-pm2 startup
+pm2 list          # 确认 status 为 online
+pm2 pid after-school  # 查看 PM2 管理的 PID
+sudo lsof -i :3000   # 确认端口 PID 与 PM2 PID 一致
 ```
 
-说明：
+---
 
-* `npm start` 由 `package.json` 中的 `scripts.start` 控制
-* 避免直接依赖具体入口文件（如 `server.js`）
-* 以后**所有运维只操作 pm2，不直接 node 启动**
+### 8️⃣ 查看实时日志（可选）
+
+```bash
+pm2 logs after-school --lines 100
+```
+
+* 用于排查启动异常或接口 404 问题。
 
 ---
 
-## 4. 常见更新场景速查表
+### ✅ 注意事项
 
-| 场景             | 前端操作                | 后端操作                                               | 数据库操作                             |
-| -------------- | ------------------- | -------------------------------------------------- | --------------------------------- |
-| 只改 Vue 页面文字    | `git push`          | 无需操作                                               | 无需操作                              |
-| 只改后端 API 逻辑    | 无需操作                | `ssh → git pull → pm2 restart after-school-server` | 无需操作                              |
-| 新增 / 更新 npm 依赖 | `git push`（CF 自动安装） | `git pull → npm install → pm2 restart`             | 无需操作                              |
-| 修改数据库表结构       | 视情况                 | 视情况                                                | 使用 Navicat 或 SQL 执行 `ALTER TABLE` |
-
----
-
-## 5. 重要运维建议（请务必遵守）
-
-* ✅ **永远不要在服务器上 `sudo npm install`**
-* ✅ 后端代码只通过 **GitHub → git pull** 更新
-* ❌ 不直接在服务器上用 `vim` 修改业务代码
-* ❌ 生产环境不使用 `nodemon`
-* ✅ `node_modules` 可随时删除并重装，这是正常行为
-
----
-
-### 最佳实践总结
-
-> **改代码 → 本地测试 → push GitHub → 服务器 git pull → pm2 restart**
-
-只要严格遵循这条链路，
-你的后端环境会长期保持 **干净、可控、可复现**。
-
----
+1. **每次部署前**，先执行第 2 步和第 3 步，确保端口 3000 没有残留 Node 进程。
+2. **不要在服务器直接用 `node app.js` 启动**，会造成 PM2 PID 和端口 PID 不一致，容易循环重启。
+3. 关闭 GitHub workflow 后，手动拉取最新代码再执行本流程即可。
