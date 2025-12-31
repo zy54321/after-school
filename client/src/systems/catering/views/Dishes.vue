@@ -24,7 +24,7 @@
               <el-button type="danger" circle size="small" icon="Delete" @click="handleDelete(dish)" />
             </div>
             <div class="h-40 bg-gray-100 overflow-hidden relative">
-              <img v-if="dish.photo_url" :src="dish.photo_url" class="w-full h-full object-cover" />
+              <img v-if="dish.photo_url" :src="$img(dish.photo_url)" class="w-full h-full object-cover" />
               <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-4xl">🥘</div>
               <div class="absolute bottom-2 left-2 flex gap-1">
                 <el-tag v-for="t in dish.tags" :key="t" size="small" effect="dark" type="success">{{ t }}</el-tag>
@@ -74,7 +74,7 @@
         <el-form-item label="菜品图片">
           <el-upload class="avatar-uploader" action="/api/catering/upload" :show-file-list="false"
             :on-success="handleAvatarSuccess" :before-upload="beforeAvatarUpload" name="file">
-            <img v-if="form.photo_url" :src="form.photo_url" class="avatar" />
+            <img v-if="form.photo_url" :src="$img(form.photo_url)" class="avatar" />
             <el-icon v-else class="avatar-uploader-icon">
               <Plus />
             </el-icon>

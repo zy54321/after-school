@@ -322,7 +322,7 @@ onMounted(initData);
       <div v-for="m in members" :key="m.id" class="member-avatar" :class="{ active: currentMemberId === m.id }"
         @click="switchMember(m.id)" @contextmenu="handleContextMenu($event, m, 'member')"
         @touchstart="handleTouchStart($event, m, 'member')" @touchend="handleTouchEnd">
-        <el-avatar :size="40" :icon="UserFilled" :src="m.avatar" class="av-img" />
+        <el-avatar :size="40" :icon="UserFilled" :src="$img(m.avatar)" class="av-img" />
         <span class="name">{{ m.name }}</span>
       </div>
       <div class="member-avatar add-btn" @click="openAddMember"><el-icon>
@@ -556,7 +556,7 @@ onMounted(initData);
     <el-dialog v-model="showMemberModal" :title="memberForm.id ? '编辑成员' : '添加新成员'" width="85%" max-width="400px">
       <div class="member-form">
         <div class="avatar-uploader" @click="$refs.fileInput.click()">
-          <el-avatar :size="80" :src="memberForm.avatarPreview" :icon="UserFilled" />
+          <el-avatar :size="80" :src="$img(memberForm.avatarPreview)" :icon="UserFilled" />
           <div class="upload-tip">点击更换头像</div>
           <input type="file" ref="fileInput" accept="image/*" style="display:none" @change="handleFileChange">
         </div>

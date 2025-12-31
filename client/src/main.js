@@ -39,6 +39,19 @@ if (apiUrl) {
 // 👇👇👇 关键代码！(开启跨域携带 Cookie) 👇👇👇
 axios.defaults.withCredentials = true;
 
+// ⭐⭐⭐ 全局图片处理函数 ⭐⭐⭐
+app.config.globalProperties.$img = (path) => {
+  if (!path) return '';
+  // 如果已经是完整链接(如 http 开头)或是本地预览的 blob，直接返回
+  if (path.startsWith('http') || path.startsWith('blob:')) return path;
+  
+  // 拼接后端地址 (利用上面定义好的 serverUrl 逻辑)
+  // 注意：我们需要重新获取一次 apiUrl 变量，或者复用上面的逻辑
+  // 为了简单稳妥，这里直接复用 axios.defaults.baseURL
+  const baseUrl = axios.defaults.baseURL || '';
+  return baseUrl ? `${baseUrl}${path}` : path;
+}
+
 // 注册所有图标
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
