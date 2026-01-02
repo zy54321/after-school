@@ -168,6 +168,11 @@ const handleTask = async (task) => {
 };
 
 const handleRedeem = (reward) => {
+  // 拦截积分不足的情况
+  if (dashboard.totalPoints < reward.cost) {
+    ElMessage.warning('积分不足，再去赚点吧！💪');
+    return;
+  }
   const status = checkRewardStatus(reward);
   if (!status.available) return;
   ElMessageBox.confirm(`确定消耗 ${reward.cost} 积分兑换 "${reward.name}" 吗?`, '兑换确认', { confirmButtonText: '确定', type: 'warning' })
@@ -498,7 +503,7 @@ onMounted(initData);
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="showAddModal" :title="addForm.id ? '编辑' : '添加'" width="90%">
+    <el-dialog v-model="showAddModal" :title="addForm.id ? '编辑' : '添加'" width="90%" :close-on-press-escape="false">
       <el-form label-position="top">
         <el-form-item label="类型">
           <el-radio-group v-model="addForm.type">
@@ -539,7 +544,7 @@ onMounted(initData);
           @click="submitAddItem">保存</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="showCatModal" title="分类管理" width="90%">
+    <el-dialog v-model="showCatModal" title="分类管理" width="90%" :close-on-press-escape="false">
       <div class="cat-manage-list">
         <div v-for="c in categories" :key="c.id" class="cat-item-row">
           <span>{{ c.name }}</span>
@@ -553,7 +558,7 @@ onMounted(initData);
       </div>
     </el-dialog>
 
-    <el-dialog v-model="showMemberModal" :title="memberForm.id ? '编辑成员' : '添加新成员'" width="85%" max-width="400px">
+    <el-dialog v-model="showMemberModal" :title="memberForm.id ? '编辑成员' : '添加新成员'" width="85%" max-width="400px" :close-on-press-escape="false">
       <div class="member-form">
         <div class="avatar-uploader" @click="$refs.fileInput.click()">
           <el-avatar :size="80" :src="$img(memberForm.avatarPreview)" :icon="UserFilled" />
@@ -762,7 +767,8 @@ onMounted(initData);
 .reward-card.disabled {
   opacity: 0.5;
   filter: grayscale(1);
-  pointer-events: none;
+  /* pointer-events: none; */
+  cursor: not-allowed;
 }
 
 .history-item {
