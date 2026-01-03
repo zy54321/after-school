@@ -36,7 +36,7 @@ const showAuctionModal = ref(false);
 
 // 表单数据 (保持不变)
 const auctionForm = reactive({ auctionId: null, auctionName: '', startingPrice: 0, winnerId: null, bidPoints: 0 });
-const addForm = reactive({ type: 'task', name: '', points: 1, category: '', limitType: 'unlimited', limitMax: 1, targetMembers: [] });
+const addForm = reactive({ type: 'task', name: '', points: 1, category: '', limitType: 'unlimited', limitMax: 1, targetMembers: [], description: '' });
 const catForm = reactive({ name: '' });
 const memberForm = reactive({ id: null, name: '', avatarFile: null, avatarPreview: '' });
 
@@ -288,12 +288,12 @@ const checkRewardStatus = (reward) => {
 const openAddMember = () => { memberForm.id = null; memberForm.name = ''; memberForm.avatarPreview = ''; showMemberModal.value = true; };
 const handleFileChange = (e) => { const f = e.target.files[0]; if (f) { memberForm.avatarFile = f; memberForm.avatarPreview = URL.createObjectURL(f); } };
 const submitMember = async () => { const fd = new FormData(); fd.append('name', memberForm.name); if (memberForm.id) fd.append('id', memberForm.id); if (memberForm.avatarFile) fd.append('avatar', memberForm.avatarFile); await axios.post(memberForm.id ? '/api/family/member/update' : '/api/family/member/create', fd); showMemberModal.value = false; initData(); };
-const openAddRule = () => { delete addForm.id; addForm.type = 'task'; addForm.name = ''; addForm.points = 1; addForm.targetMembers = []; showAddModal.value = true; };
+const openAddRule = () => { delete addForm.id; addForm.type = 'task'; addForm.name = ''; addForm.points = 1; addForm.targetMembers = []; addForm.description = ''; showAddModal.value = true; };
 const submitAddItem = async () => {
   let pts = Math.abs(addForm.points); if (addForm.type === 'penalty') pts = -pts;
   const submitType = (addForm.type === 'penalty' || addForm.type === 'task') ? 'task' : addForm.type;
   const url = addForm.id ? '/api/family/update' : '/api/family/create';
-  await axios.post(url, { ...addForm, type: submitType, points: pts }); showAddModal.value = false; initData();
+  await axios.post(url, { ...addForm, type: submitType, points: pts, description: addForm.description || '' }); showAddModal.value = false; initData();
 };
 const handleContextMenu = (e, item, type) => { e.preventDefault(); showMenu(e.clientX, e.clientY, item, type); };
 const handleTouchStart = (e, item, type) => { longPressTimer = setTimeout(() => { showMenu(e.touches[0].clientX, e.touches[0].clientY, item, type); }, 600); };
@@ -308,6 +308,7 @@ const handleMenuAction = async (action) => {
   } else if (action === 'edit') {
     if (type === 'member') { memberForm.id = item.id; memberForm.name = item.name; memberForm.avatarPreview = item.avatar; showMemberModal.value = true; return; }
     addForm.id = item.id; addForm.name = type === 'task' ? item.title : item.name; addForm.points = Math.abs(item.points || item.cost);
+    addForm.description = item.description || '';
     if (type === 'task') addForm.type = item.points < 0 ? 'penalty' : 'task'; else if (type === 'auction') addForm.type = 'auction'; else addForm.type = 'reward';
     showAddModal.value = true;
   }
@@ -415,6 +416,7 @@ const handleRevoke = (log) => { ElMessageBox.confirm('确定撤销?', '提示').
             @touchend="handleTouchEnd">
             <div class="r-icon">{{ a.icon || '🔨' }}</div>
             <div class="r-name">{{ a.name }}</div>
+            <div v-if="a.description" class="r-description">{{ a.description }}</div>
             <div class="r-cost">起拍: {{ a.cost }}</div>
           </div>
         </div>
@@ -560,7 +562,8 @@ const handleRevoke = (log) => { ElMessageBox.confirm('确定撤销?', '提示').
               label="task">赚分</el-radio-button><el-radio-button label="penalty">扣分</el-radio-button><el-radio-button
               label="reward">奖品</el-radio-button><el-radio-button
               label="auction">竞拍</el-radio-button></el-radio-group></el-form-item><el-form-item label="名称"><el-input
-            v-model="addForm.name" /></el-form-item><el-form-item label="分值"><el-input-number v-model="addForm.points"
+            v-model="addForm.name" /></el-form-item><el-form-item v-if="addForm.type === 'auction'" label="描述"><el-input
+            v-model="addForm.description" type="textarea" :rows="4" placeholder="请输入竞拍品描述，支持换行" /></el-form-item><el-form-item label="分值"><el-input-number v-model="addForm.points"
             :min="1" /></el-form-item><el-form-item v-if="addForm.type !== 'reward' && addForm.type !== 'auction'"
           label="分类"><el-select v-model="addForm.category"><el-option v-for="c in categories" :key="c.key"
               :label="c.name" :value="c.key" /></el-select></el-form-item><el-form-item v-if="addForm.type !== 'auction'"
@@ -1011,6 +1014,18 @@ const handleRevoke = (log) => { ElMessageBox.confirm('确定撤销?', '提示').
 .auction-card {
   border: 2px solid #e6a23c;
   background: #fffbf0;
+}
+
+.r-description {
+  font-size: 0.8rem;
+  color: #666;
+  margin: 8px 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .family-dashboard {

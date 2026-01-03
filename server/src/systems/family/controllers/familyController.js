@@ -268,8 +268,8 @@ exports.settleAuction = async (req, res) => {
 };
 
 exports.createItem = async (req, res) => {
-  // 🟢 更新：接收 type
-  const { type, name, points, category, limitType, limitMax, targetMembers } =
+  // 🟢 更新：接收 type 和 description
+  const { type, name, points, category, limitType, limitMax, targetMembers, description } =
     req.body;
   const userId = req.session.user.id;
   const targets =
@@ -281,9 +281,9 @@ exports.createItem = async (req, res) => {
         [userId, name, category, points, '🌟', targets]
       );
     } else {
-      // 🟢 插入 family_rewards 时带上 type
+      // 🟢 插入 family_rewards 时带上 type 和 description
       await pool.query(
-        'INSERT INTO family_rewards (parent_id, name, cost, limit_type, limit_max, target_members, type) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        'INSERT INTO family_rewards (parent_id, name, cost, limit_type, limit_max, target_members, type, description) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
         [
           userId,
           name,
@@ -292,6 +292,7 @@ exports.createItem = async (req, res) => {
           limitMax || 0,
           targets,
           type || 'reward',
+          description || null,
         ]
       );
     }
@@ -303,7 +304,7 @@ exports.createItem = async (req, res) => {
 };
 
 exports.updateItem = async (req, res) => {
-  // 🟢 更新：接收 type
+  // 🟢 更新：接收 type 和 description
   const {
     id,
     type,
@@ -313,6 +314,7 @@ exports.updateItem = async (req, res) => {
     limitType,
     limitMax,
     targetMembers,
+    description,
   } = req.body;
   const targets =
     targetMembers && targetMembers.length > 0 ? targetMembers : null;
@@ -323,10 +325,10 @@ exports.updateItem = async (req, res) => {
         [name, category, points, targets, id]
       );
     } else {
-      // 🟢 更新 family_rewards 包括 type
+      // 🟢 更新 family_rewards 包括 type 和 description
       await pool.query(
-        'UPDATE family_rewards SET name=$1, cost=$2, limit_type=$3, limit_max=$4, target_members=$5, type=$6 WHERE id=$7',
-        [name, points, limitType, limitMax, targets, type, id]
+        'UPDATE family_rewards SET name=$1, cost=$2, limit_type=$3, limit_max=$4, target_members=$5, type=$6, description=$7 WHERE id=$8',
+        [name, points, limitType, limitMax, targets, type, description || null, id]
       );
     }
     res.json({ code: 200, msg: '更新成功' });
