@@ -288,7 +288,7 @@ const checkRewardStatus = (reward) => {
 const openAddMember = () => { memberForm.id = null; memberForm.name = ''; memberForm.avatarPreview = ''; showMemberModal.value = true; };
 const handleFileChange = (e) => { const f = e.target.files[0]; if (f) { memberForm.avatarFile = f; memberForm.avatarPreview = URL.createObjectURL(f); } };
 const submitMember = async () => { const fd = new FormData(); fd.append('name', memberForm.name); if (memberForm.id) fd.append('id', memberForm.id); if (memberForm.avatarFile) fd.append('avatar', memberForm.avatarFile); await axios.post(memberForm.id ? '/api/family/member/update' : '/api/family/member/create', fd); showMemberModal.value = false; initData(); };
-const openAddRule = () => { delete addForm.id; addForm.type = 'task'; addForm.name = ''; addForm.points = 1; addForm.targetMembers = []; addForm.description = ''; showAddModal.value = true; };
+const openAddRule = () => { delete addForm.id; addForm.type = 'task'; addForm.name = ''; addForm.points = 1; addForm.targetMembers = []; addForm.description = ''; addForm.limitType = 'unlimited'; addForm.limitMax = 1; showAddModal.value = true; };
 const submitAddItem = async () => {
   let pts = Math.abs(addForm.points); if (addForm.type === 'penalty') pts = -pts;
   const submitType = (addForm.type === 'penalty' || addForm.type === 'task') ? 'task' : addForm.type;
@@ -309,6 +309,8 @@ const handleMenuAction = async (action) => {
     if (type === 'member') { memberForm.id = item.id; memberForm.name = item.name; memberForm.avatarPreview = item.avatar; showMemberModal.value = true; return; }
     addForm.id = item.id; addForm.name = type === 'task' ? item.title : item.name; addForm.points = Math.abs(item.points || item.cost);
     addForm.description = item.description || '';
+    addForm.limitType = item.limit_type || 'unlimited';
+    addForm.limitMax = item.limit_max || 1;
     if (type === 'task') addForm.type = item.points < 0 ? 'penalty' : 'task'; else if (type === 'auction') addForm.type = 'auction'; else addForm.type = 'reward';
     showAddModal.value = true;
   }
@@ -564,7 +566,12 @@ const handleRevoke = (log) => { ElMessageBox.confirm('确定撤销?', '提示').
               label="auction">竞拍</el-radio-button></el-radio-group></el-form-item><el-form-item label="名称"><el-input
             v-model="addForm.name" /></el-form-item><el-form-item v-if="addForm.type === 'auction'" label="描述"><el-input
             v-model="addForm.description" type="textarea" :rows="4" placeholder="请输入竞拍品描述，支持换行" /></el-form-item><el-form-item label="分值"><el-input-number v-model="addForm.points"
-            :min="1" /></el-form-item><el-form-item v-if="addForm.type !== 'reward' && addForm.type !== 'auction'"
+            :min="1" /></el-form-item><el-form-item v-if="addForm.type === 'reward' || addForm.type === 'auction'"
+          label="兑换限制"><el-radio-group v-model="addForm.limitType"><el-radio-button
+              label="unlimited">不限</el-radio-button><el-radio-button label="weekly">每周</el-radio-button><el-radio-button
+              label="monthly">每月</el-radio-button></el-radio-group></el-form-item><el-form-item
+          v-if="(addForm.type === 'reward' || addForm.type === 'auction') && addForm.limitType !== 'unlimited'"
+          label="周期内兑换次数"><el-input-number v-model="addForm.limitMax" :min="1" /></el-form-item><el-form-item v-if="addForm.type !== 'reward' && addForm.type !== 'auction'"
           label="分类"><el-select v-model="addForm.category"><el-option v-for="c in categories" :key="c.key"
               :label="c.name" :value="c.key" /></el-select></el-form-item><el-form-item v-if="addForm.type !== 'auction'"
           label="对象"><el-checkbox-group v-model="addForm.targetMembers"><el-checkbox v-for="m in members" :key="m.id"
