@@ -7,7 +7,6 @@ const fs = require('fs');
 // === 📦 配置图片上传 ===
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // 确保 uploads 目录存在
     const dir = 'uploads/';
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir);
@@ -15,23 +14,19 @@ const storage = multer.diskStorage({
     cb(null, dir);
   },
   filename: function (req, file, cb) {
-    // 文件名: timestamp-随机数.ext
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
   },
 });
 
 const upload = multer({ storage: storage });
-exports.uploadMiddleware = upload.single('avatar'); // 导出给路由用
+exports.uploadMiddleware = upload.single('avatar');
 
-// === 👨‍👩‍👧‍👦 成员管理接口 (新增) ===
-
-// 1. 创建成员
+// === 👨‍👩‍👧‍👦 成员管理接口 ===
 exports.createMember = async (req, res) => {
   const { name } = req.body;
   const userId = req.session.user.id;
-  const avatar = req.file ? `/uploads/${req.file.filename}` : ''; // 获取上传后的路径
-
+  const avatar = req.file ? `/uploads/${req.file.filename}` : '';
   try {
     await pool.query(
       'INSERT INTO family_members (parent_id, name, avatar) VALUES ($1, $2, $3)',
@@ -44,18 +39,14 @@ exports.createMember = async (req, res) => {
   }
 };
 
-// 2. 更新成员
 exports.updateMember = async (req, res) => {
   const { id, name } = req.body;
   let avatarSql = '';
   const params = [name, id];
-
-  // 如果上传了新头像，才更新 avatar 字段
   if (req.file) {
     avatarSql = ', avatar=$3';
     params.push(`/uploads/${req.file.filename}`);
   }
-
   try {
     await pool.query(
       `UPDATE family_members SET name=$1 ${avatarSql} WHERE id=$2`,
@@ -68,11 +59,9 @@ exports.updateMember = async (req, res) => {
   }
 };
 
-// 3. 删除成员
 exports.deleteMember = async (req, res) => {
   const { id } = req.body;
   try {
-    // 级联删除该成员的所有积分记录
     await pool.query('DELETE FROM family_points_log WHERE member_id=$1', [id]);
     await pool.query('DELETE FROM family_members WHERE id=$1', [id]);
     res.json({ code: 200, msg: '已删除成员' });
@@ -82,7 +71,7 @@ exports.deleteMember = async (req, res) => {
   }
 };
 
-// === 📋 原有业务接口 (保持不变) ===
+// === 📋 业务接口 ===
 
 exports.getInitData = async (req, res) => {
   const userId = req.session.user.id;
@@ -91,7 +80,6 @@ exports.getInitData = async (req, res) => {
       'SELECT * FROM family_members WHERE parent_id = $1 ORDER BY id',
       [userId]
     );
-    // 如果没有任何成员，初始化一个默认的
     if (membersRes.rows.length === 0) {
       const newMember = await pool.query(
         'INSERT INTO family_members (parent_id, name) VALUES ($1, $2) RETURNING *',
@@ -99,17 +87,15 @@ exports.getInitData = async (req, res) => {
       );
       membersRes = { rows: [newMember.rows[0]] };
     }
-
-    // 分类
     const catsRes = await pool.query(
       'SELECT * FROM family_categories WHERE parent_id = 0 OR parent_id = $1 ORDER BY sort_order, id',
       [userId]
     );
-    // 任务 & 奖品
     const tasksRes = await pool.query(
       'SELECT * FROM family_tasks WHERE parent_id = $1 OR parent_id = 0 ORDER BY id',
       [userId]
     );
+    // 获取 type 字段
     const rewardsRes = await pool.query(
       'SELECT * FROM family_rewards WHERE parent_id = $1 OR parent_id = 0 ORDER BY cost',
       [userId]
@@ -131,22 +117,37 @@ exports.getInitData = async (req, res) => {
 };
 
 exports.getMemberDashboard = async (req, res) => {
-  const { memberId } = req.query;
+  // 🟢 更新：支持 month 参数 (格式 YYYY-MM)
+  const { memberId, month } = req.query;
   try {
     const balanceRes = await pool.query(
       'SELECT SUM(points_change) as total FROM family_points_log WHERE member_id = $1',
       [memberId]
     );
     const totalPoints = parseInt(balanceRes.rows[0].total || 0);
-    const historyRes = await pool.query(
-      'SELECT * FROM family_points_log WHERE member_id = $1 ORDER BY created_at DESC LIMIT 50',
-      [memberId]
-    );
+
+    let historyQuery = 'SELECT * FROM family_points_log WHERE member_id = $1';
+    let params = [memberId];
+
+    if (month) {
+      // 如果有月份参数，查询整月数据
+      const start = dayjs(month).startOf('month').toDate();
+      const end = dayjs(month).endOf('month').toDate();
+      historyQuery +=
+        ' AND created_at >= $2 AND created_at <= $3 ORDER BY created_at DESC';
+      params.push(start, end);
+    } else {
+      // 默认只查最近 50 条 (保持兼容)
+      historyQuery += ' ORDER BY created_at DESC LIMIT 50';
+    }
+
+    const historyRes = await pool.query(historyQuery, params);
     const usageRes = await pool.query(
       `SELECT reward_id, COUNT(*) as usage_count FROM family_points_log 
        WHERE member_id = $1 AND points_change < 0 AND reward_id IS NOT NULL GROUP BY reward_id`,
       [memberId]
     );
+
     res.json({
       code: 200,
       data: {
@@ -228,28 +229,70 @@ exports.redeemReward = async (req, res) => {
   }
 };
 
+// 🟢 竞拍结算接口
+exports.settleAuction = async (req, res) => {
+  const { auctionId, memberId, bidPoints } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const itemRes = await client.query(
+      'SELECT * FROM family_rewards WHERE id = $1',
+      [auctionId]
+    );
+    if (itemRes.rows.length === 0) throw new Error('拍品不存在');
+    const item = itemRes.rows[0];
+
+    if (bidPoints < item.cost)
+      throw new Error(`出价不能低于起拍价 (${item.cost})`);
+
+    const balanceRes = await client.query(
+      'SELECT SUM(points_change) as total FROM family_points_log WHERE member_id = $1',
+      [memberId]
+    );
+    const currentBalance = parseInt(balanceRes.rows[0].total || 0);
+    if (currentBalance < bidPoints)
+      throw new Error('该成员积分不足以支付此竞拍价');
+
+    await client.query(
+      'INSERT INTO family_points_log (member_id, reward_id, description, points_change) VALUES ($1, $2, $3, $4)',
+      [memberId, auctionId, `竞拍得标：${item.name}`, -bidPoints]
+    );
+    await client.query('COMMIT');
+    res.json({ code: 200, msg: '竞拍结算成功！' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.json({ code: 400, msg: err.message });
+  } finally {
+    client.release();
+  }
+};
+
 exports.createItem = async (req, res) => {
-  // 🟢 新增 targetMembers 参数
+  // 🟢 更新：接收 type
   const { type, name, points, category, limitType, limitMax, targetMembers } =
     req.body;
   const userId = req.session.user.id;
-
-  // 处理空数组转为 null (数据库存 null 更省空间且逻辑清晰)
   const targets =
     targetMembers && targetMembers.length > 0 ? targetMembers : null;
-
   try {
     if (type === 'task') {
       await pool.query(
-        // 🟢 插入 target_members
         'INSERT INTO family_tasks (parent_id, title, category, points, icon, target_members) VALUES ($1, $2, $3, $4, $5, $6)',
         [userId, name, category, points, '🌟', targets]
       );
     } else {
+      // 🟢 插入 family_rewards 时带上 type
       await pool.query(
-        // 🟢 插入 target_members
-        'INSERT INTO family_rewards (parent_id, name, cost, limit_type, limit_max, target_members) VALUES ($1, $2, $3, $4, $5, $6)',
-        [userId, name, points, limitType || 'unlimited', limitMax || 0, targets]
+        'INSERT INTO family_rewards (parent_id, name, cost, limit_type, limit_max, target_members, type) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        [
+          userId,
+          name,
+          points,
+          limitType || 'unlimited',
+          limitMax || 0,
+          targets,
+          type || 'reward',
+        ]
       );
     }
     res.json({ code: 200, msg: '创建成功' });
@@ -260,7 +303,7 @@ exports.createItem = async (req, res) => {
 };
 
 exports.updateItem = async (req, res) => {
-  // 🟢 新增 targetMembers 参数
+  // 🟢 更新：接收 type
   const {
     id,
     type,
@@ -273,19 +316,17 @@ exports.updateItem = async (req, res) => {
   } = req.body;
   const targets =
     targetMembers && targetMembers.length > 0 ? targetMembers : null;
-
   try {
     if (type === 'task') {
       await pool.query(
-        // 🟢 更新 target_members
         'UPDATE family_tasks SET title=$1, category=$2, points=$3, target_members=$4 WHERE id=$5',
         [name, category, points, targets, id]
       );
     } else {
+      // 🟢 更新 family_rewards 包括 type
       await pool.query(
-        // 🟢 更新 target_members
-        'UPDATE family_rewards SET name=$1, cost=$2, limit_type=$3, limit_max=$4, target_members=$5 WHERE id=$6',
-        [name, points, limitType, limitMax, targets, id]
+        'UPDATE family_rewards SET name=$1, cost=$2, limit_type=$3, limit_max=$4, target_members=$5, type=$6 WHERE id=$7',
+        [name, points, limitType, limitMax, targets, type, id]
       );
     }
     res.json({ code: 200, msg: '更新成功' });
@@ -297,6 +338,7 @@ exports.updateItem = async (req, res) => {
 exports.deleteItem = async (req, res) => {
   const { id, type } = req.body;
   try {
+    // 处理 auction 映射
     const table = type === 'task' ? 'family_tasks' : 'family_rewards';
     await pool.query(`DELETE FROM ${table} WHERE id=$1`, [id]);
     res.json({ code: 200, msg: '删除成功' });
@@ -306,13 +348,13 @@ exports.deleteItem = async (req, res) => {
 };
 
 exports.revokeLog = async (req, res) => {
-  const { logId, logIds } = req.body; // logIds 预期为数组 [1, 2, 3]
+  const { logId, logIds } = req.body;
   try {
     if (logIds && Array.isArray(logIds) && logIds.length > 0) {
-      // 批量删除：使用 PostgreSQL 的 ANY 语法
-      await pool.query('DELETE FROM family_points_log WHERE id = ANY($1)', [logIds]);
+      await pool.query('DELETE FROM family_points_log WHERE id = ANY($1)', [
+        logIds,
+      ]);
     } else if (logId) {
-      // 单个删除
       await pool.query('DELETE FROM family_points_log WHERE id=$1', [logId]);
     }
     res.json({ code: 200, msg: '已撤销' });
