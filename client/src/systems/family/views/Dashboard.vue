@@ -1018,7 +1018,7 @@ const handleRevoke = (log) => { ElMessageBox.confirm('确定撤销?', '提示').
   height: 100vh;
   display: flex;
   flex-direction: column;
-  padding-top: 20px;
+  /* padding-top: 20px; */
   overflow: hidden;
 }
 
