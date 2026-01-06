@@ -1,10 +1,16 @@
 <script setup>
 import { useRouter } from 'vue-router';
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { UserFilled, Plus, Setting, Delete, Edit, List, Goods, Coin, PriceTag, Warning, House, Trophy, Calendar, More, ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
+import { UserFilled, Plus, Setting, Delete, Edit, List, Goods, PriceTag, Warning, House, Trophy, Calendar } from '@element-plus/icons-vue';
 import dayjs from 'dayjs';
+// 导入子组件
+import EarnTasks from '../components/EarnTasks.vue';
+import PenaltyTasks from '../components/PenaltyTasks.vue';
+import Rewards from '../components/Rewards.vue';
+import Auctions from '../components/Auctions.vue';
+import BillCalendar from '../components/BillCalendar.vue';
 
 const router = useRouter();
 const goHome = () => { router.push('/'); };
@@ -26,7 +32,6 @@ const dashboard = reactive({
 
 // 日历状态
 const currentDate = ref(new Date());
-const showDayDetailModal = ref(false); // 详情弹窗控制
 
 // 弹窗状态
 const showAddModal = ref(false);
@@ -42,116 +47,8 @@ const memberForm = reactive({ id: null, name: '', avatarFile: null, avatarPrevie
 
 // 核心逻辑：数据过滤
 const filteredTasks = computed(() => { if (!currentMemberId.value) return []; return tasks.value.filter(t => isVisible(t)); });
-const filteredRewards = computed(() => { if (!currentMemberId.value) return []; return rewards.value.filter(r => (r.type === 'reward' || !r.type) && isVisible(r)); });
-const auctionItems = computed(() => { return rewards.value.filter(r => r.type === 'auction'); });
-const earnTasks = computed(() => filteredTasks.value.filter(t => t.points > 0));
-const penaltyTasks = computed(() => filteredTasks.value.filter(t => t.points < 0));
 const isVisible = (item) => { if (!item.target_members || item.target_members.length === 0) return true; return item.target_members.includes(currentMemberId.value); };
 
-// 🟢 日历数据聚合逻辑
-const dailyStats = computed(() => {
-  const stats = {};
-  console.log('📊 ========== dailyStats 计算开始 ==========');
-  console.log('📊 dashboard.history:', dashboard.history);
-  console.log('📊 dashboard.history 类型:', Array.isArray(dashboard.history));
-  console.log('📊 dashboard.history 长度:', dashboard.history?.length);
-  
-  if (!dashboard.history || !Array.isArray(dashboard.history)) {
-    console.log('📊 没有历史数据或不是数组');
-    return stats;
-  }
-
-  console.log('📊 开始处理历史记录，共', dashboard.history.length, '条');
-  dashboard.history.forEach((log, index) => {
-    // 统一日期格式 YYYY-MM-DD
-    const day = dayjs(log.created_at).format('YYYY-MM-DD');
-    console.log(`📊 处理第${index + 1}条记录:`, {
-      created_at: log.created_at,
-      day: day,
-      points_change: log.points_change,
-      reward_id: log.reward_id
-    });
-    
-    if (!stats[day]) {
-      stats[day] = { gain: 0, penalty: 0, consume: 0, logs: [] };
-    }
-    stats[day].logs.push(log);
-
-    // 统计分值
-    if (log.points_change > 0) {
-      stats[day].gain += log.points_change;
-    } else {
-      if (log.reward_id) stats[day].consume += Math.abs(log.points_change);
-      else stats[day].penalty += Math.abs(log.points_change);
-    }
-  });
-  
-  console.log('📊 计算后的 stats:', stats);
-  console.log('📊 stats 的键:', Object.keys(stats));
-  console.log('📊 ========== dailyStats 计算结束 ==========');
-  return stats;
-});
-
-// 获取选中日期的日志 (用于弹窗)
-const selectedDayLogs = computed(() => {
-  const day = dayjs(currentDate.value).format('YYYY-MM-DD');
-  return dailyStats.value[day]?.logs || [];
-});
-
-// 原生日历：生成当前月份的日期数组
-const calendarDays = computed(() => {
-  const year = dayjs(currentDate.value).year();
-  const month = dayjs(currentDate.value).month();
-  const firstDay = dayjs(`${year}-${month + 1}-01`);
-  const daysInMonth = firstDay.daysInMonth();
-  const startDayOfWeek = firstDay.day(); // 0 = 周日, 6 = 周六
-  
-  const days = [];
-  
-  // 添加上个月的日期（用于填充第一周）
-  const prevMonth = firstDay.subtract(1, 'month');
-  const prevMonthDays = prevMonth.daysInMonth();
-  for (let i = startDayOfWeek - 1; i >= 0; i--) {
-    const day = prevMonthDays - i;
-    days.push({
-      date: prevMonth.date(day).toDate(),
-      dayStr: prevMonth.date(day).format('YYYY-MM-DD'),
-      isCurrentMonth: false
-    });
-  }
-  
-  // 添加当月的日期
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = firstDay.date(day).toDate();
-    days.push({
-      date: date,
-      dayStr: firstDay.date(day).format('YYYY-MM-DD'),
-      isCurrentMonth: true
-    });
-  }
-  
-  // 添加下个月的日期（用于填充最后一周，确保7行）
-  const remainingDays = 42 - days.length; // 6行 x 7天 = 42
-  const nextMonth = firstDay.add(1, 'month');
-  for (let day = 1; day <= remainingDays; day++) {
-    days.push({
-      date: nextMonth.date(day).toDate(),
-      dayStr: nextMonth.date(day).format('YYYY-MM-DD'),
-      isCurrentMonth: false
-    });
-  }
-  
-  return days;
-});
-
-// 星期标题
-const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
-
-// 切换月份
-const changeMonth = (delta) => {
-  currentDate.value = dayjs(currentDate.value).add(delta, 'month').toDate();
-  loadMemberData();
-};
 
 // 监听日历月份变化
 watch(() => currentDate.value, (newVal, oldVal) => {
@@ -160,23 +57,6 @@ watch(() => currentDate.value, (newVal, oldVal) => {
   if (newMonth !== oldMonth) {
     loadMemberData();
   }
-});
-
-// 监听 dashboard.history 变化，确保 dailyStats 重新计算
-watch(() => dashboard.history, (newVal) => {
-  console.log('🔄 watch dashboard.history 变化:', newVal);
-  console.log('🔄 触发 dailyStats 重新计算');
-  // 强制访问 dailyStats 以触发计算
-  const _ = dailyStats.value;
-  console.log('🔄 dailyStats.value 已更新:', _);
-}, { deep: true, immediate: true });
-
-// 监听日历日期选择（Element Plus 日历组件会在点击日期时触发）
-watch(() => currentDate.value, (newVal) => {
-  // 延迟一下，确保是用户点击触发的，而不是初始化
-  const dayStr = dayjs(newVal).format('YYYY-MM-DD');
-  console.log('🟢 日期变化监听:', dayStr);
-  // 注意：这里不自动打开弹窗，因为用户可能只是想切换月份
 });
 
 onMounted(async () => {
@@ -192,23 +72,9 @@ const handleDateClick = (dayStr) => {
   showDayDetailModal.value = true;
 };
 
-// 批量操作
+// 批量操作（用于右键菜单）
 const contextMenu = reactive({ visible: false, x: 0, y: 0, item: null, type: '' });
 let longPressTimer = null;
-const isBatchMode = ref(false);
-const selectedLogIds = ref([]);
-const isAllSelected = computed(() => selectedDayLogs.value.length > 0 && selectedLogIds.value.length === selectedDayLogs.value.length);
-const toggleBatchMode = () => { isBatchMode.value = !isBatchMode.value; selectedLogIds.value = []; };
-const handleSelectAll = (val) => { selectedLogIds.value = val ? selectedDayLogs.value.map(h => h.id) : []; };
-
-const handleBatchRevoke = () => {
-  if (selectedLogIds.value.length === 0) return;
-  ElMessageBox.confirm(`确定要撤销选中的 ${selectedLogIds.value.length} 条记录吗？`, '批量撤销', { confirmButtonText: '确定', type: 'warning' })
-    .then(async () => {
-      const res = await axios.post('/api/family/revoke', { logIds: selectedLogIds.value });
-      if (res.data.code === 200) { ElMessage.success('批量撤销成功'); isBatchMode.value = false; selectedLogIds.value = []; loadMemberData(); }
-    });
-};
 
 // === 初始化 & 数据加载 ===
 const initData = async () => {
@@ -253,6 +119,7 @@ const loadMemberData = async () => {
 };
 
 const switchMember = (id) => { currentMemberId.value = id; loadMemberData(); };
+// 处理任务点击
 const handleTask = async (task) => {
   dashboard.totalPoints += task.points;
   try {
@@ -261,6 +128,8 @@ const handleTask = async (task) => {
     loadMemberData();
   } catch (err) { dashboard.totalPoints -= task.points; }
 };
+
+// 处理兑换
 const handleRedeem = (reward) => {
   if (dashboard.totalPoints < reward.cost) return ElMessage.warning('积分不足！');
   const status = checkRewardStatus(reward);
@@ -270,19 +139,32 @@ const handleRedeem = (reward) => {
     if (res.data.code === 200) { ElMessage.success('兑换成功！'); loadMemberData(); } else { ElMessage.warning(res.data.msg); }
   });
 };
-const openAuctionSettle = (auction) => { auctionForm.auctionId = auction.id; auctionForm.auctionName = auction.name; auctionForm.startingPrice = auction.cost; auctionForm.bidPoints = auction.cost; auctionForm.winnerId = currentMemberId.value; showAuctionModal.value = true; };
-const submitAuction = async () => {
-  if (!auctionForm.winnerId) return ElMessage.warning('请选择得标人');
-  if (auctionForm.bidPoints < auctionForm.startingPrice) return ElMessage.warning('低于起拍价');
-  await axios.post('/api/family/auction/settle', { auctionId: auctionForm.auctionId, memberId: auctionForm.winnerId, bidPoints: auctionForm.bidPoints });
-  showAuctionModal.value = false; loadMemberData();
-};
+
+// 检查奖品状态
 const checkRewardStatus = (reward) => {
   if (reward.limit_type === 'unlimited') return { available: true, text: '' };
   const stat = dashboard.usageStats.find(s => s.reward_id === reward.id);
   if (!stat) return { available: true, text: `限 ${reward.limit_max}` };
   const left = reward.limit_max - parseInt(stat.usage_count);
   return left <= 0 ? { available: false, text: '完' } : { available: true, text: `剩 ${left}` };
+};
+
+// 处理竞拍点击
+const openAuctionSettle = (auction) => {
+  auctionForm.auctionId = auction.id;
+  auctionForm.auctionName = auction.name;
+  auctionForm.startingPrice = auction.cost;
+  auctionForm.bidPoints = auction.cost;
+  auctionForm.winnerId = currentMemberId.value;
+  showAuctionModal.value = true;
+};
+
+const submitAuction = async () => {
+  if (!auctionForm.winnerId) return ElMessage.warning('请选择得标人');
+  if (auctionForm.bidPoints < auctionForm.startingPrice) return ElMessage.warning('低于起拍价');
+  await axios.post('/api/family/auction/settle', { auctionId: auctionForm.auctionId, memberId: auctionForm.winnerId, bidPoints: auctionForm.bidPoints });
+  showAuctionModal.value = false;
+  loadMemberData();
 };
 // 简单的增删改查
 const openAddMember = () => { memberForm.id = null; memberForm.name = ''; memberForm.avatarPreview = ''; showMemberModal.value = true; };
@@ -317,7 +199,10 @@ const handleMenuAction = async (action) => {
 };
 const submitAddCat = async () => { if (catForm.name) await axios.post('/api/family/category/create', { name: catForm.name }); initData(); };
 const deleteCat = async (id) => { await axios.post('/api/family/category/delete', { id }); initData(); };
-const handleRevoke = (log) => { ElMessageBox.confirm('确定撤销?', '提示').then(async () => { await axios.post('/api/family/revoke', { logId: log.id }); loadMemberData(); }); }; // 删除后不关闭弹窗，方便连续操作
+// 处理日历月份变化
+const handleCalendarMonthChange = (newDate) => {
+  currentDate.value = newDate;
+};
 </script>
 
 <template>
@@ -349,215 +234,57 @@ const handleRevoke = (log) => { ElMessageBox.confirm('确定撤销?', '提示').
     </div>
 
     <el-tabs type="border-card" class="action-tabs">
-      <el-tab-pane label="赚分"><template #label><span class="tab-label"><el-icon>
-              <List />
-            </el-icon> 赚分</span></template>
-        <div class="task-list">
-          <div v-for="cat in categories" :key="cat.id">
-            <div v-if="earnTasks.filter(x => x.category === cat.key).length > 0">
-              <div class="category-title">{{ cat.name }}</div>
-              <div class="grid">
-                <div v-for="t in earnTasks.filter(x => x.category === cat.key)" :key="t.id" class="card task-card"
-                  @click="handleTask(t)" @contextmenu="handleContextMenu($event, t, 'task')"
-                  @touchstart="handleTouchStart($event, t, 'task')" @touchend="handleTouchEnd">
-                  <div class="icon">{{ t.icon || '✨' }}</div>
-                  <div class="info">
-                    <div class="t-name">{{ t.title }}</div>
-                    <div class="t-pts text-blue">+{{ t.points }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <el-tab-pane label="赚分">
+        <template #label><span class="tab-label"><el-icon><List /></el-icon> 赚分</span></template>
+        <EarnTasks
+          :tasks="filteredTasks"
+          :categories="categories"
+          @task-click="handleTask"
+          @context-menu="handleContextMenu" />
       </el-tab-pane>
-      <el-tab-pane label="扣分"><template #label><span class="tab-label" style="color:#F56C6C"><el-icon>
-              <Warning />
-            </el-icon> 扣分</span></template>
-        <div class="task-list">
-          <div v-for="cat in categories" :key="cat.id">
-            <div v-if="penaltyTasks.filter(x => x.category === cat.key).length > 0">
-              <div class="category-title">{{ cat.name }}</div>
-              <div class="grid">
-                <div v-for="t in penaltyTasks.filter(x => x.category === cat.key)" :key="t.id"
-                  class="card task-card warning" @click="handleTask(t)"
-                  @contextmenu="handleContextMenu($event, t, 'task')" @touchstart="handleTouchStart($event, t, 'task')"
-                  @touchend="handleTouchEnd">
-                  <div class="icon">{{ t.icon || '⚠️' }}</div>
-                  <div class="info">
-                    <div class="t-name">{{ t.title }}</div>
-                    <div class="t-pts text-red">{{ t.points }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      
+      <el-tab-pane label="扣分">
+        <template #label><span class="tab-label" style="color:#F56C6C"><el-icon><Warning /></el-icon> 扣分</span></template>
+        <PenaltyTasks
+          :tasks="filteredTasks"
+          :categories="categories"
+          @task-click="handleTask"
+          @context-menu="handleContextMenu" />
       </el-tab-pane>
-      <el-tab-pane label="兑换"><template #label><span class="tab-label"><el-icon>
-              <Goods />
-            </el-icon> 兑换</span></template>
-        <div class="grid shop-grid">
-          <div v-for="r in filteredRewards" :key="r.id" class="card reward-card"
-            :class="{ disabled: !checkRewardStatus(r).available || dashboard.totalPoints < r.cost }"
-            @click="handleRedeem(r)" @contextmenu="handleContextMenu($event, r, 'reward')"
-            @touchstart="handleTouchStart($event, r, 'reward')" @touchend="handleTouchEnd">
-            <div class="r-icon">{{ r.icon || '🎁' }}</div>
-            <div class="r-name">{{ r.name }}</div>
-            <div class="r-cost">💰 {{ r.cost }}</div>
-            <div v-if="r.limit_type !== 'unlimited'" class="limit-badge">{{ checkRewardStatus(r).text }}</div>
-          </div>
-        </div>
+      
+      <el-tab-pane label="兑换">
+        <template #label><span class="tab-label"><el-icon><Goods /></el-icon> 兑换</span></template>
+        <Rewards
+          :rewards="rewards"
+          :current-member-id="currentMemberId"
+          :total-points="dashboard.totalPoints"
+          :usage-stats="dashboard.usageStats"
+          :history="dashboard.history"
+          @redeem="handleRedeem"
+          @context-menu="handleContextMenu" />
       </el-tab-pane>
-      <el-tab-pane label="竞拍"><template #label><span class="tab-label"><el-icon>
-              <Trophy />
-            </el-icon> 竞拍</span></template>
-        <div class="grid shop-grid">
-          <div v-for="a in auctionItems" :key="a.id" class="card reward-card auction-card" @click="openAuctionSettle(a)"
-            @contextmenu="handleContextMenu($event, a, 'auction')" @touchstart="handleTouchStart($event, a, 'auction')"
-            @touchend="handleTouchEnd">
-            <div class="r-icon">{{ a.icon || '🔨' }}</div>
-            <div class="r-name">{{ a.name }}</div>
-            <div v-if="a.description" class="r-description">{{ a.description }}</div>
-            <div class="r-cost">起拍: {{ a.cost }}</div>
-          </div>
-        </div>
+      
+      <el-tab-pane label="竞拍">
+        <template #label><span class="tab-label"><el-icon><Trophy /></el-icon> 竞拍</span></template>
+        <Auctions
+          :rewards="rewards"
+          :current-member-id="currentMemberId"
+          :usage-stats="dashboard.usageStats"
+          :history="dashboard.history"
+          @auction-click="openAuctionSettle"
+          @context-menu="handleContextMenu" />
       </el-tab-pane>
 
       <el-tab-pane label="账单">
-        <template #label><span class="tab-label"><el-icon>
-              <Calendar />
-            </el-icon> 账单</span></template>
-        <div class="bill-calendar-view">
-
-          <div class="calendar-status" v-if="dashboard.history.length > 0">
-            本月共 {{ dashboard.history.length }} 条记录
-          </div>
-          <div class="calendar-status" v-else>
-            本月暂无记录 ({{ dayjs(currentDate).format('YYYY-MM') }})
-          </div>
-
-          <!-- 原生日历实现 -->
-          <div class="custom-calendar">
-            <!-- 月份切换栏 -->
-            <div class="calendar-header">
-              <el-button circle :icon="ArrowLeft" @click="changeMonth(-1)" size="small"></el-button>
-              <span class="month-title">{{ dayjs(currentDate).format('YYYY年MM月') }}</span>
-              <el-button circle :icon="ArrowRight" @click="changeMonth(1)" size="small"></el-button>
-            </div>
-            
-            <!-- 日历表格 -->
-            <table class="calendar-table">
-              <thead>
-                <tr>
-                  <th v-for="day in weekDays" :key="day" class="weekday-header">{{ day }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(row, rowIndex) in Math.ceil(calendarDays.length / 7)" :key="rowIndex">
-                  <td v-for="(day, dayIndex) in calendarDays.slice(rowIndex * 7, (rowIndex + 1) * 7)" 
-                      :key="dayIndex"
-                      class="calendar-day"
-                      :class="{ 'other-month': !day.isCurrentMonth, 'has-data': dailyStats && dailyStats[day.dayStr] }"
-                      @click="handleDateClick(day.dayStr)">
-                    <div class="cal-cell-content">
-                      <div class="day-header">
-                        <span class="day-num">{{ dayjs(day.date).format('D') }}</span>
-                        <span v-if="dailyStats && dailyStats[day.dayStr]" class="day-sum"
-                          :class="{ 'pos': dailyStats[day.dayStr].gain > (dailyStats[day.dayStr].penalty + dailyStats[day.dayStr].consume), 'neg': dailyStats[day.dayStr].gain <= (dailyStats[day.dayStr].penalty + dailyStats[day.dayStr].consume) }">
-                          {{ (dailyStats[day.dayStr].gain - dailyStats[day.dayStr].penalty - dailyStats[day.dayStr].consume) > 0 ?
-                          '+' : ''}}{{ dailyStats[day.dayStr].gain - dailyStats[day.dayStr].penalty - dailyStats[day.dayStr].consume
-                          }}
-                        </span>
-                      </div>
-
-                      <!-- 当天统计信息 -->
-                      <div v-if="dailyStats && dailyStats[day.dayStr]" class="day-stats">
-                        <div v-if="dailyStats[day.dayStr].gain > 0" class="stat-item stat-gain">
-                          <span class="stat-label">赚</span>
-                          <span class="stat-value">+{{ dailyStats[day.dayStr].gain }}</span>
-                        </div>
-                        <div v-if="dailyStats[day.dayStr].penalty > 0" class="stat-item stat-penalty">
-                          <span class="stat-label">扣</span>
-                          <span class="stat-value">-{{ dailyStats[day.dayStr].penalty }}</span>
-                        </div>
-                        <div v-if="dailyStats[day.dayStr].consume > 0" class="stat-item stat-consume">
-                          <span class="stat-label">花</span>
-                          <span class="stat-value">-{{ dailyStats[day.dayStr].consume }}</span>
-                        </div>
-                      </div>
-
-                      <!-- 记录列表（最多显示2条，超出显示省略号） -->
-                      <div class="mini-logs" v-if="dailyStats && dailyStats[day.dayStr] && dailyStats[day.dayStr].logs.length > 0">
-                        <div v-for="(log, index) in dailyStats[day.dayStr].logs.slice(0, 2)" :key="log.id" class="mini-log-item">
-                          <span class="log-desc" :title="log.description">{{ log.description }}</span>
-                          <span class="log-pts"
-                            :class="{ 'p-plus': log.points_change > 0, 'p-minus': log.points_change < 0 }">
-                            {{ log.points_change > 0 ? '+' : '' }}{{ log.points_change }}
-                          </span>
-                        </div>
-                        <div v-if="dailyStats[day.dayStr].logs.length > 2" class="more-logs">
-                          <span class="more-text">...</span>
-                          <span class="more-count">+{{ dailyStats[day.dayStr].logs.length - 2 }}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <template #label><span class="tab-label"><el-icon><Calendar /></el-icon> 账单</span></template>
+        <BillCalendar
+          :history="dashboard.history"
+          :current-date="currentDate"
+          :member-id="currentMemberId"
+          @update:current-date="handleCalendarMonthChange"
+          @refresh="loadMemberData" />
       </el-tab-pane>
     </el-tabs>
-
-    <el-dialog v-model="showDayDetailModal" :title="dayjs(currentDate).format('MM月DD日') + ' 明细'" width="90%"
-      class="day-detail-modal" append-to-body>
-      <div class="modal-toolbar">
-        <div class="summary-row" v-if="dailyStats[dayjs(currentDate).format('YYYY-MM-DD')]">
-          <div class="s-item get">收入: {{ dailyStats[dayjs(currentDate).format('YYYY-MM-DD')].gain }}</div>
-          <div class="s-item lost">扣: {{ dailyStats[dayjs(currentDate).format('YYYY-MM-DD')].penalty }}</div>
-          <div class="s-item use">花: {{ dailyStats[dayjs(currentDate).format('YYYY-MM-DD')].consume }}</div>
-        </div>
-        <div class="summary-row" v-else>暂无记录</div>
-        <div class="batch-btn" @click="toggleBatchMode">{{ isBatchMode ? '退出' : '批量管理' }}</div>
-      </div>
-
-      <div v-if="isBatchMode" class="batch-bar-modal">
-        <el-checkbox v-model="isAllSelected" @change="handleSelectAll" label="全选" />
-        <el-button type="danger" size="small" :disabled="selectedLogIds.length === 0"
-          @click="handleBatchRevoke">删除</el-button>
-      </div>
-
-      <div class="detail-list-scroll">
-        <div v-if="selectedDayLogs.length > 0">
-          <div v-for="h in selectedDayLogs" :key="h.id" class="history-item">
-            <div v-if="isBatchMode" class="h-check"><el-checkbox v-model="selectedLogIds" :label="h.id"><span
-                  style="display:none">.</span></el-checkbox></div>
-            <div class="h-main">
-              <span class="h-desc">{{ h.description }}</span>
-              <span class="h-time">{{ dayjs(h.created_at).format('HH:mm') }}</span>
-            </div>
-            <div class="h-right">
-              <span class="h-pts"
-                :class="{ plus: h.points_change > 0, minus: h.points_change < 0 && !h.reward_id, consume: h.points_change < 0 && h.reward_id }">
-                {{ h.points_change > 0 ? '+' : '' }}{{ h.points_change }}
-              </span>
-              <el-icon v-if="!isBatchMode" class="revoke-btn" @click="handleRevoke(h)">
-                <Delete />
-              </el-icon>
-            </div>
-          </div>
-        </div>
-        <div v-else class="empty-tip-modal">
-          <div style="font-size: 30px; margin-bottom: 10px;">📅</div>
-          今天还没有动静哦
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="showDayDetailModal = false" style="width:100%">关闭</el-button>
-      </template>
-    </el-dialog>
 
     <el-dialog v-model="showAddModal" :title="addForm.id ? '编辑' : '添加'" width="90%"><el-form
         label-position="top"><el-form-item label="类型"><el-radio-group v-model="addForm.type"><el-radio-button
@@ -612,428 +339,7 @@ const handleRevoke = (log) => { ElMessageBox.confirm('确定撤销?', '提示').
 </template>
 
 <style scoped>
-/* 🟢 修复核心：强制撑开日历格子，确保有地方可点 */
-.bill-calendar-view {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: #fff;
-}
 
-.calendar-status {
-  padding: 8px 15px;
-  font-size: 13px;
-  color: #409EFF;
-  background: #ecf5ff;
-  border-bottom: 1px solid #d9ecff;
-  font-weight: bold;
-  flex-shrink: 0;
-}
-
-/* 原生日历样式 */
-.custom-calendar {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  padding: 10px;
-}
-
-.calendar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  margin-bottom: 10px;
-  border-bottom: 1px solid #eee;
-}
-
-.month-title {
-  font-size: 16px;
-  font-weight: bold;
-  color: #333;
-}
-
-.calendar-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.weekday-header {
-  padding: 8px 0;
-  text-align: center;
-  font-weight: bold;
-  color: #666;
-  font-size: 13px;
-  border-bottom: 1px solid #eee;
-}
-
-.calendar-day {
-  height: 100px;
-  padding: 0;
-  border: 1px solid #f0f0f0;
-  vertical-align: top;
-  cursor: pointer;
-  transition: background 0.2s;
-  position: relative;
-}
-
-.calendar-day:hover {
-  background: #f0f9ff;
-}
-
-.calendar-day:active {
-  background: #d4e8f8;
-}
-
-.calendar-day.other-month {
-  opacity: 0.4;
-  background: #fafafa;
-}
-
-.calendar-day.has-data {
-  border-color: #409EFF;
-  border-width: 2px;
-}
-
-/* 移动端适配：减小高度 */
-@media screen and (max-width: 768px) {
-  :deep(.el-calendar-table .el-calendar-day) {
-    height: 85px !important;
-  }
-
-  .mini-log-item {
-    font-size: 9px !important;
-    line-height: 12px !important;
-  }
-
-  .day-num {
-    font-size: 11px !important;
-  }
-
-  .day-sum {
-    font-size: 9px !important;
-    padding: 0 2px !important;
-  }
-
-  /* 手机端隐藏文字描述，避免太挤 */
-  .log-desc {
-    display: none;
-  }
-
-  .log-pts {
-    width: 100%;
-    text-align: center;
-  }
-
-  .day-stats {
-    font-size: 8px;
-    gap: 1px;
-  }
-
-  .stat-item {
-    padding: 0 2px;
-  }
-
-  .stat-label {
-    font-size: 7px;
-  }
-}
-
-/* 单元格内容布局：撑满父元素 */
-.cal-cell-content {
-  height: 100%;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  cursor: pointer;
-  padding: 4px;
-  box-sizing: border-box;
-  position: relative;
-  overflow: hidden;
-}
-
-/* 点击反馈 */
-
-.day-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 3px;
-  flex-shrink: 0;
-}
-
-.day-num {
-  font-weight: bold;
-  color: #333;
-  font-size: 12px;
-}
-
-.day-sum {
-  font-size: 10px;
-  font-weight: bold;
-  padding: 0 4px;
-  border-radius: 4px;
-}
-
-.day-sum.pos {
-  color: #67C23A;
-  background: #e1f3d8;
-}
-
-.day-sum.neg {
-  color: #909399;
-  background: #f4f4f5;
-}
-
-/* 当天统计信息 */
-.day-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  margin-bottom: 3px;
-  font-size: 9px;
-  flex-shrink: 0;
-}
-
-.stat-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 1px;
-  padding: 1px 4px;
-  border-radius: 3px;
-  white-space: nowrap;
-  flex-shrink: 0;
-  line-height: 1.2;
-}
-
-.stat-label {
-  font-weight: bold;
-  font-size: 8px;
-  opacity: 0.9;
-}
-
-.stat-value {
-  font-weight: bold;
-  font-family: monospace;
-  font-size: 9px;
-}
-
-.stat-gain {
-  background: #e1f3d8;
-  color: #67C23A;
-}
-
-.stat-penalty {
-  background: #fef0f0;
-  color: #F56C6C;
-}
-
-.stat-consume {
-  background: #fdf6ec;
-  color: #E6A23C;
-}
-
-/* 日志列表 */
-.mini-logs {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  overflow: hidden;
-  min-height: 0;
-  max-height: 100%;
-}
-
-.mini-log-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 9px;
-  line-height: 12px;
-  background: #f5f7fa;
-  padding: 2px 4px;
-  border-radius: 2px;
-  flex-shrink: 0;
-  min-height: 14px;
-}
-
-.log-desc {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #606266;
-  margin-right: 3px;
-  font-size: 9px;
-}
-
-.log-pts {
-  font-weight: bold;
-  flex-shrink: 0;
-  font-family: monospace;
-}
-
-.p-plus {
-  color: #67C23A;
-}
-
-.p-minus {
-  color: #F56C6C;
-}
-
-.more-logs {
-  font-size: 9px;
-  color: #909399;
-  text-align: center;
-  background: #f0f2f5;
-  border-radius: 2px;
-  padding: 1px 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-}
-
-.more-text {
-  font-weight: bold;
-}
-
-.more-count {
-  font-weight: bold;
-  color: #409EFF;
-}
-
-/* 详情弹窗样式 */
-.modal-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
-}
-
-.summary-row {
-  display: flex;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.s-item {
-  font-weight: bold;
-}
-
-.s-item.get {
-  color: #67C23A;
-}
-
-.s-item.lost {
-  color: #F56C6C;
-}
-
-.s-item.use {
-  color: #E6A23C;
-}
-
-.batch-btn {
-  color: #409EFF;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.batch-bar-modal {
-  background: #fdf6ec;
-  padding: 5px;
-  margin-bottom: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.detail-list-scroll {
-  max-height: 50vh;
-  overflow-y: auto;
-}
-
-.empty-tip-modal {
-  text-align: center;
-  padding: 30px;
-  color: #999;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* 列表项复用 */
-.history-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid #f5f5f5;
-  align-items: center;
-}
-
-.h-main {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  overflow: hidden;
-}
-
-.h-desc {
-  font-weight: bold;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.h-time {
-  font-size: 11px;
-  color: #999;
-}
-
-.h-pts {
-  font-weight: bold;
-  font-size: 1.1rem;
-  margin-right: 10px;
-}
-
-.h-pts.plus {
-  color: #67C23A;
-}
-
-.h-pts.minus {
-  color: #F56C6C;
-}
-
-.h-pts.consume {
-  color: #E6A23C;
-}
-
-.revoke-btn {
-  padding: 8px;
-  color: #ccc;
-  cursor: pointer;
-}
-
-/* 原有样式保持 */
-.auction-card {
-  border: 2px solid #e6a23c;
-  background: #fffbf0;
-}
-
-.r-description {
-  font-size: 0.8rem;
-  color: #666;
-  margin: 8px 0;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 80px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .family-dashboard {
   background: #fdf6ec;

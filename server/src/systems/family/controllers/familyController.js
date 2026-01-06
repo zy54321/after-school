@@ -253,6 +253,22 @@ exports.settleAuction = async (req, res) => {
     if (currentBalance < bidPoints)
       throw new Error('该成员积分不足以支付此竞拍价');
 
+    // 🟢 添加次数限制检查（与兑换品相同的逻辑）
+    if (item.limit_type !== 'unlimited') {
+      let startTime = dayjs();
+      if (item.limit_type === 'daily') startTime = startTime.startOf('day');
+      if (item.limit_type === 'weekly')
+        startTime = startTime.startOf('week').add(1, 'day');
+      if (item.limit_type === 'monthly')
+        startTime = startTime.startOf('month');
+      const count = await client.query(
+        'SELECT COUNT(*) FROM family_points_log WHERE member_id=$1 AND reward_id=$2 AND created_at >= $3',
+        [memberId, auctionId, startTime.toDate()]
+      );
+      if (parseInt(count.rows[0].count) >= item.limit_max)
+        throw new Error('已达竞拍上限');
+    }
+
     await client.query(
       'INSERT INTO family_points_log (member_id, reward_id, description, points_change) VALUES ($1, $2, $3, $4)',
       [memberId, auctionId, `竞拍得标：${item.name}`, -bidPoints]
