@@ -149,34 +149,83 @@
       </div>
 
       <!-- 关联分析模块 -->
-      <div v-if="report.correlations && hasValidCorrelations(report.correlations)"
-        class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-        <div class="font-bold text-gray-800 mb-3 flex items-center">
-          <el-icon class="mr-2 text-purple-500 bg-purple-50 p-1 rounded">
-            <DataAnalysis />
+      <div v-if="report.correlations" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        <div class="mb-3">
+          <div class="font-bold text-gray-800 mb-1 flex items-center">
+            <el-icon class="mr-2 text-purple-500 bg-purple-50 p-1 rounded">
+              <DataAnalysis />
+            </el-icon>
+            数据关联分析
+          </div>
+          <div class="text-xs text-gray-500 ml-8">
+            基于个人表现数据，分析不同指标之间的关联性
+            <span v-if="hasValidCorrelations(report.correlations)" class="text-purple-500">
+              （需要至少3天数据）
+            </span>
+          </div>
+        </div>
+        
+        <!-- 数据不足提示 -->
+        <div v-if="!hasValidCorrelations(report.correlations)" 
+          class="text-center py-8 text-gray-400">
+          <el-icon class="text-4xl mb-2 text-gray-300">
+            <InfoFilled />
           </el-icon>
-          数据分析
+          <div class="text-sm mb-1 font-medium text-gray-500">数据积累中</div>
+          <div class="text-xs text-gray-400 px-4">
+            {{ getCorrelationMessage(report.correlations) }}
+          </div>
         </div>
         
         <!-- 专注时长与作业质量 -->
         <div v-if="report.correlations.focus_homework?.hasEnoughData" class="mb-6">
-          <div class="text-sm font-semibold text-gray-700 mb-2">专注时长与作业质量的关系</div>
-          <div ref="focusHomeworkChartRef" class="w-full h-[200px] mb-3"></div>
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-sm font-semibold text-gray-700">专注时长与作业质量的关系</div>
+            <div class="text-xs text-gray-400">
+              样本量: {{ report.correlations.focus_homework.dataCount }}天
+              <span v-if="report.correlations.focus_homework.correlation" class="ml-2">
+                相关系数: {{ report.correlations.focus_homework.correlation > 0 ? '+' : '' }}{{ report.correlations.focus_homework.correlation }}
+              </span>
+            </div>
+          </div>
+          <div ref="focusHomeworkChartRef" class="w-full h-[240px] mb-3"></div>
+          <div class="text-xs text-gray-500 mb-2 px-1">
+            <span class="font-semibold">图表说明：</span>
+            横轴表示专注时长范围，纵轴表示该范围内作业评级的数量分布。柱状图高度越高，表示该专注时长范围下的作业评级数量越多。
+          </div>
           <div class="text-xs text-gray-600 bg-gray-50 rounded p-3 border border-gray-100">
             <div class="font-semibold mb-1">📊 分析洞察：</div>
             <div class="mb-2">{{ report.correlations.focus_homework.insight }}</div>
-            <div class="text-gray-700 leading-relaxed">{{ report.correlations.focus_homework.explanation }}</div>
+            <div class="text-gray-700 leading-relaxed mb-2">{{ report.correlations.focus_homework.explanation }}</div>
+            <div class="text-gray-500 italic mt-2 pt-2 border-t border-gray-200">
+              <span class="text-[10px]">注：本分析基于最近{{ report.correlations.focus_homework.dataCount }}天的个人数据，旨在发现数据趋势，仅供参考。相关性不等于因果性。</span>
+            </div>
           </div>
         </div>
 
         <!-- 走神次数与作业质量 -->
         <div v-if="report.correlations.distraction_homework?.hasEnoughData">
-          <div class="text-sm font-semibold text-gray-700 mb-2">走神次数与作业质量的关系</div>
-          <div ref="distractionHomeworkChartRef" class="w-full h-[200px] mb-3"></div>
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-sm font-semibold text-gray-700">走神次数与作业质量的关系</div>
+            <div class="text-xs text-gray-400">
+              样本量: {{ report.correlations.distraction_homework.dataCount }}天
+              <span v-if="report.correlations.distraction_homework.correlation" class="ml-2">
+                相关系数: {{ report.correlations.distraction_homework.correlation > 0 ? '+' : '' }}{{ report.correlations.distraction_homework.correlation }}
+              </span>
+            </div>
+          </div>
+          <div ref="distractionHomeworkChartRef" class="w-full h-[240px] mb-3"></div>
+          <div class="text-xs text-gray-500 mb-2 px-1">
+            <span class="font-semibold">图表说明：</span>
+            横轴表示走神次数范围，纵轴表示该范围内作业评级的数量分布。柱状图高度越高，表示该走神次数范围下的作业评级数量越多。
+          </div>
           <div class="text-xs text-gray-600 bg-gray-50 rounded p-3 border border-gray-100">
             <div class="font-semibold mb-1">📊 分析洞察：</div>
             <div class="mb-2">{{ report.correlations.distraction_homework.insight }}</div>
-            <div class="text-gray-700 leading-relaxed">{{ report.correlations.distraction_homework.explanation }}</div>
+            <div class="text-gray-700 leading-relaxed mb-2">{{ report.correlations.distraction_homework.explanation }}</div>
+            <div class="text-gray-500 italic mt-2 pt-2 border-t border-gray-200">
+              <span class="text-[10px]">注：本分析基于最近{{ report.correlations.distraction_homework.dataCount }}天的个人数据，旨在发现数据趋势，仅供参考。相关性不等于因果性。</span>
+            </div>
           </div>
         </div>
       </div>
@@ -305,6 +354,33 @@ const hasValidCorrelations = (correlations) => {
   );
 };
 
+// 获取关联分析数据不足的提示信息
+const getCorrelationMessage = (correlations) => {
+  if (!correlations) return '暂无数据分析';
+  
+  const focusData = correlations.focus_homework;
+  const distractionData = correlations.distraction_homework;
+  
+  if (focusData && !focusData.hasEnoughData && distractionData && !distractionData.hasEnoughData) {
+    const dataCount = focusData?.dataCount || distractionData?.dataCount || 0;
+    if (dataCount === 0) {
+      return '今天是第一天，数据积累中，请继续关注后续表现';
+    } else if (dataCount < 3) {
+      return `目前有${dataCount}天数据，需要至少3天数据才能进行分析。继续加油，数据会越来越丰富！`;
+    }
+  }
+  
+  if (focusData && !focusData.hasEnoughData) {
+    return focusData.message || '专注时长与作业质量的数据不足，无法进行分析';
+  }
+  
+  if (distractionData && !distractionData.hasEnoughData) {
+    return distractionData.message || '走神次数与作业质量的数据不足，无法进行分析';
+  }
+  
+  return '数据积累中，请继续关注后续表现';
+};
+
 const initRadarChart = () => {
   if (!radarChartRef.value) return;
   const chart = echarts.init(radarChartRef.value);
@@ -421,22 +497,49 @@ const initFocusHomeworkChart = () => {
   const option = {
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow' }
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        let result = `<div style="font-weight: bold; margin-bottom: 5px;">${params[0].axisValue}</div>`;
+        params.forEach(param => {
+          const group = data.groupedData[param.dataIndex];
+          const total = group.total;
+          const percentage = total > 0 ? ((param.value / total) * 100).toFixed(0) : 0;
+          result += `<div style="margin: 3px 0;">
+            <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; margin-right: 5px;"></span>
+            ${param.seriesName}: ${param.value}次 (${percentage}%)
+          </div>`;
+        });
+        const group = data.groupedData[params[0].dataIndex];
+        result += `<div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #eee; font-size: 11px; color: #999;">总计: ${group.total}次</div>`;
+        return result;
+      }
     },
     legend: {
       data: ['A级', 'B级', 'C级'],
       top: 10,
-      textStyle: { fontSize: 11 }
+      textStyle: { fontSize: 11 },
+      itemGap: 15
     },
-    grid: { top: 40, right: 10, bottom: 20, left: 40, containLabel: true },
+    grid: { top: 45, right: 15, bottom: 35, left: 55, containLabel: true },
     xAxis: {
       type: 'category',
       data: ranges,
-      axisLabel: { fontSize: 10, rotate: 0 }
+      name: '专注时长范围',
+      nameLocation: 'middle',
+      nameGap: 25,
+      nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#666' },
+      axisLabel: { fontSize: 10, rotate: 0, color: '#666' },
+      axisLine: { lineStyle: { color: '#ddd' } }
     },
     yAxis: {
       type: 'value',
-      axisLabel: { fontSize: 10 }
+      name: '作业评级次数',
+      nameLocation: 'middle',
+      nameGap: 40,
+      nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#666' },
+      axisLabel: { fontSize: 10, color: '#666' },
+      axisLine: { lineStyle: { color: '#ddd' } },
+      splitLine: { lineStyle: { type: 'dashed', color: '#eee' } }
     },
     series: [
       {
@@ -479,22 +582,49 @@ const initDistractionHomeworkChart = () => {
   const option = {
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow' }
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        let result = `<div style="font-weight: bold; margin-bottom: 5px;">${params[0].axisValue}</div>`;
+        params.forEach(param => {
+          const group = data.groupedData[param.dataIndex];
+          const total = group.total;
+          const percentage = total > 0 ? ((param.value / total) * 100).toFixed(0) : 0;
+          result += `<div style="margin: 3px 0;">
+            <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; margin-right: 5px;"></span>
+            ${param.seriesName}: ${param.value}次 (${percentage}%)
+          </div>`;
+        });
+        const group = data.groupedData[params[0].dataIndex];
+        result += `<div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #eee; font-size: 11px; color: #999;">总计: ${group.total}次</div>`;
+        return result;
+      }
     },
     legend: {
       data: ['A级', 'B级', 'C级'],
       top: 10,
-      textStyle: { fontSize: 11 }
+      textStyle: { fontSize: 11 },
+      itemGap: 15
     },
-    grid: { top: 40, right: 10, bottom: 20, left: 40, containLabel: true },
+    grid: { top: 45, right: 15, bottom: 35, left: 55, containLabel: true },
     xAxis: {
       type: 'category',
       data: ranges,
-      axisLabel: { fontSize: 10 }
+      name: '走神次数范围',
+      nameLocation: 'middle',
+      nameGap: 25,
+      nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#666' },
+      axisLabel: { fontSize: 10, color: '#666' },
+      axisLine: { lineStyle: { color: '#ddd' } }
     },
     yAxis: {
       type: 'value',
-      axisLabel: { fontSize: 10 }
+      name: '作业评级次数',
+      nameLocation: 'middle',
+      nameGap: 40,
+      nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#666' },
+      axisLabel: { fontSize: 10, color: '#666' },
+      axisLine: { lineStyle: { color: '#ddd' } },
+      splitLine: { lineStyle: { type: 'dashed', color: '#eee' } }
     },
     series: [
       {

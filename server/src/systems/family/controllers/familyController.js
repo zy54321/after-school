@@ -165,6 +165,14 @@ exports.getMemberDashboard = async (req, res) => {
 exports.logAction = async (req, res) => {
   const { memberId, taskId, customTitle, points } = req.body;
   try {
+    // 参数验证
+    if (!memberId) {
+      return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
+    }
+    if (points === undefined || points === null) {
+      return res.status(400).json({ code: 400, msg: '积分值不能为空' });
+    }
+
     let title = customTitle;
     if (!title && taskId) {
       const t = await pool.query('SELECT title FROM family_tasks WHERE id=$1', [
@@ -178,7 +186,20 @@ exports.logAction = async (req, res) => {
     );
     res.json({ code: 200, msg: '记录成功' });
   } catch (err) {
-    res.status(500).json({ msg: '操作失败' });
+    console.error('logAction 错误:', err);
+    console.error('请求参数:', { memberId, taskId, customTitle, points });
+    
+    // 处理主键冲突错误（序列未同步）
+    if (err.code === '23505' && err.constraint === 'family_points_log_pkey') {
+      console.error('⚠️ 检测到序列未同步问题，请执行修复序列脚本.sql');
+      return res.status(500).json({ 
+        code: 500, 
+        msg: '数据库序列未同步，请联系管理员执行修复序列脚本', 
+        error: '主键冲突：序列值需要修复'
+      });
+    }
+    
+    res.status(500).json({ code: 500, msg: '操作失败', error: err.message });
   }
 };
 

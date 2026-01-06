@@ -116,7 +116,10 @@ function analyzeFocusHomework(data, config, studentName, studentType) {
     return {
       description: '专注时长与作业质量的关系',
       hasEnoughData: false,
-      message: `数据不足（需要至少${config.minDataCount}条有效数据），无法进行分析。`,
+      dataCount: validData.length,
+      message: validData.length === 0 
+        ? '今天是第一天，数据积累中，请继续关注后续表现'
+        : `目前有${validData.length}天数据，需要至少${config.minDataCount}天数据才能进行分析。继续加油，数据会越来越丰富！`,
     };
   }
 
@@ -440,7 +443,10 @@ function analyzeDistractionHomework(data, config, studentName, studentType) {
     return {
       description: '走神次数与作业质量的关系',
       hasEnoughData: false,
-      message: `数据不足（需要至少${config.minDataCount}条有效数据），无法进行分析。`,
+      dataCount: validData.length,
+      message: validData.length === 0 
+        ? '今天是第一天，数据积累中，请继续关注后续表现'
+        : `目前有${validData.length}天数据，需要至少${config.minDataCount}天数据才能进行分析。继续加油，数据会越来越丰富！`,
     };
   }
 

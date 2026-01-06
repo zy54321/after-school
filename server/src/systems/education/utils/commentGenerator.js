@@ -43,15 +43,17 @@ const TEMPLATES = {
     {
       style: 'warm',
       templates: [
-        '今天{name}表现很棒！专注时长{focus}分钟，作业质量{homework_desc}，走神{distraction_desc}，继续保持！✨',
-        '今天{name}的表现让老师很满意！{focus}分钟的专注时长，作业完成得{homework_desc}，走神{distraction_desc}，这样的状态很好！💪',
+        '今天{name}表现很棒！专注时长{focus}分钟，作业质量{homework_desc}，走神{distraction_desc}，{discipline_desc}，继续保持！✨',
+        '今天{name}的表现让老师很满意！{focus}分钟的专注时长，作业完成得{homework_desc}，走神{distraction_desc}，{habit_desc}，这样的状态很好！💪',
+        '今天{name}表现不错！专注时长{focus}分钟，作业质量{homework_desc}，{meal_desc}，{discipline_desc}，继续保持！🌟',
       ],
     },
     {
       style: 'encouraging',
       templates: [
-        '今天{name}的表现不错！{focus}分钟全神贯注，作业质量{homework_desc}，走神{distraction_desc}，继续加油！🚀',
-        '看到{name}今天的表现，老师很欣慰！{focus}分钟的专注时长，作业{homework_desc}，走神{distraction_desc}，继续保持！🌟',
+        '今天{name}的表现不错！{focus}分钟全神贯注，作业质量{homework_desc}，走神{distraction_desc}，{habit_desc}，继续加油！🚀',
+        '看到{name}今天的表现，老师很欣慰！{focus}分钟的专注时长，作业{homework_desc}，走神{distraction_desc}，{discipline_desc}，继续保持！🌟',
+        '今天{name}表现很棒！专注时长{focus}分钟，作业质量{homework_desc}，{meal_desc}，{habit_desc}，继续努力！💪',
       ],
     },
   ],
@@ -61,15 +63,17 @@ const TEMPLATES = {
     {
       style: 'warm',
       templates: [
-        '今天{name}表现良好！专注时长{focus}分钟，作业质量{homework_desc}，走神{distraction_desc}，还有进步空间，继续努力！💪',
-        '今天{name}的表现平稳！{focus}分钟的专注时长，作业{homework_desc}，走神{distraction_desc}，继续保持，相信会越来越好！✨',
+        '今天{name}表现良好！专注时长{focus}分钟，作业质量{homework_desc}，走神{distraction_desc}，{discipline_desc}，还有进步空间，继续努力！💪',
+        '今天{name}的表现平稳！{focus}分钟的专注时长，作业{homework_desc}，走神{distraction_desc}，{habit_desc}，继续保持，相信会越来越好！✨',
+        '今天{name}表现还可以！专注时长{focus}分钟，作业质量{homework_desc}，{meal_desc}，{discipline_desc}，继续加油！🌟',
       ],
     },
     {
       style: 'encouraging',
       templates: [
-        '今天{name}的表现还可以！{focus}分钟专注学习，作业质量{homework_desc}，走神{distraction_desc}，继续加油，相信会更好！🚀',
-        '看到{name}今天的表现，老师相信{name}可以做得更好！{focus}分钟的专注时长，作业{homework_desc}，走神{distraction_desc}，继续努力！🌟',
+        '今天{name}的表现还可以！{focus}分钟专注学习，作业质量{homework_desc}，走神{distraction_desc}，{habit_desc}，继续加油，相信会更好！🚀',
+        '看到{name}今天的表现，老师相信{name}可以做得更好！{focus}分钟的专注时长，作业{homework_desc}，走神{distraction_desc}，{discipline_desc}，继续努力！🌟',
+        '今天{name}表现良好！专注时长{focus}分钟，作业质量{homework_desc}，{meal_desc}，{habit_desc}，继续努力！💪',
       ],
     },
   ],
@@ -79,15 +83,17 @@ const TEMPLATES = {
     {
       style: 'warm',
       templates: [
-        '今天{name}的专注时长{focus}分钟，作业质量{homework_desc}，走神{distraction_desc}。建议设定小目标，逐步提升专注力，相信{name}会越来越好！💪',
-        '今天{name}的表现还有提升空间。专注时长{focus}分钟，作业{homework_desc}，走神{distraction_desc}。建议回家复盘，找出问题所在，明天会更好！✨',
+        '今天{name}的专注时长{focus}分钟，作业质量{homework_desc}，走神{distraction_desc}，{discipline_desc}。建议设定小目标，逐步提升专注力，相信{name}会越来越好！💪',
+        '今天{name}的表现还有提升空间。专注时长{focus}分钟，作业{homework_desc}，走神{distraction_desc}，{habit_desc}。建议回家复盘，找出问题所在，明天会更好！✨',
+        '今天{name}的专注时长{focus}分钟，作业质量{homework_desc}，{meal_desc}，{discipline_desc}。建议设定小目标，逐步提升！🌟',
       ],
     },
     {
       style: 'encouraging',
       templates: [
-        '今天{name}的专注时长{focus}分钟，作业质量{homework_desc}，走神{distraction_desc}。虽然今天有些挑战，但相信{name}可以克服，继续加油！🚀',
-        '看到{name}今天的表现，老师相信{name}有潜力做得更好！专注时长{focus}分钟，作业{homework_desc}，走神{distraction_desc}。建议设定小目标，逐步提升！🌟',
+        '今天{name}的专注时长{focus}分钟，作业质量{homework_desc}，走神{distraction_desc}，{habit_desc}。虽然今天有些挑战，但相信{name}可以克服，继续加油！🚀',
+        '看到{name}今天的表现，老师相信{name}有潜力做得更好！专注时长{focus}分钟，作业{homework_desc}，走神{distraction_desc}，{discipline_desc}。建议设定小目标，逐步提升！🌟',
+        '今天{name}的专注时长{focus}分钟，作业质量{homework_desc}，{meal_desc}，{habit_desc}。建议回家复盘，找出问题所在，继续努力！💪',
       ],
     },
   ],
@@ -120,6 +126,27 @@ const SYNONYMS = {
     3: ['走神3次', '走神3次，还有进步空间', '走神3次，需要继续努力'],
     4: ['走神4次', '走神4次，需要提升专注力', '走神4次，建议加强训练'],
     5: ['走神5次', '走神5次，需要重点训练抗干扰能力', '走神5次，建议设定小目标'],
+  },
+
+  // 用餐情况表达
+  mealExpressions: {
+    finished: ['用餐完成', '光盘行动', '用餐情况良好', '用餐习惯良好'],
+    partial: ['用餐不完整', '少量剩菜', '用餐情况一般'],
+    skipped: ['未用餐', '用餐情况需要关注'],
+  },
+
+  // 纪律评级表达
+  disciplineExpressions: {
+    A: ['纪律表现优秀', '课堂纪律很好', '纪律性很强', '遵守纪律'],
+    B: ['纪律表现良好', '课堂纪律还可以', '纪律性不错'],
+    C: ['纪律需要加强', '课堂纪律需要改进', '纪律性有待提升'],
+  },
+
+  // 习惯评级表达
+  habitExpressions: {
+    A: ['行为习惯优秀', '习惯养成很好', '习惯表现很棒', '习惯很好'],
+    B: ['行为习惯良好', '习惯养成还可以', '习惯表现不错'],
+    C: ['习惯需要改进', '习惯养成需要加强', '习惯表现有待提升'],
   },
 
   // 表扬表达
@@ -281,6 +308,30 @@ function formatDistractionCount(count, seed, index) {
 }
 
 /**
+ * 格式化用餐情况描述
+ */
+function formatMealStatus(status, seed, index) {
+  const expressions = SYNONYMS.mealExpressions[status] || SYNONYMS.mealExpressions.finished;
+  return randomChoice(expressions, seed, index);
+}
+
+/**
+ * 格式化纪律评级描述
+ */
+function formatDisciplineRating(rating, seed, index) {
+  const expressions = SYNONYMS.disciplineExpressions[rating] || SYNONYMS.disciplineExpressions.C;
+  return randomChoice(expressions, seed, index);
+}
+
+/**
+ * 格式化习惯评级描述
+ */
+function formatHabitRating(rating, seed, index) {
+  const expressions = SYNONYMS.habitExpressions[rating] || SYNONYMS.habitExpressions.C;
+  return randomChoice(expressions, seed, index);
+}
+
+/**
  * 选择语言风格
  */
 function selectStyle(seed, index) {
@@ -343,11 +394,17 @@ function generateComment(studentData, historyData, studentId, studentName, repor
   const focus = studentData.focus_minutes || 0;
   const homeworkRating = studentData.homework_rating || 'C';
   const distractionCount = studentData.distraction_count || 0;
+  const mealStatus = studentData.meal_status || 'finished';
+  const disciplineRating = studentData.discipline_rating || 'A';
+  const habitRating = studentData.habit_rating || 'A';
 
   // 格式化各个部分
   const focusDesc = formatFocusMinutes(focus, seed, seedIndex++);
   const homeworkDesc = formatHomeworkRating(homeworkRating, seed, seedIndex++);
   const distractionDesc = formatDistractionCount(distractionCount, seed, seedIndex++);
+  const mealDesc = formatMealStatus(mealStatus, seed, seedIndex++);
+  const disciplineDesc = formatDisciplineRating(disciplineRating, seed, seedIndex++);
+  const habitDesc = formatHabitRating(habitRating, seed, seedIndex++);
 
   // 获取历史对比信息
   const comparison = getHistoryComparison(studentData, historyData);
@@ -361,6 +418,9 @@ function generateComment(studentData, historyData, studentId, studentName, repor
     .replace(/{focus_desc}/g, focusDesc)
     .replace(/{homework_desc}/g, homeworkDesc)
     .replace(/{distraction_desc}/g, distractionDesc)
+    .replace(/{meal_desc}/g, mealDesc)
+    .replace(/{discipline_desc}/g, disciplineDesc)
+    .replace(/{habit_desc}/g, habitDesc)
     .replace(/{focus}/g, focus);
 
   // 添加历史对比信息（如果模板中没有，可以追加）
@@ -374,6 +434,74 @@ function generateComment(studentData, historyData, studentId, studentName, repor
   // 添加时间特征（如果适用）
   if (timeFeature && level === 'perfect') {
     comment = comment.replace('今天', `${timeFeature}，今天`);
+  }
+
+  // 智能添加其他指标信息（如果模板中没有包含）
+  // 检查模板中是否已经包含了这些信息（通过检查占位符是否被替换）
+  const hasMealInfo = comment.includes('用餐') || comment.includes('meal_desc');
+  const hasDisciplineInfo = comment.includes('纪律') || comment.includes('discipline_desc');
+  const hasHabitInfo = comment.includes('习惯') || comment.includes('行为') || comment.includes('habit_desc');
+
+  const additionalInfo = [];
+  
+  // 用餐情况：优先处理异常情况（未用餐或用餐不完整）
+  if (!hasMealInfo) {
+    if (mealStatus === 'skipped') {
+      additionalInfo.push('用餐情况需要关注');
+    } else if (mealStatus === 'partial' && level === 'needsImprovement') {
+      additionalInfo.push('用餐情况一般');
+    } else if (mealStatus === 'finished' && (level === 'perfect' || level === 'excellent')) {
+      // 优秀表现时可以表扬用餐
+      additionalInfo.push('用餐习惯也很好');
+    }
+  }
+
+  // 纪律评级：优先处理需要改进的情况
+  if (!hasDisciplineInfo) {
+    if (disciplineRating === 'C') {
+      additionalInfo.push(disciplineDesc);
+    } else if (disciplineRating === 'A' && (level === 'perfect' || level === 'excellent')) {
+      // 优秀表现时可以表扬纪律
+      additionalInfo.push(disciplineDesc);
+    }
+  }
+
+  // 习惯评级：优先处理需要改进的情况
+  if (!hasHabitInfo) {
+    if (habitRating === 'C') {
+      additionalInfo.push(habitDesc);
+    } else if (habitRating === 'A' && (level === 'perfect' || level === 'excellent')) {
+      // 优秀表现时可以表扬习惯
+      additionalInfo.push(habitDesc);
+    }
+  }
+
+  // 如果有额外信息，智能添加到评语中
+  if (additionalInfo.length > 0) {
+    // 限制最多添加2条额外信息，避免评语过长
+    const infoToAdd = additionalInfo.slice(0, 2);
+    
+    // 根据评语长度和风格，选择添加方式
+    if (comment.length < 80) {
+      // 如果评语较短，直接追加
+      comment += '。' + infoToAdd.join('，') + '。';
+    } else if (comment.length < 150) {
+      // 如果评语中等长度，在合适的位置插入
+      const insertPos = comment.lastIndexOf('。');
+      if (insertPos > 0) {
+        comment = comment.substring(0, insertPos) + '，' + infoToAdd.join('，') + comment.substring(insertPos);
+      } else {
+        comment += '。' + infoToAdd.join('，') + '。';
+      }
+    } else {
+      // 如果评语已经较长，只添加最重要的1条
+      if (infoToAdd.length > 0) {
+        const insertPos = comment.lastIndexOf('。');
+        if (insertPos > 0) {
+          comment = comment.substring(0, insertPos) + '，' + infoToAdd[0] + comment.substring(insertPos);
+        }
+      }
+    }
   }
 
   // 质量检查：确保评语长度在100-200字之间

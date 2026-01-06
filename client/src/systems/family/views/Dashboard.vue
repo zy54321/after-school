@@ -64,13 +64,7 @@ onMounted(async () => {
   await initData();
 });
 
-// 🟢 点击日历格子的处理函数
-const handleDateClick = (dayStr) => {
-  // 更新当前选中日期
-  currentDate.value = dayjs(dayStr).toDate();
-  // 打开弹窗显示详情
-  showDayDetailModal.value = true;
-};
+// 注意：handleDateClick 函数已移至 BillCalendar 组件内部
 
 // 批量操作（用于右键菜单）
 const contextMenu = reactive({ visible: false, x: 0, y: 0, item: null, type: '' });
@@ -109,9 +103,6 @@ const loadMemberData = async () => {
         historyCount: dashboard.history.length,
         history: dashboard.history
       });
-      // 强制触发 dailyStats 重新计算
-      console.log('🔄 强制触发 dailyStats 计算');
-      console.log('🔄 dailyStats.value:', dailyStats.value);
     }
   } catch (e) { 
     console.error('🔄 加载数据失败:', e); 
@@ -121,12 +112,40 @@ const loadMemberData = async () => {
 const switchMember = (id) => { currentMemberId.value = id; loadMemberData(); };
 // 处理任务点击
 const handleTask = async (task) => {
+  // 参数验证
+  if (!currentMemberId.value) {
+    ElMessage.warning('请先选择成员');
+    return;
+  }
+  if (!task || !task.id) {
+    ElMessage.error('任务信息不完整');
+    return;
+  }
+  if (task.points === undefined || task.points === null) {
+    ElMessage.error('任务积分值无效');
+    return;
+  }
+
   dashboard.totalPoints += task.points;
   try {
-    await axios.post('/api/family/action', { memberId: currentMemberId.value, taskId: task.id, points: task.points });
-    ElMessage.success(task.points > 0 ? `+${task.points}` : `${task.points}`);
-    loadMemberData();
-  } catch (err) { dashboard.totalPoints -= task.points; }
+    const res = await axios.post('/api/family/action', { 
+      memberId: currentMemberId.value, 
+      taskId: task.id, 
+      points: task.points 
+    });
+    if (res.data.code === 200) {
+      ElMessage.success(task.points > 0 ? `+${task.points}` : `${task.points}`);
+      loadMemberData();
+    } else {
+      dashboard.totalPoints -= task.points;
+      ElMessage.error(res.data.msg || '操作失败');
+    }
+  } catch (err) {
+    dashboard.totalPoints -= task.points;
+    console.error('添加积分失败:', err);
+    const errorMsg = err.response?.data?.msg || err.response?.data?.error || err.message || '操作失败，请重试';
+    ElMessage.error(errorMsg);
+  }
 };
 
 // 处理兑换
