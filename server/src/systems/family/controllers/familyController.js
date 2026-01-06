@@ -34,8 +34,20 @@ exports.createMember = async (req, res) => {
     );
     res.json({ code: 200, msg: '添加成员成功' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: '添加失败' });
+    console.error('createMember 错误:', err);
+    console.error('请求参数:', { name, userId, avatar });
+    
+    // 处理主键冲突错误（序列未同步）
+    if (err.code === '23505' && err.constraint === 'family_members_pkey') {
+      console.error('⚠️ 检测到 family_members 表序列未同步问题，请执行修复序列脚本.sql');
+      return res.status(500).json({ 
+        code: 500, 
+        msg: '数据库序列未同步，请联系管理员执行修复序列脚本', 
+        error: '主键冲突：序列值需要修复'
+      });
+    }
+    
+    res.status(500).json({ code: 500, msg: '添加失败', error: err.message });
   }
 };
 
@@ -335,8 +347,23 @@ exports.createItem = async (req, res) => {
     }
     res.json({ code: 200, msg: '创建成功' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: '创建失败' });
+    console.error('createItem 错误:', err);
+    console.error('请求参数:', { type, name, points, category, limitType, limitMax, targetMembers, description });
+    
+    // 处理主键冲突错误（序列未同步）
+    if (err.code === '23505') {
+      const tableName = err.table === 'family_tasks' ? 'family_tasks' : 
+                       err.table === 'family_rewards' ? 'family_rewards' : 
+                       err.table || '未知表';
+      console.error(`⚠️ 检测到 ${tableName} 表序列未同步问题，请执行修复序列脚本.sql`);
+      return res.status(500).json({ 
+        code: 500, 
+        msg: `数据库序列未同步（${tableName}），请联系管理员执行修复序列脚本`, 
+        error: '主键冲突：序列值需要修复'
+      });
+    }
+    
+    res.status(500).json({ code: 500, msg: '创建失败', error: err.message });
   }
 };
 
@@ -414,7 +441,20 @@ exports.createCategory = async (req, res) => {
     );
     res.json({ code: 200, msg: '添加成功' });
   } catch (err) {
-    res.status(500).json({ msg: '添加失败' });
+    console.error('createCategory 错误:', err);
+    console.error('请求参数:', { name, userId, key });
+    
+    // 处理主键冲突错误（序列未同步）
+    if (err.code === '23505' && err.constraint === 'family_categories_pkey') {
+      console.error('⚠️ 检测到 family_categories 表序列未同步问题，请执行修复序列脚本.sql');
+      return res.status(500).json({ 
+        code: 500, 
+        msg: '数据库序列未同步，请联系管理员执行修复序列脚本', 
+        error: '主键冲突：序列值需要修复'
+      });
+    }
+    
+    res.status(500).json({ code: 500, msg: '添加失败', error: err.message });
   }
 };
 
