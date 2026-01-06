@@ -235,8 +235,21 @@ exports.saveDailyWorkflow = async (req, res) => {
     res.json({ code: 200, msg: '保存成功', data: generatedLinks });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ code: 500, msg: '保存失败' });
+    console.error('saveDailyWorkflow 错误:', err);
+    console.error('请求参数:', { date, menu, studentsCount: students?.length });
+    
+    // 处理主键冲突错误（序列未同步）
+    if (err.code === '23505') {
+      const tableName = err.table || '未知表';
+      console.error(`⚠️ 检测到 ${tableName} 表序列未同步问题，请执行修复所有表序列脚本.sql`);
+      return res.status(500).json({ 
+        code: 500, 
+        msg: `数据库序列未同步（${tableName}），请联系管理员执行修复序列脚本`, 
+        error: '主键冲突：序列值需要修复'
+      });
+    }
+    
+    res.status(500).json({ code: 500, msg: '保存失败', error: err.message });
   } finally {
     client.release();
   }
