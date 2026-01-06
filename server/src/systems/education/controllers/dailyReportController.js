@@ -1,5 +1,8 @@
 const pool = require('../../../shared/config/db');
 const crypto = require('crypto');
+const { generateComment } = require('../utils/commentGenerator');
+const { analyzeCorrelationsWithData } = require('../utils/correlationAnalyzer');
+const { generateAlerts } = require('../utils/alertGenerator');
 
 // 获取特训工作台数据
 exports.getDailyWorkflowData = async (req, res) => {
@@ -57,7 +60,7 @@ exports.getDailyWorkflowData = async (req, res) => {
       }
     }
 
-    // 获取学生数据
+    // 获取学生数据（只显示今天已签到的学员）
     const studentsRes = await pool.query(
       `
       SELECT 
@@ -65,8 +68,10 @@ exports.getDailyWorkflowData = async (req, res) => {
         dr.focus_minutes, dr.distraction_count, dr.meal_status, dr.homework_rating, dr.homework_tags,
         dr.token,
         dr.discipline_rating,
-        dr.habit_rating
+        dr.habit_rating,
+        true as has_signed_today
       FROM students s
+      INNER JOIN attendance a ON s.id = a.student_id AND DATE(a.sign_in_time) = $1
       LEFT JOIN daily_reports dr ON s.id = dr.student_id AND dr.report_date = $1
       WHERE s.status = 'active' 
       ORDER BY s.id ASC
@@ -117,17 +122,80 @@ exports.saveDailyWorkflow = async (req, res) => {
     const generatedLinks = [];
 
     for (const student of students) {
+      // 检查是否有签到记录（可选，只记录警告，不阻止保存）
+      const attendanceCheck = await client.query(
+        `SELECT 1 FROM attendance 
+         WHERE student_id = $1 
+         AND DATE(sign_in_time) = $2`,
+        [student.id, date]
+      );
+      
+      if (attendanceCheck.rows.length === 0) {
+        console.warn(`学员 ${student.name || student.id} 今天未签到，但仍保存了日报`);
+      }
+
       let token = student.token;
       if (!token) {
         token = crypto.randomBytes(16).toString('hex');
+      }
+
+      // 生成评语：如果前端传入了 teacher_comment，优先使用；否则自动生成
+      let teacherComment = student.teacher_comment;
+      
+      if (!teacherComment) {
+        try {
+          // 获取学员姓名
+          const studentInfoRes = await client.query(
+            'SELECT name FROM students WHERE id = $1',
+            [student.id]
+          );
+          const studentName = studentInfoRes.rows[0]?.name || '学员';
+
+          // 获取最近7天的历史数据用于生成个性化评语
+          const historyRes = await client.query(
+            `SELECT report_date, focus_minutes, homework_rating, distraction_count
+             FROM daily_reports
+             WHERE student_id = $1 
+             AND report_date < $2
+             ORDER BY report_date DESC
+             LIMIT 7`,
+            [student.id, date]
+          );
+
+          // 准备当前数据
+          const currentData = {
+            focus_minutes: student.focus_minutes,
+            homework_rating: student.homework_rating,
+            distraction_count: student.distraction_count,
+            meal_status: student.meal_status,
+            discipline_rating: student.discipline_rating || 'A',
+            habit_rating: student.habit_rating || 'A',
+          };
+
+          // 准备历史数据（反转顺序，从早到晚）
+          const historyData = historyRes.rows.reverse();
+
+          // 生成个性化评语
+          teacherComment = generateComment(
+            currentData,
+            historyData,
+            student.id,
+            studentName,
+            date
+          );
+        } catch (err) {
+          console.error(`生成评语失败（学员ID: ${student.id}）:`, err);
+          // 如果生成失败，使用默认评语
+          teacherComment = `今天表现${student.homework_rating === 'A' ? '优秀' : student.homework_rating === 'B' ? '良好' : '需要继续努力'}，继续保持！💪`;
+        }
       }
 
       const upsertQuery = `
         INSERT INTO daily_reports (
           student_id, report_date, focus_minutes, distraction_count, 
           meal_status, homework_rating, homework_tags, token,
-          discipline_rating, habit_rating
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          discipline_rating, habit_rating, teacher_comment
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (student_id, report_date) 
         DO UPDATE SET 
           focus_minutes = EXCLUDED.focus_minutes,
@@ -137,6 +205,7 @@ exports.saveDailyWorkflow = async (req, res) => {
           homework_tags = EXCLUDED.homework_tags,
           discipline_rating = EXCLUDED.discipline_rating,
           habit_rating = EXCLUDED.habit_rating,
+          teacher_comment = COALESCE(EXCLUDED.teacher_comment, daily_reports.teacher_comment),
           token = COALESCE(daily_reports.token, EXCLUDED.token)
         RETURNING token;
       `;
@@ -152,6 +221,7 @@ exports.saveDailyWorkflow = async (req, res) => {
         token,
         student.discipline_rating || 'A',
         student.habit_rating || 'A',
+        teacherComment,
       ]);
 
       generatedLinks.push({
@@ -201,18 +271,72 @@ exports.getStudentReportByToken = async (req, res) => {
 
     const currentReport = reportRes.rows[0];
 
+    // 查询最近7天的历史数据（包含今天），确保包含当前报告的数据
+    // 先查询最近7条记录（可能包含今天），包含关联分析和预警检测所需的所有字段
     const historyQuery = `
-      SELECT report_date, focus_minutes, homework_rating
+      SELECT report_date, focus_minutes, homework_rating, distraction_count, meal_status, 
+             discipline_rating, habit_rating
       FROM daily_reports
       WHERE student_id = $1 
       AND report_date <= $2
-      ORDER BY report_date ASC
+      ORDER BY report_date DESC
       LIMIT 7
     `;
     const historyRes = await pool.query(historyQuery, [
       currentReport.student_id,
       currentReport.report_date,
     ]);
+    
+    // 确保当前报告的数据在历史中，并使用最新的数据
+    let historyRows = historyRes.rows;
+    
+    // 格式化日期用于比较（统一为 YYYY-MM-DD 格式）
+    const formatDateForCompare = (date) => {
+      if (!date) return '';
+      const d = date instanceof Date ? date : new Date(date);
+      return d.toISOString().split('T')[0];
+    };
+    
+    const currentDateStr = formatDateForCompare(currentReport.report_date);
+    const hasCurrentDate = historyRows.some(h => 
+      formatDateForCompare(h.report_date) === currentDateStr
+    );
+    
+    if (!hasCurrentDate) {
+      // 如果历史中没有今天的数据，添加当前报告的数据
+      historyRows.unshift({
+        report_date: currentReport.report_date,
+        focus_minutes: currentReport.focus_minutes,
+        homework_rating: currentReport.homework_rating,
+        distraction_count: currentReport.distraction_count,
+        meal_status: currentReport.meal_status,
+        discipline_rating: currentReport.discipline_rating,
+        habit_rating: currentReport.habit_rating,
+      });
+      // 如果超过7条，移除最旧的
+      if (historyRows.length > 7) {
+        historyRows = historyRows.slice(0, 7);
+      }
+    } else {
+      // 如果历史中有今天的数据，确保使用最新的（当前报告的）数据
+      const todayIndex = historyRows.findIndex(h => 
+        formatDateForCompare(h.report_date) === currentDateStr
+      );
+      if (todayIndex >= 0) {
+        historyRows[todayIndex] = {
+          report_date: currentReport.report_date,
+          focus_minutes: currentReport.focus_minutes,
+          homework_rating: currentReport.homework_rating,
+          distraction_count: currentReport.distraction_count,
+          meal_status: currentReport.meal_status,
+          discipline_rating: currentReport.discipline_rating,
+          habit_rating: currentReport.habit_rating,
+        };
+      }
+    }
+    
+    // 反转数组，使日期按升序排列（从早到晚），用于图表显示
+    historyRows = historyRows.reverse();
 
     const sourcingQuery = `
       SELECT DISTINCT
@@ -229,29 +353,116 @@ exports.getStudentReportByToken = async (req, res) => {
       currentReport.report_date,
     ]);
 
+    // 如果评语为空，使用新的评语生成器自动生成
     if (!currentReport.teacher_comment) {
-      if (
-        currentReport.distraction_count === 0 &&
-        currentReport.homework_rating === 'A'
-      ) {
-        currentReport.teacher_comment = `今天${currentReport.student_name}表现完美！专注力全开，作业质量全优！🌟`;
-      } else if (currentReport.distraction_count > 3) {
-        currentReport.teacher_comment = `今天走神${currentReport.distraction_count}次，需要重点训练抗干扰能力。`;
-      } else if (currentReport.homework_rating === 'C') {
-        currentReport.teacher_comment = `今日作业暴露出${
-          currentReport.homework_tags?.join(',') || '一些'
-        }问题，建议回家复盘。`;
-      } else {
-        currentReport.teacher_comment = `表现平稳，继续保持！💪`;
+      try {
+        // 准备当前数据
+        const currentData = {
+          focus_minutes: currentReport.focus_minutes,
+          homework_rating: currentReport.homework_rating,
+          distraction_count: currentReport.distraction_count,
+          meal_status: currentReport.meal_status,
+          discipline_rating: currentReport.discipline_rating || 'A',
+          habit_rating: currentReport.habit_rating || 'A',
+        };
+
+        // 准备历史数据（排除今天的数据）
+        const historyData = historyRows.filter(
+          (h) => formatDateForCompare(h.report_date) !== currentDateStr
+        );
+
+        // 生成个性化评语
+        currentReport.teacher_comment = generateComment(
+          currentData,
+          historyData,
+          currentReport.student_id,
+          currentReport.student_name,
+          currentReport.report_date
+        );
+      } catch (err) {
+        console.error('生成评语失败:', err);
+        // 如果生成失败，使用默认评语
+        if (
+          currentReport.distraction_count === 0 &&
+          currentReport.homework_rating === 'A'
+        ) {
+          currentReport.teacher_comment = `今天${currentReport.student_name}表现完美！专注力全开，作业质量全优！🌟`;
+        } else if (currentReport.distraction_count > 3) {
+          currentReport.teacher_comment = `今天走神${currentReport.distraction_count}次，需要重点训练抗干扰能力。`;
+        } else if (currentReport.homework_rating === 'C') {
+          currentReport.teacher_comment = `今日作业暴露出${
+            currentReport.homework_tags?.join(',') || '一些'
+          }问题，建议回家复盘。`;
+        } else {
+          currentReport.teacher_comment = `表现平稳，继续保持！💪`;
+        }
       }
+    }
+
+    // 执行关联分析
+    let correlations = {};
+    try {
+      // 准备历史数据（包含今天，用于关联分析）
+      const analysisData = historyRows.map((h) => ({
+        focus_minutes: h.focus_minutes,
+        homework_rating: h.homework_rating,
+        distraction_count: h.distraction_count,
+        meal_status: h.meal_status,
+      }));
+
+      // 调用关联分析函数
+      correlations = analyzeCorrelationsWithData(
+        analysisData,
+        {}, // 使用默认配置
+        currentReport.student_name
+      );
+    } catch (err) {
+      console.error('关联分析失败:', err);
+      // 如果分析失败，返回空对象，不影响其他功能
+      correlations = {};
+    }
+
+    // 执行预警检测
+    let alerts = [];
+    try {
+      // 准备当前数据
+      const currentData = {
+        report_date: currentReport.report_date,
+        focus_minutes: currentReport.focus_minutes,
+        homework_rating: currentReport.homework_rating,
+        distraction_count: currentReport.distraction_count,
+        discipline_rating: currentReport.discipline_rating,
+        habit_rating: currentReport.habit_rating,
+      };
+
+      // 准备历史数据（排除今天，用于预警检测）
+      const alertHistoryData = historyRows
+        .filter((h) => formatDateForCompare(h.report_date) !== currentDateStr)
+        .map((h) => ({
+          report_date: h.report_date,
+          focus_minutes: h.focus_minutes,
+          homework_rating: h.homework_rating,
+          distraction_count: h.distraction_count,
+          discipline_rating: h.discipline_rating,
+          habit_rating: h.habit_rating,
+        }));
+
+      // 调用预警生成函数
+      alerts = generateAlerts(currentData, alertHistoryData);
+    } catch (err) {
+      console.error('预警检测失败:', err);
+      // 如果检测失败，返回空数组，不影响其他功能
+      alerts = [];
     }
 
     res.json({
       code: 200,
       data: {
         ...currentReport,
-        history: historyRes.rows,
+        history: historyRows,
         sourcing_data: sourcingRes.rows,
+        correlations,
+        alerts,
       },
     });
   } catch (err) {

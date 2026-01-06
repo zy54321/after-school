@@ -26,6 +26,40 @@
       </div>
     </div>
 
+    <!-- 预警信息卡片 -->
+    <div v-if="report && report.alerts && report.alerts.length > 0" class="px-4 mb-6">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="bg-gradient-to-r from-amber-50 to-orange-50 px-4 py-3 border-b border-amber-100">
+          <div class="font-bold text-amber-800 flex items-center">
+            <el-icon class="mr-2 text-amber-500 bg-amber-100 p-1 rounded">
+              <Warning />
+            </el-icon>
+            今日提醒
+          </div>
+        </div>
+        <div class="p-4 space-y-3">
+          <div v-for="(alert, idx) in report.alerts" :key="idx" 
+            :class="getAlertCardClass(alert.level)"
+            class="rounded-lg p-3 border-l-4">
+            <div class="flex items-start">
+              <div class="flex-shrink-0 mr-3">
+                <el-icon :class="getAlertIconClass(alert.level)" class="text-xl">
+                  <component :is="getAlertIcon(alert.level)" />
+                </el-icon>
+              </div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm mb-1">{{ alert.title }}</div>
+                <div class="text-xs text-gray-600 mb-2">{{ alert.description }}</div>
+                <div class="text-xs text-gray-700 bg-white/50 rounded px-2 py-1.5 border border-gray-200">
+                  💡 {{ alert.suggestion }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="report" class="px-4 space-y-6">
 
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 relative overflow-hidden">
@@ -114,6 +148,39 @@
         </div>
       </div>
 
+      <!-- 关联分析模块 -->
+      <div v-if="report.correlations && hasValidCorrelations(report.correlations)"
+        class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        <div class="font-bold text-gray-800 mb-3 flex items-center">
+          <el-icon class="mr-2 text-purple-500 bg-purple-50 p-1 rounded">
+            <DataAnalysis />
+          </el-icon>
+          数据分析
+        </div>
+        
+        <!-- 专注时长与作业质量 -->
+        <div v-if="report.correlations.focus_homework?.hasEnoughData" class="mb-6">
+          <div class="text-sm font-semibold text-gray-700 mb-2">专注时长与作业质量的关系</div>
+          <div ref="focusHomeworkChartRef" class="w-full h-[200px] mb-3"></div>
+          <div class="text-xs text-gray-600 bg-gray-50 rounded p-3 border border-gray-100">
+            <div class="font-semibold mb-1">📊 分析洞察：</div>
+            <div class="mb-2">{{ report.correlations.focus_homework.insight }}</div>
+            <div class="text-gray-700 leading-relaxed">{{ report.correlations.focus_homework.explanation }}</div>
+          </div>
+        </div>
+
+        <!-- 走神次数与作业质量 -->
+        <div v-if="report.correlations.distraction_homework?.hasEnoughData">
+          <div class="text-sm font-semibold text-gray-700 mb-2">走神次数与作业质量的关系</div>
+          <div ref="distractionHomeworkChartRef" class="w-full h-[200px] mb-3"></div>
+          <div class="text-xs text-gray-600 bg-gray-50 rounded p-3 border border-gray-100">
+            <div class="font-semibold mb-1">📊 分析洞察：</div>
+            <div class="mb-2">{{ report.correlations.distraction_homework.insight }}</div>
+            <div class="text-gray-700 leading-relaxed">{{ report.correlations.distraction_homework.explanation }}</div>
+          </div>
+        </div>
+      </div>
+
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <div class="font-bold text-gray-800 mb-3 flex items-center">
           <el-icon class="mr-2 text-green-500 bg-green-50 p-1 rounded">
@@ -122,11 +189,11 @@
           老师寄语
         </div>
         <div class="relative">
-          <span class="absolute -top-2 -left-2 text-4xl text-gray-100 font-serif">“</span>
+          <span class="absolute -top-2 -left-2 text-4xl text-gray-100 font-serif">"</span>
           <div class="text-gray-600 text-sm leading-7 px-2 relative z-10 indent-2">
             {{ report.teacher_comment }}
           </div>
-          <span class="absolute -bottom-4 -right-2 text-4xl text-gray-100 font-serif">”</span>
+          <span class="absolute -bottom-4 -right-2 text-4xl text-gray-100 font-serif">"</span>
         </div>
       </div>
 
@@ -152,7 +219,7 @@ import { ref, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import * as echarts from 'echarts';
-import { Food, ChatDotRound, TrendCharts, DocumentDelete, DataAnalysis, ShoppingCart } from '@element-plus/icons-vue';
+import { Food, ChatDotRound, TrendCharts, DocumentDelete, DataAnalysis, ShoppingCart, Warning, InfoFilled, CircleClose } from '@element-plus/icons-vue';
 
 const route = useRoute();
 const loading = ref(true);
@@ -160,6 +227,8 @@ const report = ref(null);
 
 const radarChartRef = ref(null);
 const lineChartRef = ref(null);
+const focusHomeworkChartRef = ref(null);
+const distractionHomeworkChartRef = ref(null);
 
 const formatDate = (str) => {
   if (!str) return '';
@@ -197,6 +266,43 @@ const getSourceBadgeClass = (source) => {
   if (['盒马鲜生', '山姆', '麦德龙'].includes(source)) return 'bg-blue-100 text-blue-600';
   if (['叮咚买菜', '朴朴'].includes(source)) return 'bg-green-100 text-green-600';
   return 'bg-gray-200 text-gray-500';
+};
+
+// 预警相关函数
+const getAlertCardClass = (level) => {
+  const map = {
+    light: 'bg-blue-50 border-blue-300',
+    medium: 'bg-amber-50 border-amber-400',
+    severe: 'bg-red-50 border-red-500',
+  };
+  return map[level] || map.light;
+};
+
+const getAlertIconClass = (level) => {
+  const map = {
+    light: 'text-blue-500',
+    medium: 'text-amber-500',
+    severe: 'text-red-500',
+  };
+  return map[level] || map.light;
+};
+
+const getAlertIcon = (level) => {
+  const map = {
+    light: InfoFilled,
+    medium: Warning,
+    severe: CircleClose,
+  };
+  return map[level] || InfoFilled;
+};
+
+// 检查是否有有效的关联分析数据
+const hasValidCorrelations = (correlations) => {
+  if (!correlations) return false;
+  return (
+    (correlations.focus_homework?.hasEnoughData) ||
+    (correlations.distraction_homework?.hasEnoughData)
+  );
 };
 
 const initRadarChart = () => {
@@ -251,8 +357,23 @@ const initLineChart = () => {
   if (!lineChartRef.value || !report.value.history) return;
   const chart = echarts.init(lineChartRef.value);
 
-  const dates = report.value.history.map(h => formatDateShort(h.report_date));
-  const values = report.value.history.map(h => Number(h.focus_minutes || 0));
+  // 确保历史数据按日期排序（升序）
+  const sortedHistory = [...report.value.history].sort((a, b) => {
+    const dateA = new Date(a.report_date);
+    const dateB = new Date(b.report_date);
+    return dateA - dateB;
+  });
+
+  const dates = sortedHistory.map(h => formatDateShort(h.report_date));
+  const values = sortedHistory.map(h => Number(h.focus_minutes || 0));
+  
+  // 调试信息
+  console.log('专注力成长曲线数据:', {
+    dates,
+    values,
+    rawHistory: report.value.history,
+    currentFocus: report.value.focus_minutes
+  });
 
   const option = {
     grid: { top: 20, right: 10, bottom: 20, left: 30, containLabel: true },
@@ -285,6 +406,123 @@ const initLineChart = () => {
   chart.setOption(option);
 };
 
+// 初始化专注时长与作业质量图表
+const initFocusHomeworkChart = () => {
+  if (!focusHomeworkChartRef.value || !report.value?.correlations?.focus_homework?.hasEnoughData) return;
+  const chart = echarts.init(focusHomeworkChartRef.value);
+  const data = report.value.correlations.focus_homework;
+
+  // 准备分组柱状图数据
+  const ranges = data.groupedData.map(g => g.range);
+  const aData = data.groupedData.map(g => g.A);
+  const bData = data.groupedData.map(g => g.B);
+  const cData = data.groupedData.map(g => g.C);
+
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
+    },
+    legend: {
+      data: ['A级', 'B级', 'C级'],
+      top: 10,
+      textStyle: { fontSize: 11 }
+    },
+    grid: { top: 40, right: 10, bottom: 20, left: 40, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: ranges,
+      axisLabel: { fontSize: 10, rotate: 0 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 10 }
+    },
+    series: [
+      {
+        name: 'A级',
+        type: 'bar',
+        stack: 'total',
+        data: aData,
+        itemStyle: { color: '#10b981' }
+      },
+      {
+        name: 'B级',
+        type: 'bar',
+        stack: 'total',
+        data: bData,
+        itemStyle: { color: '#f59e0b' }
+      },
+      {
+        name: 'C级',
+        type: 'bar',
+        stack: 'total',
+        data: cData,
+        itemStyle: { color: '#ef4444' }
+      }
+    ]
+  };
+  chart.setOption(option);
+};
+
+// 初始化走神次数与作业质量图表
+const initDistractionHomeworkChart = () => {
+  if (!distractionHomeworkChartRef.value || !report.value?.correlations?.distraction_homework?.hasEnoughData) return;
+  const chart = echarts.init(distractionHomeworkChartRef.value);
+  const data = report.value.correlations.distraction_homework;
+
+  const ranges = data.groupedData.map(g => g.range);
+  const aData = data.groupedData.map(g => g.A);
+  const bData = data.groupedData.map(g => g.B);
+  const cData = data.groupedData.map(g => g.C);
+
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
+    },
+    legend: {
+      data: ['A级', 'B级', 'C级'],
+      top: 10,
+      textStyle: { fontSize: 11 }
+    },
+    grid: { top: 40, right: 10, bottom: 20, left: 40, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: ranges,
+      axisLabel: { fontSize: 10 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 10 }
+    },
+    series: [
+      {
+        name: 'A级',
+        type: 'bar',
+        stack: 'total',
+        data: aData,
+        itemStyle: { color: '#10b981' }
+      },
+      {
+        name: 'B级',
+        type: 'bar',
+        stack: 'total',
+        data: bData,
+        itemStyle: { color: '#f59e0b' }
+      },
+      {
+        name: 'C级',
+        type: 'bar',
+        stack: 'total',
+        data: cData,
+        itemStyle: { color: '#ef4444' }
+      }
+    ]
+  };
+  chart.setOption(option);
+};
+
 onMounted(async () => {
   const token = route.query.token;
   if (!token) { loading.value = false; return; }
@@ -296,6 +534,9 @@ onMounted(async () => {
       nextTick(() => {
         initRadarChart();
         initLineChart();
+        // 初始化关联分析图表
+        initFocusHomeworkChart();
+        initDistractionHomeworkChart();
       });
     }
   } catch (err) { console.error(err); }

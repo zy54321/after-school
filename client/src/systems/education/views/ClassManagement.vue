@@ -50,8 +50,11 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="$t('common.action')" width="150">
+        <el-table-column :label="$t('common.action')" width="220">
           <template #default="scope">
+            <el-button size="small" type="info" link @click="openEnrollmentHistory(scope.row)">
+              📋 报名历史
+            </el-button>
             <el-button size="small" type="primary" link @click="openEditDialog(scope.row)">{{ $t('common.edit')
               }}</el-button>
             <el-button size="small" type="danger" link @click="handleDelete(scope.row)">{{ $t('common.delete')
@@ -126,6 +129,60 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 报名历史弹窗 -->
+    <el-dialog v-model="historyDialogVisible" title="课程报名历史" width="900px">
+      <div v-if="historyData.class" class="mb-4">
+        <el-descriptions :column="3" border>
+          <el-descriptions-item label="课程名称">{{ historyData.class.class_name }}</el-descriptions-item>
+          <el-descriptions-item label="计费类型">
+            <el-tag :type="historyData.class.billing_type === 'time' ? 'warning' : 'success'">
+              {{ historyData.class.billing_type === 'time' ? '按期' : '按次' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="报名总数">{{ historyData.enrollments?.length || 0 }} 人</el-descriptions-item>
+        </el-descriptions>
+      </div>
+
+      <el-table :data="historyData.enrollments" stripe height="400" v-loading="historyLoading">
+        <el-table-column prop="student_name" label="学员姓名" width="120" />
+        <el-table-column prop="parent_name" label="家长姓名" width="120" />
+        <el-table-column prop="parent_phone" label="联系电话" width="130" />
+        <el-table-column label="报名时间" width="180">
+          <template #default="scope">
+            {{ formatDateTime(scope.row.created_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="有效期至" width="120">
+          <template #default="scope">
+            <span v-if="scope.row.expired_at" :class="isExpired(scope.row.expired_at) ? 'text-red-500' : 'text-green-600'">
+              {{ formatDate(scope.row.expired_at) }}
+            </span>
+            <span v-else class="text-gray-400">--</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="scope">
+            <el-tag :type="scope.row.status === '有效' ? 'success' : 'info'" size="small">
+              {{ scope.row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="学员状态" width="100">
+          <template #default="scope">
+            <el-tag :type="scope.row.student_status === 'active' ? 'success' : 'info'" size="small">
+              {{ scope.row.student_status === 'active' ? '在读' : '已退学' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="historyDialogVisible = false">关闭</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -140,6 +197,9 @@ const tableData = ref([]);
 const loading = ref(false);
 const dialogVisible = ref(false);
 const isEdit = ref(false);
+const historyDialogVisible = ref(false);
+const historyLoading = ref(false);
+const historyData = ref({ class: null, enrollments: [] });
 
 const form = reactive({
   id: null, class_name: '', billing_type: 'time', teacher_name: '', description: '', is_active: true,
@@ -148,10 +208,19 @@ const form = reactive({
 const displayFee = ref(0);
 
 const formatDate = (dateStr) => dateStr ? dateStr.split('T')[0] : '--';
+const formatDateTime = (dateStr) => {
+  if (!dateStr) return '--';
+  const date = new Date(dateStr);
+  return date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
 const formatDays = (daysStr) => {
   if (!daysStr) return '';
   const arr = Array.isArray(daysStr) ? daysStr : daysStr.split(',');
   return arr.map(d => t(`class.week.${d}`)).join(', ');
+};
+const isExpired = (expiredAt) => {
+  if (!expiredAt) return false;
+  return new Date(expiredAt) < new Date();
 };
 
 const calculateEndDate = () => {
@@ -230,6 +299,24 @@ const handleDelete = async (row) => {
     if (res.data.code === 200) { ElMessage.success(t('common.success')); fetchClasses(); }
     else { ElMessage.error(res.data.msg); }
   } catch (err) { if (err !== 'cancel') ElMessage.error(t('common.failed')); }
+};
+
+const openEnrollmentHistory = async (row) => {
+  historyDialogVisible.value = true;
+  historyLoading.value = true;
+  try {
+    const res = await axios.get(`/api/classes/${row.id}/enrollment-history`);
+    if (res.data.code === 200) {
+      historyData.value = res.data.data;
+    } else {
+      ElMessage.error(res.data.msg || '获取报名历史失败');
+    }
+  } catch (err) {
+    console.error(err);
+    ElMessage.error('获取报名历史失败');
+  } finally {
+    historyLoading.value = false;
+  }
 };
 
 onMounted(() => { fetchClasses(); });

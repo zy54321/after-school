@@ -115,6 +115,8 @@ export default {
     colSchedule: 'Schedule',
     colFee: 'Tuition',
     colTeacher: 'Teacher',
+    colDesc: 'Description',
+    colStatus: 'Status',
     typeTime: 'Term/Month',
     typeCount: 'Per Lesson',
     dialogCreateTitle: 'Create New Class',

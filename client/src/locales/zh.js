@@ -121,6 +121,8 @@ export default {
     colSchedule: '开课/排课',
     colFee: '学费',
     colTeacher: '负责老师',
+    colDesc: '备注/描述',
+    colStatus: '状态',
     typeTime: '包期/月',
     typeCount: '按次',
     // 弹窗

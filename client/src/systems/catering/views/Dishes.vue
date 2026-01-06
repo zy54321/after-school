@@ -15,7 +15,7 @@
       </div>
     </el-card>
 
-    <div class="flex-1 overflow-y-auto pr-2">
+    <div class="flex-1 overflow-y-auto overflow-x-hidden pr-2">
       <el-row :gutter="20">
         <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="dish in dishes" :key="dish.id" class="mb-4">
           <el-card :body-style="{ padding: '0px' }" class="hover:shadow-lg transition-all relative group">

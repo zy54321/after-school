@@ -20,11 +20,7 @@ const getStudents = async (req, res) => {
           ) as has_signed_today
         FROM student_course_balance scb
         JOIN classes c ON scb.class_id = c.id
-        WHERE (
-          (c.billing_type = 'time' AND scb.expired_at >= CURRENT_DATE)
-          OR
-          (COALESCE(c.billing_type, 'count') != 'time' AND scb.remaining_lessons > 0)
-        )
+        WHERE scb.expired_at >= CURRENT_DATE
       )
       SELECT 
         s.*,
@@ -240,20 +236,23 @@ const getStudentDetail = async (req, res) => {
     }
     const student = studentRes.rows[0];
 
-    const courseRes = await client.query(
+    // 根据学员状态决定查询条件
+    const courseQuery = student.status === 'active'
+      ? `
+        SELECT scb.*, c.class_name, c.tuition_fee
+        FROM student_course_balance scb
+        JOIN classes c ON scb.class_id = c.id
+        WHERE scb.student_id = $1
+        AND scb.expired_at >= CURRENT_DATE
       `
-      SELECT scb.*, c.class_name, c.tuition_fee
-      FROM student_course_balance scb
-      JOIN classes c ON scb.class_id = c.id
-      WHERE scb.student_id = $1
-      AND (
-        (c.billing_type = 'time' AND scb.expired_at >= CURRENT_DATE)
-        OR
-        (COALESCE(c.billing_type, 'count') != 'time' AND scb.remaining_lessons > 0)
-      )
-    `,
-      [id]
-    );
+      : `
+        SELECT scb.*, c.class_name, c.tuition_fee
+        FROM student_course_balance scb
+        JOIN classes c ON scb.class_id = c.id
+        WHERE scb.student_id = $1
+      `;
+    
+    const courseRes = await client.query(courseQuery, [id]);
 
     const attendanceRes = await client.query(
       `
@@ -325,8 +324,7 @@ const dropClass = async (req, res) => {
     const updateRes = await client.query(
       `
       UPDATE student_course_balance
-      SET remaining_lessons = 0, 
-          expired_at = CURRENT_DATE - INTERVAL '1 day',
+      SET expired_at = CURRENT_DATE - INTERVAL '1 day',
           updated_at = CURRENT_TIMESTAMP
       WHERE student_id = $1 AND class_id = $2
       RETURNING *
@@ -343,7 +341,7 @@ const dropClass = async (req, res) => {
       SELECT count(*) FROM student_course_balance 
       WHERE student_id = $1 
       AND class_id != $2
-      AND (expired_at >= CURRENT_DATE OR remaining_lessons > 0)
+      AND expired_at >= CURRENT_DATE
     `,
       [id, class_id]
     );

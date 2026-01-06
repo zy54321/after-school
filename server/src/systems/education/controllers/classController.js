@@ -72,11 +72,41 @@ const updateClass = async (req, res) => {
   } = req.body;
 
   try {
+    // 先查询当前课程状态
+    const currentClass = await pool.query(
+      'SELECT is_active FROM classes WHERE id = $1',
+      [id]
+    );
+
+    if (currentClass.rows.length === 0) {
+      return res.status(404).json({ code: 404, msg: '课程不存在' });
+    }
+
+    const wasActive = currentClass.rows[0].is_active;
+    const nowActive = is_active;
+
+    // 如果课程从激活变为停用，记录停用时间
+    let deactivatedAt = null;
+    if (wasActive && !nowActive) {
+      deactivatedAt = new Date();
+    } else if (!wasActive && nowActive) {
+      // 如果课程从停用变为激活，清除停用时间
+      deactivatedAt = null;
+    } else if (!wasActive && !nowActive) {
+      // 如果课程本来就是停用状态，保持原有停用时间（不更新）
+      const currentDeactivated = await pool.query(
+        'SELECT deactivated_at FROM classes WHERE id = $1',
+        [id]
+      );
+      deactivatedAt = currentDeactivated.rows[0]?.deactivated_at || null;
+    }
+
     const query = `
       UPDATE classes 
       SET class_name=$1, tuition_fee=$2, billing_type=$3, teacher_name=$4, description=$5, is_active=$6,
-          start_date=$7, end_date=$8, schedule_days=$9, time_range=$10, duration_value=$11
-      WHERE id=$12
+          start_date=$7, end_date=$8, schedule_days=$9, time_range=$10, duration_value=$11,
+          deactivated_at=$12
+      WHERE id=$13
       RETURNING *
     `;
     
@@ -85,7 +115,7 @@ const updateClass = async (req, res) => {
     const values = [
       class_name, tuition_fee, billing_type, teacher_name, description, is_active,
       start_date, end_date, daysStr, time_range, duration_value,
-      id
+      deactivatedAt, id
     ];
     
     const result = await pool.query(query, values);
@@ -105,7 +135,7 @@ const deleteClass = async (req, res) => {
     const checkBalance = await pool.query(`
       SELECT COUNT(*) as count FROM student_course_balance
       WHERE class_id = $1 
-      AND (expired_at IS NULL OR expired_at >= CURRENT_DATE)
+      AND expired_at >= CURRENT_DATE
     `, [id]);
 
     if (parseInt(checkBalance.rows[0].count) > 0) {
@@ -158,5 +188,58 @@ const deleteClass = async (req, res) => {
   }
 };
 
-module.exports = { getAllClasses, getActiveClasses, createClass, updateClass, deleteClass };
+// 6. 获取课程报名历史
+const getClassEnrollmentHistory = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 先查询课程信息
+    const classRes = await pool.query(
+      'SELECT id, class_name, billing_type FROM classes WHERE id = $1',
+      [id]
+    );
+
+    if (classRes.rows.length === 0) {
+      return res.status(404).json({ code: 404, msg: '课程不存在' });
+    }
+
+    // 查询该课程的所有报名记录（包括已过期的）
+    const enrollmentRes = await pool.query(
+      `
+      SELECT 
+        scb.id,
+        scb.student_id,
+        scb.expired_at,
+        scb.updated_at as created_at,
+        scb.updated_at,
+        s.name as student_name,
+        s.parent_name,
+        s.parent_phone,
+        s.status as student_status,
+        CASE 
+          WHEN scb.expired_at >= CURRENT_DATE THEN '有效'
+          ELSE '已过期'
+        END as status
+      FROM student_course_balance scb
+      JOIN students s ON scb.student_id = s.id
+      WHERE scb.class_id = $1
+      ORDER BY scb.updated_at DESC
+    `,
+      [id]
+    );
+
+    res.json({
+      code: 200,
+      data: {
+        class: classRes.rows[0],
+        enrollments: enrollmentRes.rows,
+      },
+    });
+  } catch (err) {
+    console.error('获取报名历史失败:', err);
+    res.status(500).json({ code: 500, msg: '获取失败', error: err.message });
+  }
+};
+
+module.exports = { getAllClasses, getActiveClasses, createClass, updateClass, deleteClass, getClassEnrollmentHistory };
 

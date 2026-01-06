@@ -186,10 +186,30 @@ exports.updateDish = async (req, res) => {
 
 // 删除菜品
 exports.deleteDish = async (req, res) => {
+  const { id } = req.params;
   try {
-    await pool.query('DELETE FROM dishes WHERE id = $1', [req.params.id]);
+    // 检查是否在食谱中使用
+    const menuCheck = await pool.query(
+      'SELECT COUNT(*) as count FROM weekly_menus WHERE dish_id = $1',
+      [id]
+    );
+    
+    if (parseInt(menuCheck.rows[0].count) > 0) {
+      return res.status(400).json({
+        code: 400,
+        msg: '该菜品已在食谱排期中使用，无法删除。请先移除相关食谱后再删除。',
+      });
+    }
+
+    await pool.query('DELETE FROM dishes WHERE id = $1', [id]);
     res.json({ code: 200, msg: '删除成功' });
   } catch (err) {
+    if (err.code === '23503') {
+      return res.status(400).json({
+        code: 400,
+        msg: '该菜品存在关联数据，无法删除',
+      });
+    }
     res.status(500).json({ code: 500, msg: '删除失败', error: err.message });
   }
 };
@@ -200,6 +220,25 @@ exports.deleteDish = async (req, res) => {
 exports.getMenus = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
+    // 获取所有学员的过敏信息
+    const studentsRes = await pool.query(
+      `SELECT id, allergies FROM students WHERE status = 'active' AND allergies IS NOT NULL AND allergies != ''`
+    );
+    
+    // 构建过敏原到学员的映射
+    const allergenToStudents = {};
+    studentsRes.rows.forEach(student => {
+      if (student.allergies) {
+        const allergies = student.allergies.split(/[,，、]/).map(a => a.trim()).filter(a => a);
+        allergies.forEach(allergen => {
+          if (!allergenToStudents[allergen]) {
+            allergenToStudents[allergen] = new Set();
+          }
+          allergenToStudents[allergen].add(student.id);
+        });
+      }
+    });
+
     const query = `
       SELECT 
         wm.id, 
@@ -223,7 +262,30 @@ exports.getMenus = async (req, res) => {
       ORDER BY wm.plan_date, wm.meal_type
     `;
     const result = await pool.query(query, [start_date, end_date]);
-    res.json({ code: 200, data: result.rows });
+    
+    // 处理过敏原匹配
+    const processedRows = result.rows.map(row => {
+      const allergens = row.allergens ? row.allergens.split(',').map(a => a.trim()) : [];
+      const matchedAllergies = allergens.filter(a => allergenToStudents[a]);
+      
+      // 计算受影响的学员数（去重）
+      const affectedStudentIds = new Set();
+      matchedAllergies.forEach(allergen => {
+        if (allergenToStudents[allergen]) {
+          allergenToStudents[allergen].forEach(id => affectedStudentIds.add(id));
+        }
+      });
+      
+      return {
+        ...row,
+        allergens: row.allergens,
+        matched_allergens: matchedAllergies.length > 0 ? matchedAllergies.join(',') : null,
+        has_matched_allergen: matchedAllergies.length > 0,
+        affected_students_count: affectedStudentIds.size
+      };
+    });
+
+    res.json({ code: 200, data: processedRows });
   } catch (err) {
     res
       .status(500)
@@ -260,8 +322,28 @@ exports.removeMenuItem = async (req, res) => {
 exports.getShoppingList = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
-    const countRes = await pool.query('SELECT count(*) FROM students');
-    const studentCount = parseInt(countRes.rows[0].count) || 0;
+    // 计算实际人数：优先使用历史平均签到人数，如果没有则使用活跃学员数
+    const avgAttendanceRes = await pool.query(
+      `SELECT AVG(daily_count) as avg_count
+       FROM (
+         SELECT DATE(sign_in_time) as date, COUNT(DISTINCT student_id) as daily_count
+         FROM attendance
+         WHERE DATE(sign_in_time) >= CURRENT_DATE - INTERVAL '30 days'
+         GROUP BY DATE(sign_in_time)
+       ) daily_stats`
+    );
+    
+    let studentCount = 0;
+    if (avgAttendanceRes.rows[0]?.avg_count) {
+      studentCount = Math.ceil(parseFloat(avgAttendanceRes.rows[0].avg_count));
+    } else {
+      // 兜底：使用活跃学员数
+      const countRes = await pool.query("SELECT count(*) FROM students WHERE status = 'active'");
+      studentCount = parseInt(countRes.rows[0].count) || 0;
+    }
+    
+    // 如果还是没有，使用10人基准
+    if (studentCount === 0) studentCount = 10;
 
     const query = `
       SELECT 
@@ -270,12 +352,17 @@ exports.getShoppingList = async (req, res) => {
         i.name,
         i.unit,
         SUM(di.quantity) as benchmark_total,
-        i.price
+        i.price,
+        i.allergen_type,
+        CASE 
+          WHEN i.allergen_type != '无' THEN true
+          ELSE false
+        END as has_allergen
       FROM weekly_menus wm
       JOIN dish_ingredients di ON wm.dish_id = di.dish_id
       JOIN ingredients i ON di.ingredient_id = i.id
       WHERE wm.plan_date >= $1 AND wm.plan_date <= $2
-      GROUP BY i.source, i.category, i.name, i.unit, i.price
+      GROUP BY i.source, i.category, i.name, i.unit, i.price, i.allergen_type
       ORDER BY 
         CASE i.source 
           WHEN '盒马鲜生' THEN 1 
@@ -309,6 +396,8 @@ exports.getShoppingList = async (req, res) => {
         price: row.price,
         total_quantity: parseFloat(actualQuantity.toFixed(2)),
         total_cost: parseFloat(actualCost.toFixed(2)),
+        allergen_type: row.allergen_type,
+        has_allergen: row.has_allergen,
       };
 
       groupedData[row.source].items.push(item);
@@ -334,16 +423,16 @@ exports.getShoppingList = async (req, res) => {
 exports.getCostAnalysis = async (req, res) => {
   const { start_date, end_date } = req.query;
   try {
-    // 1. 获取兜底人数
-    const activeRes = await pool.query("SELECT count(*) FROM students");
+    // 1. 获取兜底人数（活跃学员数）
+    const activeRes = await pool.query("SELECT count(*) FROM students WHERE status = 'active'");
     const activeCount = parseInt(activeRes.rows[0].count) || 0;
 
-    // 2. 获取每日实际人数
+    // 2. 获取每日实际签到人数（使用attendance表，更准确）
     const studentRes = await pool.query(
-      `SELECT to_char(report_date, 'YYYY-MM-DD') as date, COUNT(*) as count
-       FROM daily_reports
-       WHERE report_date >= $1 AND report_date <= $2
-       GROUP BY date`,
+      `SELECT to_char(DATE(sign_in_time), 'YYYY-MM-DD') as date, COUNT(DISTINCT student_id) as count
+       FROM attendance
+       WHERE DATE(sign_in_time) >= $1::date AND DATE(sign_in_time) <= $2::date
+       GROUP BY DATE(sign_in_time)`,
       [start_date, end_date]
     );
     const studentCounts = {};
