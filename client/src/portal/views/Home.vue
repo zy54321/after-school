@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { Location, User, Lock } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import axios from 'axios';
+import { initUserPermissions, clearUserPermissions } from '@/composables/usePermission';
 
 const router = useRouter();
 const { locale, t } = useI18n();
@@ -156,6 +157,16 @@ const handleLogin = async () => {
           isLoggedIn.value = true;
           userInfo.value = res.data.data;
 
+          // 加载用户权限
+          try {
+            const permRes = await axios.get('/api/permissions/auth/permissions');
+            if (permRes.data.code === 200) {
+              initUserPermissions(permRes.data.data);
+            }
+          } catch (permError) {
+            console.error('加载用户权限失败:', permError);
+          }
+
           ElMessage.success('登录成功');
           loginVisible.value = false;
 
@@ -197,6 +208,8 @@ const handleLogin = async () => {
 const handleLogout = () => {
   localStorage.removeItem('user_token');
   localStorage.removeItem('user_info');
+  localStorage.removeItem('user_permissions');
+  clearUserPermissions();
   isLoggedIn.value = false;
   userInfo.value = {};
   loginForm.username = '';

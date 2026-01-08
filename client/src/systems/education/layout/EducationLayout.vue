@@ -31,7 +31,7 @@
             <span>{{ $t('menu.attendance') }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/system/orders" v-if="role === 'admin'"> <el-icon>
+          <el-menu-item index="/system/orders" v-if="hasPermission('order:read')"> <el-icon>
               <Money />
             </el-icon>
             <span>{{ $t('menu.orders') }}</span>
@@ -43,11 +43,32 @@
             <span>{{ $t('menu.classes') }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/system/users" v-if="role === 'admin'"> <el-icon>
+          <el-menu-item index="/system/users" v-if="hasPermission('user:read')"> <el-icon>
               <Tools />
             </el-icon>
             <span>{{ $t('menu.users') }}</span>
           </el-menu-item>
+
+          <el-sub-menu index="/system/permissions" v-if="hasPermission('permission:read')">
+            <template #title>
+              <el-icon>
+                <Lock />
+              </el-icon>
+              <span>权限管理</span>
+            </template>
+            <el-menu-item index="/system/permissions">
+              <el-icon>
+                <Lock />
+              </el-icon>
+              权限配置
+            </el-menu-item>
+            <el-menu-item index="/system/user-roles">
+              <el-icon>
+                <User />
+              </el-icon>
+              用户角色分配
+            </el-menu-item>
+          </el-sub-menu>
 
           <el-sub-menu index="/system/catering">
             <template #title>
@@ -127,11 +148,13 @@
 </template>
 
 <script setup>
-import { Odometer, User, Calendar, Money, School, Tools, MapLocation, HomeFilled, Food, Apple, Dish, ShoppingCart, DataBoard } from '@element-plus/icons-vue';
+import { Odometer, User, Calendar, Money, School, Tools, MapLocation, HomeFilled, Food, Apple, Dish, ShoppingCart, DataBoard, Lock } from '@element-plus/icons-vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { usePermission, clearUserPermissions } from '@/composables/usePermission';
+import axios from 'axios';
 
 const router = useRouter();
 const route = useRoute();
@@ -142,9 +165,27 @@ const userInfoStr = localStorage.getItem('user_info');
 const userInfo = userInfoStr ? JSON.parse(userInfoStr) : {};
 const role = userInfo.role || 'teacher';
 
+// 权限检查
+const { hasPermission } = usePermission();
+
+// 加载用户权限
+onMounted(async () => {
+  try {
+    const res = await axios.get('/api/permissions/auth/permissions');
+    if (res.data.code === 200) {
+      const { initUserPermissions } = await import('@/composables/usePermission');
+      initUserPermissions(res.data.data);
+    }
+  } catch (error) {
+    console.error('加载用户权限失败:', error);
+  }
+});
+
 const handleLogout = () => {
   localStorage.removeItem('user_token');
   localStorage.removeItem('user_info');
+  localStorage.removeItem('user_permissions');
+  clearUserPermissions();
   router.push('/');
   ElMessage.success('Logout success');
 };

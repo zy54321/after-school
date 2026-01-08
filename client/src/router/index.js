@@ -83,6 +83,18 @@ const routes = [
         component: () => import('../systems/education/views/UserList.vue'),
       },
       {
+        path: 'permissions',
+        name: 'Permissions',
+        component: () => import('../systems/education/views/PermissionManagement.vue'),
+        meta: { title: '权限配置管理' },
+      },
+      {
+        path: 'user-roles',
+        name: 'UserRoles',
+        component: () => import('../systems/education/views/UserRoleAssignment.vue'),
+        meta: { title: '用户角色分配' },
+      },
+      {
         path: 'grid-map',
         name: 'GridMap',
         component: () => import('../systems/education/views/StudentMap.vue'),

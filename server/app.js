@@ -50,6 +50,7 @@ const familyRoutes = require('./src/systems/family/routes/familyRoutes');
 const mapboxRoutes = require('./src/systems/analytics/routes/mapboxRoutes');
 const dictionaryRoutes = require('./src/systems/analytics/routes/dictionaryRoutes');
 const demographicsRoutes = require('./src/systems/analytics/routes/demographicsRoutes');
+const permissionRoutes = require('./src/systems/education/routes/permissionRoutes');
 
 // 🔥 信任反向代理
 app.set('trust proxy', 1);
@@ -113,6 +114,7 @@ app.use('/api/reports', dailyReportRoutes);
 app.use('/api/catering', cateringRoutes);
 app.use('/api/amap', checkAuth, amapRoutes);
 app.use('/api/users', checkAuth, checkAdmin, userRoutes);
+app.use('/api/permissions', permissionRoutes); // 权限管理路由（内部已包含权限检查）
 app.use('/api/mapbox/dictionary', checkAuth, dictionaryRoutes);
 app.use('/api/mapbox', checkAuth, mapboxRoutes);
 app.use('/api/analytics/demographics', checkAuth, demographicsRoutes);
