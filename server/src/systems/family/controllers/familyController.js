@@ -215,6 +215,29 @@ exports.logAction = async (req, res) => {
   }
 };
 
+// 🎒 辅助函数：存入背包（支持合并数量）
+const addToBackpack = async (client, memberId, rewardId, pointsLogId) => {
+  // 检查是否已存在相同的未使用物品
+  const existingRes = await client.query(
+    'SELECT id, quantity FROM family_backpack WHERE member_id=$1 AND reward_id=$2 AND status=$3',
+    [memberId, rewardId, 'unused']
+  );
+
+  if (existingRes.rows.length > 0) {
+    // 如果存在，增加数量
+    await client.query(
+      'UPDATE family_backpack SET quantity=quantity+1, updated_at=CURRENT_TIMESTAMP WHERE id=$1',
+      [existingRes.rows[0].id]
+    );
+  } else {
+    // 如果不存在，创建新记录
+    await client.query(
+      'INSERT INTO family_backpack (member_id, reward_id, points_log_id, quantity, status, obtained_at) VALUES ($1, $2, $3, 1, $4, CURRENT_TIMESTAMP)',
+      [memberId, rewardId, pointsLogId, 'unused']
+    );
+  }
+};
+
 exports.redeemReward = async (req, res) => {
   const { memberId, rewardId } = req.body;
   const client = await pool.connect();
@@ -248,17 +271,183 @@ exports.redeemReward = async (req, res) => {
       if (parseInt(count.rows[0].count) >= reward.limit_max)
         throw new Error('已达兑换上限');
     }
-    await client.query(
-      'INSERT INTO family_points_log (member_id, reward_id, description, points_change) VALUES ($1, $2, $3, $4)',
+    
+    // 记录积分流水
+    const logRes = await client.query(
+      'INSERT INTO family_points_log (member_id, reward_id, description, points_change) VALUES ($1, $2, $3, $4) RETURNING id',
       [memberId, rewardId, `兑换：${reward.name}`, -reward.cost]
     );
+    const pointsLogId = logRes.rows[0].id;
+    
+    // 🎒 存入背包
+    await addToBackpack(client, memberId, rewardId, pointsLogId);
+    
     await client.query('COMMIT');
-    res.json({ code: 200, msg: '兑换成功' });
+    res.json({ code: 200, msg: '兑换成功！物品已存入背包 🎒' });
   } catch (err) {
     await client.query('ROLLBACK');
     res.json({ code: 400, msg: err.message });
   } finally {
     client.release();
+  }
+};
+
+// 转赠背包物品
+exports.transferBackpackItem = async (req, res) => {
+  const { backpackId, fromMemberId, toMemberId, quantity } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (!backpackId || !fromMemberId || !toMemberId) {
+      throw new Error('参数不完整');
+    }
+
+    if (fromMemberId === toMemberId) {
+      throw new Error('不能转赠给自己');
+    }
+
+    const transferQuantity = quantity || 1;
+
+    // 查询源背包物品
+    const backpackRes = await client.query(
+      'SELECT * FROM family_backpack WHERE id = $1 AND member_id = $2',
+      [backpackId, fromMemberId]
+    );
+
+    if (backpackRes.rows.length === 0) {
+      throw new Error('背包物品不存在或不属于该成员');
+    }
+
+    const backpackItem = backpackRes.rows[0];
+
+    if (backpackItem.status !== 'unused') {
+      throw new Error('只能转赠未使用的物品');
+    }
+
+    if (backpackItem.quantity < transferQuantity) {
+      throw new Error(`数量不足，当前数量：${backpackItem.quantity}`);
+    }
+
+    // 验证目标成员是否存在（必须是同一家庭的成员）
+    const fromMemberRes = await client.query(
+      'SELECT parent_id FROM family_members WHERE id = $1',
+      [fromMemberId]
+    );
+    const toMemberRes = await client.query(
+      'SELECT parent_id FROM family_members WHERE id = $1',
+      [toMemberId]
+    );
+
+    if (fromMemberRes.rows.length === 0 || toMemberRes.rows.length === 0) {
+      throw new Error('成员不存在');
+    }
+
+    if (fromMemberRes.rows[0].parent_id !== toMemberRes.rows[0].parent_id) {
+      throw new Error('只能转赠给同一家庭的成员');
+    }
+
+    // 更新源背包物品
+    if (backpackItem.quantity === transferQuantity) {
+      // 如果全部转赠，更新成员ID
+      await client.query(
+        'UPDATE family_backpack SET member_id=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+        [toMemberId, backpackId]
+      );
+    } else {
+      // 如果部分转赠，减少源数量并创建目标记录
+      await client.query(
+        'UPDATE family_backpack SET quantity=quantity-$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+        [transferQuantity, backpackId]
+      );
+      
+      // 检查目标成员是否已有相同物品
+      const existingRes = await client.query(
+        'SELECT id, quantity FROM family_backpack WHERE member_id=$1 AND reward_id=$2 AND status=$3',
+        [toMemberId, backpackItem.reward_id, 'unused']
+      );
+
+      if (existingRes.rows.length > 0) {
+        // 如果存在，增加数量
+        await client.query(
+          'UPDATE family_backpack SET quantity=quantity+$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+          [transferQuantity, existingRes.rows[0].id]
+        );
+      } else {
+        // 如果不存在，创建新记录
+        await client.query(
+          `INSERT INTO family_backpack (member_id, reward_id, points_log_id, quantity, status, obtained_at) 
+           VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+          [
+            toMemberId,
+            backpackItem.reward_id,
+            backpackItem.points_log_id,
+            transferQuantity,
+            'unused',
+          ]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ code: 200, msg: '转赠成功' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('transferBackpackItem 错误:', err);
+    res.json({ code: 400, msg: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+// 获取使用记录
+exports.getUsageHistory = async (req, res) => {
+  const { memberId, rewardId, limit } = req.query;
+  try {
+    if (!memberId) {
+      return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
+    }
+
+    let query = `
+      SELECT 
+        ul.*,
+        r.name as reward_name,
+        r.icon as reward_icon,
+        r.type as reward_type
+      FROM family_backpack_usage_log ul
+      LEFT JOIN family_rewards r ON ul.reward_id = r.id
+      WHERE ul.member_id = $1
+    `;
+    const params = [memberId];
+
+    // 如果指定了奖励ID，筛选特定奖励
+    if (rewardId) {
+      query += ' AND ul.reward_id = $2';
+      params.push(rewardId);
+    }
+
+    query += ' ORDER BY ul.used_at DESC';
+
+    // 限制返回数量
+    if (limit) {
+      query += ` LIMIT $${params.length + 1}`;
+      params.push(parseInt(limit) || 50);
+    } else {
+      query += ' LIMIT 50';
+    }
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      code: 200,
+      data: {
+        history: result.rows,
+        total: result.rows.length,
+      },
+    });
+  } catch (err) {
+    console.error('getUsageHistory 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取使用记录失败', error: err.message });
   }
 };
 
@@ -302,17 +491,182 @@ exports.settleAuction = async (req, res) => {
         throw new Error('已达竞拍上限');
     }
 
-    await client.query(
-      'INSERT INTO family_points_log (member_id, reward_id, description, points_change) VALUES ($1, $2, $3, $4)',
+    // 记录积分流水
+    const logRes = await client.query(
+      'INSERT INTO family_points_log (member_id, reward_id, description, points_change) VALUES ($1, $2, $3, $4) RETURNING id',
       [memberId, auctionId, `竞拍得标：${item.name}`, -bidPoints]
     );
+    const pointsLogId = logRes.rows[0].id;
+    
+    // 🎒 存入背包
+    await addToBackpack(client, memberId, auctionId, pointsLogId);
+    
     await client.query('COMMIT');
-    res.json({ code: 200, msg: '竞拍结算成功！' });
+    res.json({ code: 200, msg: '竞拍结算成功！物品已存入背包 🎒' });
   } catch (err) {
     await client.query('ROLLBACK');
     res.json({ code: 400, msg: err.message });
   } finally {
     client.release();
+  }
+};
+
+// 转赠背包物品
+exports.transferBackpackItem = async (req, res) => {
+  const { backpackId, fromMemberId, toMemberId, quantity } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (!backpackId || !fromMemberId || !toMemberId) {
+      throw new Error('参数不完整');
+    }
+
+    if (fromMemberId === toMemberId) {
+      throw new Error('不能转赠给自己');
+    }
+
+    const transferQuantity = quantity || 1;
+
+    // 查询源背包物品
+    const backpackRes = await client.query(
+      'SELECT * FROM family_backpack WHERE id = $1 AND member_id = $2',
+      [backpackId, fromMemberId]
+    );
+
+    if (backpackRes.rows.length === 0) {
+      throw new Error('背包物品不存在或不属于该成员');
+    }
+
+    const backpackItem = backpackRes.rows[0];
+
+    if (backpackItem.status !== 'unused') {
+      throw new Error('只能转赠未使用的物品');
+    }
+
+    if (backpackItem.quantity < transferQuantity) {
+      throw new Error(`数量不足，当前数量：${backpackItem.quantity}`);
+    }
+
+    // 验证目标成员是否存在（必须是同一家庭的成员）
+    const fromMemberRes = await client.query(
+      'SELECT parent_id FROM family_members WHERE id = $1',
+      [fromMemberId]
+    );
+    const toMemberRes = await client.query(
+      'SELECT parent_id FROM family_members WHERE id = $1',
+      [toMemberId]
+    );
+
+    if (fromMemberRes.rows.length === 0 || toMemberRes.rows.length === 0) {
+      throw new Error('成员不存在');
+    }
+
+    if (fromMemberRes.rows[0].parent_id !== toMemberRes.rows[0].parent_id) {
+      throw new Error('只能转赠给同一家庭的成员');
+    }
+
+    // 更新源背包物品
+    if (backpackItem.quantity === transferQuantity) {
+      // 如果全部转赠，更新成员ID
+      await client.query(
+        'UPDATE family_backpack SET member_id=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+        [toMemberId, backpackId]
+      );
+    } else {
+      // 如果部分转赠，减少源数量并创建目标记录
+      await client.query(
+        'UPDATE family_backpack SET quantity=quantity-$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+        [transferQuantity, backpackId]
+      );
+      
+      // 检查目标成员是否已有相同物品
+      const existingRes = await client.query(
+        'SELECT id, quantity FROM family_backpack WHERE member_id=$1 AND reward_id=$2 AND status=$3',
+        [toMemberId, backpackItem.reward_id, 'unused']
+      );
+
+      if (existingRes.rows.length > 0) {
+        // 如果存在，增加数量
+        await client.query(
+          'UPDATE family_backpack SET quantity=quantity+$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+          [transferQuantity, existingRes.rows[0].id]
+        );
+      } else {
+        // 如果不存在，创建新记录
+        await client.query(
+          `INSERT INTO family_backpack (member_id, reward_id, points_log_id, quantity, status, obtained_at) 
+           VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+          [
+            toMemberId,
+            backpackItem.reward_id,
+            backpackItem.points_log_id,
+            transferQuantity,
+            'unused',
+          ]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ code: 200, msg: '转赠成功' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('transferBackpackItem 错误:', err);
+    res.json({ code: 400, msg: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+// 获取使用记录
+exports.getUsageHistory = async (req, res) => {
+  const { memberId, rewardId, limit } = req.query;
+  try {
+    if (!memberId) {
+      return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
+    }
+
+    let query = `
+      SELECT 
+        ul.*,
+        r.name as reward_name,
+        r.icon as reward_icon,
+        r.type as reward_type
+      FROM family_backpack_usage_log ul
+      LEFT JOIN family_rewards r ON ul.reward_id = r.id
+      WHERE ul.member_id = $1
+    `;
+    const params = [memberId];
+
+    // 如果指定了奖励ID，筛选特定奖励
+    if (rewardId) {
+      query += ' AND ul.reward_id = $2';
+      params.push(rewardId);
+    }
+
+    query += ' ORDER BY ul.used_at DESC';
+
+    // 限制返回数量
+    if (limit) {
+      query += ` LIMIT $${params.length + 1}`;
+      params.push(parseInt(limit) || 50);
+    } else {
+      query += ' LIMIT 50';
+    }
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      code: 200,
+      data: {
+        history: result.rows,
+        total: result.rows.length,
+      },
+    });
+  } catch (err) {
+    console.error('getUsageHistory 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取使用记录失败', error: err.message });
   }
 };
 
@@ -415,18 +769,57 @@ exports.deleteItem = async (req, res) => {
 
 exports.revokeLog = async (req, res) => {
   const { logId, logIds } = req.body;
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
+    // 确定要删除的流水记录ID列表
+    let targetLogIds = [];
     if (logIds && Array.isArray(logIds) && logIds.length > 0) {
-      await pool.query('DELETE FROM family_points_log WHERE id = ANY($1)', [
-        logIds,
-      ]);
+      targetLogIds = logIds;
     } else if (logId) {
-      await pool.query('DELETE FROM family_points_log WHERE id=$1', [logId]);
+      targetLogIds = [logId];
+    } else {
+      throw new Error('参数不完整');
     }
+
+    // 🔍 查询这些流水记录是否有关联的背包记录
+    const backpackRes = await client.query(
+      'SELECT id FROM family_backpack WHERE points_log_id = ANY($1)',
+      [targetLogIds]
+    );
+
+    const backpackIds = backpackRes.rows.map(row => row.id);
+
+    // 🗑️ 如果有关联的背包记录，先删除使用记录（如果存在）
+    if (backpackIds.length > 0) {
+      await client.query(
+        'DELETE FROM family_backpack_usage_log WHERE backpack_id = ANY($1)',
+        [backpackIds]
+      );
+    }
+
+    // 🗑️ 删除相关的背包记录
+    if (backpackIds.length > 0) {
+      await client.query(
+        'DELETE FROM family_backpack WHERE id = ANY($1)',
+        [backpackIds]
+      );
+    }
+
+    // 🗑️ 最后删除积分流水记录
+    await client.query('DELETE FROM family_points_log WHERE id = ANY($1)', [
+      targetLogIds,
+    ]);
+
+    await client.query('COMMIT');
     res.json({ code: 200, msg: '已撤销' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: '撤销失败' });
+    await client.query('ROLLBACK');
+    console.error('revokeLog 错误:', err);
+    res.status(500).json({ code: 500, msg: '撤销失败', error: err.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -465,5 +858,293 @@ exports.deleteCategory = async (req, res) => {
     res.json({ code: 200, msg: '删除成功' });
   } catch (err) {
     res.status(500).json({ msg: '删除失败' });
+  }
+};
+
+// === 🎒 背包功能接口 ===
+
+// 获取背包列表
+exports.getBackpack = async (req, res) => {
+  const { memberId, status } = req.query; // status: 'unused' / 'used' / 'all'
+  try {
+    if (!memberId) {
+      return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
+    }
+
+    let query = `
+      SELECT 
+        bp.*,
+        r.name as reward_name,
+        r.icon as reward_icon,
+        r.type as reward_type,
+        r.description as reward_description
+      FROM family_backpack bp
+      LEFT JOIN family_rewards r ON bp.reward_id = r.id
+      WHERE bp.member_id = $1
+    `;
+    const params = [memberId];
+
+    // 状态筛选
+    if (status && status !== 'all') {
+      query += ' AND bp.status = $2';
+      params.push(status);
+    }
+
+    query += ' ORDER BY bp.obtained_at DESC';
+
+    const result = await pool.query(query, params);
+
+    // 统计信息
+    const statsRes = await pool.query(
+      `SELECT 
+        COUNT(*) as total_items,
+        SUM(CASE WHEN status = 'unused' THEN quantity ELSE 0 END) as unused_count,
+        SUM(CASE WHEN status = 'used' THEN quantity ELSE 0 END) as used_count
+      FROM family_backpack 
+      WHERE member_id = $1`,
+      [memberId]
+    );
+
+    const stats = statsRes.rows[0] || { total_items: 0, unused_count: 0, used_count: 0 };
+
+    res.json({
+      code: 200,
+      data: {
+        items: result.rows,
+        stats: {
+          total_items: parseInt(stats.total_items || 0),
+          unused_count: parseInt(stats.unused_count || 0),
+          used_count: parseInt(stats.used_count || 0),
+        },
+      },
+    });
+  } catch (err) {
+    console.error('getBackpack 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取背包失败', error: err.message });
+  }
+};
+
+// 使用背包物品
+exports.useBackpackItem = async (req, res) => {
+  const { backpackId, memberId, quantity } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (!backpackId || !memberId) {
+      throw new Error('参数不完整');
+    }
+
+    const useQuantity = quantity || 1;
+
+    // 查询背包物品
+    const backpackRes = await client.query(
+      'SELECT * FROM family_backpack WHERE id = $1 AND member_id = $2',
+      [backpackId, memberId]
+    );
+
+    if (backpackRes.rows.length === 0) {
+      throw new Error('背包物品不存在或不属于该成员');
+    }
+
+    const backpackItem = backpackRes.rows[0];
+
+    if (backpackItem.status !== 'unused') {
+      throw new Error('该物品已使用');
+    }
+
+    if (backpackItem.quantity < useQuantity) {
+      throw new Error(`数量不足，当前数量：${backpackItem.quantity}`);
+    }
+
+    // 更新背包物品
+    if (backpackItem.quantity === useQuantity) {
+      // 如果全部使用，更新状态
+      await client.query(
+        'UPDATE family_backpack SET status=$1, used_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+        ['used', backpackId]
+      );
+    } else {
+      // 如果部分使用，减少数量
+      await client.query(
+        'UPDATE family_backpack SET quantity=quantity-$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+        [useQuantity, backpackId]
+      );
+    }
+    
+    // 📝 记录使用历史
+    await client.query(
+      `INSERT INTO family_backpack_usage_log (backpack_id, member_id, reward_id, quantity, used_at) 
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+      [backpackId, memberId, backpackItem.reward_id, useQuantity]
+    );
+
+    await client.query('COMMIT');
+    res.json({ code: 200, msg: '使用成功' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('useBackpackItem 错误:', err);
+    res.json({ code: 400, msg: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+// 转赠背包物品
+exports.transferBackpackItem = async (req, res) => {
+  const { backpackId, fromMemberId, toMemberId, quantity } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (!backpackId || !fromMemberId || !toMemberId) {
+      throw new Error('参数不完整');
+    }
+
+    if (fromMemberId === toMemberId) {
+      throw new Error('不能转赠给自己');
+    }
+
+    const transferQuantity = quantity || 1;
+
+    // 查询源背包物品
+    const backpackRes = await client.query(
+      'SELECT * FROM family_backpack WHERE id = $1 AND member_id = $2',
+      [backpackId, fromMemberId]
+    );
+
+    if (backpackRes.rows.length === 0) {
+      throw new Error('背包物品不存在或不属于该成员');
+    }
+
+    const backpackItem = backpackRes.rows[0];
+
+    if (backpackItem.status !== 'unused') {
+      throw new Error('只能转赠未使用的物品');
+    }
+
+    if (backpackItem.quantity < transferQuantity) {
+      throw new Error(`数量不足，当前数量：${backpackItem.quantity}`);
+    }
+
+    // 验证目标成员是否存在（必须是同一家庭的成员）
+    const fromMemberRes = await client.query(
+      'SELECT parent_id FROM family_members WHERE id = $1',
+      [fromMemberId]
+    );
+    const toMemberRes = await client.query(
+      'SELECT parent_id FROM family_members WHERE id = $1',
+      [toMemberId]
+    );
+
+    if (fromMemberRes.rows.length === 0 || toMemberRes.rows.length === 0) {
+      throw new Error('成员不存在');
+    }
+
+    if (fromMemberRes.rows[0].parent_id !== toMemberRes.rows[0].parent_id) {
+      throw new Error('只能转赠给同一家庭的成员');
+    }
+
+    // 更新源背包物品
+    if (backpackItem.quantity === transferQuantity) {
+      // 如果全部转赠，更新成员ID
+      await client.query(
+        'UPDATE family_backpack SET member_id=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+        [toMemberId, backpackId]
+      );
+    } else {
+      // 如果部分转赠，减少源数量并创建目标记录
+      await client.query(
+        'UPDATE family_backpack SET quantity=quantity-$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+        [transferQuantity, backpackId]
+      );
+      
+      // 检查目标成员是否已有相同物品
+      const existingRes = await client.query(
+        'SELECT id, quantity FROM family_backpack WHERE member_id=$1 AND reward_id=$2 AND status=$3',
+        [toMemberId, backpackItem.reward_id, 'unused']
+      );
+
+      if (existingRes.rows.length > 0) {
+        // 如果存在，增加数量
+        await client.query(
+          'UPDATE family_backpack SET quantity=quantity+$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+          [transferQuantity, existingRes.rows[0].id]
+        );
+      } else {
+        // 如果不存在，创建新记录
+        await client.query(
+          `INSERT INTO family_backpack (member_id, reward_id, points_log_id, quantity, status, obtained_at) 
+           VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+          [
+            toMemberId,
+            backpackItem.reward_id,
+            backpackItem.points_log_id,
+            transferQuantity,
+            'unused',
+          ]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ code: 200, msg: '转赠成功' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('transferBackpackItem 错误:', err);
+    res.json({ code: 400, msg: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+// 获取使用记录
+exports.getUsageHistory = async (req, res) => {
+  const { memberId, rewardId, limit } = req.query;
+  try {
+    if (!memberId) {
+      return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
+    }
+
+    let query = `
+      SELECT 
+        ul.*,
+        r.name as reward_name,
+        r.icon as reward_icon,
+        r.type as reward_type
+      FROM family_backpack_usage_log ul
+      LEFT JOIN family_rewards r ON ul.reward_id = r.id
+      WHERE ul.member_id = $1
+    `;
+    const params = [memberId];
+
+    // 如果指定了奖励ID，筛选特定奖励
+    if (rewardId) {
+      query += ' AND ul.reward_id = $2';
+      params.push(rewardId);
+    }
+
+    query += ' ORDER BY ul.used_at DESC';
+
+    // 限制返回数量
+    if (limit) {
+      query += ` LIMIT $${params.length + 1}`;
+      params.push(parseInt(limit) || 50);
+    } else {
+      query += ' LIMIT 50';
+    }
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      code: 200,
+      data: {
+        history: result.rows,
+        total: result.rows.length,
+      },
+    });
+  } catch (err) {
+    console.error('getUsageHistory 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取使用记录失败', error: err.message });
   }
 };

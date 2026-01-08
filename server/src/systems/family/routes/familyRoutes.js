@@ -36,4 +36,10 @@ router.post(
 );
 router.post('/member/delete', controller.deleteMember);
 
+// 🎒 背包功能
+router.get('/backpack', controller.getBackpack);
+router.post('/backpack/use', controller.useBackpackItem);
+router.post('/backpack/transfer', controller.transferBackpackItem);
+router.get('/backpack/usage-history', controller.getUsageHistory);
+
 module.exports = router;

@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router';
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { UserFilled, Plus, Setting, Delete, Edit, List, Goods, PriceTag, Warning, House, Trophy, Calendar } from '@element-plus/icons-vue';
+import { UserFilled, Plus, Setting, Delete, Edit, List, Goods, PriceTag, Warning, House, Trophy, Calendar, Box } from '@element-plus/icons-vue';
 import dayjs from 'dayjs';
 // 导入子组件
 import EarnTasks from '../components/EarnTasks.vue';
@@ -11,9 +11,13 @@ import PenaltyTasks from '../components/PenaltyTasks.vue';
 import Rewards from '../components/Rewards.vue';
 import Auctions from '../components/Auctions.vue';
 import BillCalendar from '../components/BillCalendar.vue';
+import Backpack from '../components/Backpack.vue';
 
 const router = useRouter();
 const goHome = () => { router.push('/'); };
+
+// 组件引用
+const backpackRef = ref(null);
 
 // === 状态定义 ===
 const loading = ref(false);
@@ -28,6 +32,11 @@ const dashboard = reactive({
   totalPoints: 0,
   history: [],
   usageStats: []
+});
+
+// 背包统计数据
+const backpackStats = reactive({
+  unused_count: 0
 });
 
 // 日历状态
@@ -104,8 +113,25 @@ const loadMemberData = async () => {
         history: dashboard.history
       });
     }
-  } catch (e) { 
+    
+    // 🎒 加载背包统计数据
+    try {
+      const backpackRes = await axios.get('/api/family/backpack', {
+        params: { memberId: currentMemberId.value, status: 'unused' }
+      });
+      if (backpackRes.data.code === 200) {
+        backpackStats.unused_count = backpackRes.data.data.stats?.unused_count || 0;
+      }
+    } catch (e) {
+      console.error('加载背包统计失败:', e);
+    }
+    } catch (e) { 
     console.error('🔄 加载数据失败:', e); 
+  }
+  
+  // 🎒 刷新背包组件数据
+  if (backpackRef.value && backpackRef.value.refresh) {
+    backpackRef.value.refresh();
   }
 };
 
@@ -292,6 +318,22 @@ const handleCalendarMonthChange = (newDate) => {
           :history="dashboard.history"
           @auction-click="openAuctionSettle"
           @context-menu="handleContextMenu" />
+      </el-tab-pane>
+
+      <el-tab-pane label="背包">
+        <template #label>
+          <span class="tab-label">
+            <el-icon><Box /></el-icon> 背包
+            <el-badge v-if="backpackStats.unused_count > 0" 
+                      :value="backpackStats.unused_count" 
+                      class="badge" />
+          </span>
+        </template>
+        <Backpack
+          ref="backpackRef"
+          :member-id="currentMemberId"
+          :members="members"
+          @refresh="loadMemberData" />
       </el-tab-pane>
 
       <el-tab-pane label="账单">
@@ -587,5 +629,9 @@ const handleCalendarMonthChange = (newDate) => {
 
 .h-check {
   margin-right: 10px;
+}
+
+.badge {
+  margin-left: 4px;
 }
 </style>
