@@ -1,23 +1,23 @@
-import { createApp } from 'vue'
-import './css/style.css'
-import App from './App.vue'
-import router from './router' // 引入路由
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import { createApp } from 'vue';
+import './css/style.css';
+import App from './App.vue';
+import router from './router'; // 引入路由
+import ElementPlus from 'element-plus';
+import 'element-plus/dist/index.css';
+import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 
 // 👇 引入 axios
-import axios from 'axios'
+import axios from 'axios';
 
 // 👇 引入 i18n 相关
-import { createI18n } from 'vue-i18n'
-import zh from './locales/zh'
-import enLocale from './locales/en'
+import { createI18n } from 'vue-i18n';
+import zh from './locales/zh';
+import enLocale from './locales/en';
 
 // 👇 引入权限检查函数
 import { hasPermission } from './utils/auth';
 
-const app = createApp(App)
+const app = createApp(App);
 
 // 👇 创建 i18n 实例
 const i18n = createI18n({
@@ -26,9 +26,9 @@ const i18n = createI18n({
   fallbackLocale: 'en', // 缺省语言
   messages: {
     zh,
-    en: enLocale
-  }
-})
+    en: enLocale,
+  },
+});
 
 // 👇 全局配置 Axios 的 BaseURL (这是修复的关键！)
 // 逻辑：读取 Cloudflare 里的环境变量。如果没有(比如本地开发)，就用空字符串(会自动走本地代理)
@@ -47,34 +47,29 @@ app.config.globalProperties.$img = (path) => {
   if (!path) return '';
   // 如果已经是完整链接(如 http 开头)或是本地预览的 blob，直接返回
   if (path.startsWith('http') || path.startsWith('blob:')) return path;
-  
+
   // 拼接后端地址 (利用上面定义好的 serverUrl 逻辑)
   // 注意：我们需要重新获取一次 apiUrl 变量，或者复用上面的逻辑
   // 为了简单稳妥，这里直接复用 axios.defaults.baseURL
   const baseUrl = axios.defaults.baseURL || '';
   return baseUrl ? `${baseUrl}${path}` : path;
-}
+};
 
 // 注册所有图标
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component)
+  app.component(key, component);
 }
 
 app.directive('auth', {
   mounted(el, binding) {
-    const { value } = binding; // 获取指令的值，例如 'edu:student:delete'
-    if (value && typeof value === 'string') {
-      if (!hasPermission(value)) {
-        // ❌ 如果没有权限，移除该元素
-        el.parentNode && el.parentNode.removeChild(el);
-      }
-    } else {
-      throw new Error(`v-auth 需要传入权限 Key 字符串，例如 v-auth="'edu:student:delete'"`);
+    if (!hasPermission(binding.value)) {
+      // 这里的 hasPermission 现在会正确读取 user_info
+      el.parentNode && el.parentNode.removeChild(el);
     }
-  }
+  },
 });
 
-app.use(router) // 使用路由
-app.use(ElementPlus)
-app.use(i18n) // 👈 挂载 i18n
-app.mount('#app')
+app.use(router); // 使用路由
+app.use(ElementPlus);
+app.use(i18n); // 👈 挂载 i18n
+app.mount('#app');

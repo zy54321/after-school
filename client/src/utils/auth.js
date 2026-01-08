@@ -1,11 +1,16 @@
-// client/src/utils/auth.js
-
 /**
  * 获取当前登录用户信息
+ * ✅ 修正：使用 'user_info' 匹配你的 EducationLayout.vue
  */
 export const getUser = () => {
-  const userStr = localStorage.getItem('user');
-  return userStr ? JSON.parse(userStr) : null;
+  const userStr = localStorage.getItem('user_info');
+  if (!userStr) return null;
+  try {
+    return JSON.parse(userStr);
+  } catch (e) {
+    console.error('解析用户信息失败', e);
+    return null;
+  }
 };
 
 /**
@@ -25,15 +30,5 @@ export const hasPermission = (permissionKey) => {
   return permissions.includes(permissionKey);
 };
 
-/**
- * 检查是否拥有列表中的任意一个权限 (用于菜单显示)
- * @param {Array} permissionKeys - 权限 Key 数组
- */
-export const hasAnyPermission = (permissionKeys) => {
-  const user = getUser();
-  if (!user) return false;
-  if (user.role === 'admin') return true;
-  
-  const userPerms = user.permissions || [];
-  return permissionKeys.some(key => userPerms.includes(key));
-};
+// 供模板使用的简单检查函数（可选）
+export const check = (key) => hasPermission(key);
