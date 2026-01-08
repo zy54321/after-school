@@ -14,9 +14,6 @@ import { createI18n } from 'vue-i18n'
 import zh from './locales/zh'
 import enLocale from './locales/en'
 
-// 👇 引入权限检查函数
-import { hasPermission } from './utils/auth';
-
 const app = createApp(App)
 
 // 👇 创建 i18n 实例
@@ -59,20 +56,6 @@ app.config.globalProperties.$img = (path) => {
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
-
-app.directive('auth', {
-  mounted(el, binding) {
-    const { value } = binding; // 获取指令的值，例如 'edu:student:delete'
-    if (value && typeof value === 'string') {
-      if (!hasPermission(value)) {
-        // ❌ 如果没有权限，移除该元素
-        el.parentNode && el.parentNode.removeChild(el);
-      }
-    } else {
-      throw new Error(`v-auth 需要传入权限 Key 字符串，例如 v-auth="'edu:student:delete'"`);
-    }
-  }
-});
 
 app.use(router) // 使用路由
 app.use(ElementPlus)

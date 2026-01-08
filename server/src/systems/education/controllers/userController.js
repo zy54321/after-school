@@ -6,7 +6,7 @@ const getUsers = async (req, res) => {
   try {
     // 注意：千万不要把 password 查出来返回给前端！
     const result = await pool.query(`
-     SELECT id, username, real_name, role, is_active, created_at, permissions 
+      SELECT id, username, real_name, role, is_active, created_at 
       FROM users 
       ORDER BY id ASC
     `);
@@ -55,12 +55,12 @@ const createUser = async (req, res) => {
 // 3. 修改员工信息 (改名、改角色、禁用/启用)
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { real_name, role, is_active, permissions } = req.body;
+  const { real_name, role, is_active } = req.body;
 
   try {
     await pool.query(
-      'UPDATE users SET real_name=$1, role=$2, is_active=$3, permissions=$4 WHERE id=$5',
-      [real_name, role, is_active, JSON.stringify(permissions || []), id]
+      'UPDATE users SET real_name=$1, role=$2, is_active=$3 WHERE id=$4',
+      [real_name, role, is_active, id]
     );
     res.json({ code: 200, msg: '更新成功' });
   } catch (err) {
