@@ -15,7 +15,7 @@ const login = async (req, res) => {
     // 2. 查询数据库
     // 注意：只根据用户名查用户
     const queryText = `
-      SELECT id, username, password, real_name, role, is_active 
+      SELECT id, username, password, real_name, role, is_active, permissions 
       FROM users 
       WHERE username = $1
     `;
@@ -36,6 +36,11 @@ const login = async (req, res) => {
       // 检查账号是否被禁用 (Soft Delete 检查)
       if (user.is_active === false) {
         return res.json({ code: 403, msg: '该账号已被禁用，请联系管理员' });
+      }
+
+      // 确保 permissions 字段存在且为数组 (防止数据库旧数据为 null)
+      if (!Array.isArray(user.permissions)) {
+        user.permissions = [];
       }
 
       // 登录成功 (存 Session，要把密码从对象里删掉，别存进 Session)
