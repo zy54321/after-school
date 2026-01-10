@@ -476,9 +476,15 @@ const handleLogout = () => {
 .app-card p {
   font-size: 0.95rem;
   color: #94a3b8;
-  line-height: 1.5;
+  line-height: 1.6;
   margin-bottom: 30px;
-  height: 42px;
+  min-height: 48px;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 .card-footer {
@@ -733,11 +739,11 @@ body.el-popup-parent--hidden {
           <div class="card-glow" style="background: #f59e0b;"></div>
           <div class="card-content">
             <div class="icon-wrapper">🧸</div>
-            <h3>家庭成长银行</h3>
-            <p>做任务、攒积分、换礼物，让好习惯养成更有趣！</p>
+            <h3>{{ $t('portal.familyCard.title') }}</h3>
+            <p>{{ $t('portal.familyCard.desc') }}</p>
             <div class="card-footer">
               <span class="tag" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
-                FAMILY
+                {{ $t('portal.familyCard.tag') }}
               </span>
               <span class="arrow">-></span>
             </div>

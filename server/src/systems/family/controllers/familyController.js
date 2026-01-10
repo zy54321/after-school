@@ -3,6 +3,7 @@ const dayjs = require('dayjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { fixSequenceAsync } = require('../../../shared/utils/sequenceFixer');
 
 // === 📦 配置图片上传 ===
 const storage = multer.diskStorage({
@@ -39,7 +40,24 @@ exports.createMember = async (req, res) => {
     
     // 处理主键冲突错误（序列未同步）
     if (err.code === '23505' && err.constraint === 'family_members_pkey') {
-      console.error('⚠️ 检测到 family_members 表序列未同步问题，请执行修复序列脚本.sql');
+      console.error('⚠️ 检测到 family_members 表序列未同步问题，尝试自动修复...');
+      
+      // 尝试自动修复序列
+      try {
+        const fixed = await fixSequenceAsync('family_members');
+        if (fixed) {
+          console.log('✅ 已自动修复 family_members 表的序列，请重试操作');
+          return res.status(500).json({ 
+            code: 500, 
+            msg: '序列已自动修复，请重试操作', 
+            error: '序列已修复，请重试',
+            autoFixed: true
+          });
+        }
+      } catch (fixError) {
+        console.error('自动修复序列失败:', fixError);
+      }
+      
       return res.status(500).json({ 
         code: 500, 
         msg: '数据库序列未同步，请联系管理员执行修复序列脚本', 
@@ -203,7 +221,24 @@ exports.logAction = async (req, res) => {
     
     // 处理主键冲突错误（序列未同步）
     if (err.code === '23505' && err.constraint === 'family_points_log_pkey') {
-      console.error('⚠️ 检测到序列未同步问题，请执行修复序列脚本.sql');
+      console.error('⚠️ 检测到 family_points_log 表序列未同步问题，尝试自动修复...');
+      
+      // 尝试自动修复序列
+      try {
+        const fixed = await fixSequenceAsync('family_points_log');
+        if (fixed) {
+          console.log('✅ 已自动修复 family_points_log 表的序列，请重试操作');
+          return res.status(500).json({ 
+            code: 500, 
+            msg: '序列已自动修复，请重试操作', 
+            error: '序列已修复，请重试',
+            autoFixed: true
+          });
+        }
+      } catch (fixError) {
+        console.error('自动修复序列失败:', fixError);
+      }
+      
       return res.status(500).json({ 
         code: 500, 
         msg: '数据库序列未同步，请联系管理员执行修复序列脚本', 
@@ -706,10 +741,25 @@ exports.createItem = async (req, res) => {
     
     // 处理主键冲突错误（序列未同步）
     if (err.code === '23505') {
-      const tableName = err.table === 'family_tasks' ? 'family_tasks' : 
-                       err.table === 'family_rewards' ? 'family_rewards' : 
-                       err.table || '未知表';
-      console.error(`⚠️ 检测到 ${tableName} 表序列未同步问题，请执行修复序列脚本.sql`);
+      const tableName = type === 'task' ? 'family_tasks' : 'family_rewards';
+      console.error(`⚠️ 检测到 ${tableName} 表序列未同步问题，尝试自动修复...`);
+      
+      // 尝试自动修复序列
+      try {
+        const fixed = await fixSequenceAsync(tableName);
+        if (fixed) {
+          console.log(`✅ 已自动修复 ${tableName} 表的序列，请重试操作`);
+          return res.status(500).json({ 
+            code: 500, 
+            msg: `序列已自动修复，请重试操作`, 
+            error: '序列已修复，请重试',
+            autoFixed: true
+          });
+        }
+      } catch (fixError) {
+        console.error('自动修复序列失败:', fixError);
+      }
+      
       return res.status(500).json({ 
         code: 500, 
         msg: `数据库序列未同步（${tableName}），请联系管理员执行修复序列脚本`, 

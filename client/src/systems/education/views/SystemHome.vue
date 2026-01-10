@@ -70,16 +70,20 @@
         </div>
         <div class="hero-stats">
           <div class="stat-item">
-            <div class="stat-number">6+</div>
-            <div class="stat-label">核心功能</div>
+            <div class="stat-number">60%</div>
+            <div class="stat-label">运营效率提升</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number">40%</div>
+            <div class="stat-label">管理成本降低</div>
           </div>
           <div class="stat-item">
             <div class="stat-number">3秒</div>
-            <div class="stat-label">快速签到</div>
+            <div class="stat-label">完成签到消课</div>
           </div>
           <div class="stat-item">
             <div class="stat-number">100%</div>
-            <div class="stat-label">数据安全</div>
+            <div class="stat-label">数据安全可控</div>
           </div>
         </div>
       </div>
@@ -123,7 +127,7 @@
       <div class="container">
         <div class="section-header">
           <h2 class="section-title">核心功能</h2>
-          <p class="section-subtitle">一站式解决教育机构运营管理需求</p>
+          <p class="section-subtitle">一站式解决教育机构运营管理需求，让管理更简单、更高效</p>
         </div>
         <div class="features-grid">
           <div class="feature-card">
@@ -167,6 +171,27 @@
             </div>
             <h3>{{ $t('login.features.reportTitle') }}</h3>
             <p>{{ $t('login.features.reportDesc') }}</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon-wrapper">
+              <div class="feature-icon">🎯</div>
+            </div>
+            <h3>{{ $t('login.features.workflowTitle') }}</h3>
+            <p>{{ $t('login.features.workflowDesc') }}</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon-wrapper">
+              <div class="feature-icon">🍽️</div>
+            </div>
+            <h3>{{ $t('login.features.cateringTitle') }}</h3>
+            <p>{{ $t('login.features.cateringDesc') }}</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon-wrapper">
+              <div class="feature-icon">🔐</div>
+            </div>
+            <h3>{{ $t('login.features.permissionTitle') }}</h3>
+            <p>{{ $t('login.features.permissionDesc') }}</p>
           </div>
         </div>
       </div>

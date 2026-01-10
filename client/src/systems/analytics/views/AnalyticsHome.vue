@@ -123,6 +123,16 @@
             <h3>{{ $t('analytics.home.features.dataTitle') }}</h3>
             <p>{{ $t('analytics.home.features.dataDesc') }}</p>
           </div>
+          <div class="feature-card">
+            <div class="feature-icon">👥</div>
+            <h3>{{ $t('analytics.home.features.demographicsTitle') }}</h3>
+            <p>{{ $t('analytics.home.features.demographicsDesc') }}</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📏</div>
+            <h3>{{ $t('analytics.home.features.measurementTitle') }}</h3>
+            <p>{{ $t('analytics.home.features.measurementDesc') }}</p>
+          </div>
         </div>
       </div>
     </section>
