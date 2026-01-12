@@ -61,7 +61,7 @@ exports.getDailyWorkflowData = async (req, res) => {
     }
 
     // 获取学生数据（只显示今天已签到的学员）
-    // 修复：使用时区转换确保日期匹配正确（兼容不同数据库时区设置）
+    // 修复：使用简单的日期比较，确保能正确匹配签到记录
     const studentsRes = await pool.query(
       `
       SELECT 
@@ -73,7 +73,7 @@ exports.getDailyWorkflowData = async (req, res) => {
         true as has_signed_today
       FROM students s
       INNER JOIN attendance a ON s.id = a.student_id 
-        AND DATE(a.sign_in_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai') = $1::date
+        AND DATE(a.sign_in_time) = $1::date
       LEFT JOIN daily_reports dr ON s.id = dr.student_id AND dr.report_date = $1
       WHERE s.status = 'active' 
       ORDER BY s.id ASC

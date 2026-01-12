@@ -72,13 +72,13 @@
         <div ref="radarChartRef" class="w-full h-[250px]"></div>
       </div>
 
-      <div v-if="report.history && report.history.length > 1"
+      <div v-if="report.history && report.history.length > 0"
         class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
         <div class="font-bold text-gray-800 mb-2 flex items-center">
           <el-icon class="mr-2 text-blue-500 bg-blue-50 p-1 rounded">
             <TrendCharts />
           </el-icon>
-          专注力成长曲线 (7天)
+          专注力成长曲线 ({{ report.history.length }}天)
         </div>
         <div ref="lineChartRef" class="w-full h-[220px]"></div>
       </div>
@@ -451,6 +451,9 @@ const initLineChart = () => {
     currentFocus: report.value.focus_minutes
   });
 
+  // 当只有1个数据点时，调整图表配置以便更好显示
+  const isSinglePoint = values.length === 1;
+  
   const option = {
     grid: { top: 20, right: 10, bottom: 20, left: 30, containLabel: true },
     tooltip: { trigger: 'axis' },
@@ -458,7 +461,9 @@ const initLineChart = () => {
       type: 'category',
       data: dates,
       axisLine: { lineStyle: { color: '#ddd' } },
-      axisLabel: { color: '#999', fontSize: 10 }
+      axisLabel: { color: '#999', fontSize: 10 },
+      // 单个数据点时，确保x轴显示
+      boundaryGap: true
     },
     yAxis: {
       type: 'value',
@@ -468,10 +473,10 @@ const initLineChart = () => {
     series: [{
       data: values,
       type: 'line',
-      smooth: true,
-      symbolSize: 6,
+      smooth: !isSinglePoint, // 单个数据点时不使用平滑曲线
+      symbolSize: isSinglePoint ? 10 : 6, // 单个数据点时增大点的大小
       itemStyle: { color: '#0ea5e9', borderWidth: 2 },
-      areaStyle: {
+      areaStyle: isSinglePoint ? null : { // 单个数据点时不显示面积
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
           { offset: 0, color: 'rgba(14, 165, 233, 0.3)' },
           { offset: 1, color: 'rgba(14, 165, 233, 0)' }
