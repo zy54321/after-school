@@ -4,12 +4,12 @@
       class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex justify-between items-center sticky top-0 z-20 backdrop-blur-md bg-white/90">
       <div class="flex items-center gap-4 flex-1">
         <h2 class="text-xl font-bold flex items-center text-gray-800">
-          <span class="mr-2 text-2xl">⚡</span> 特训工作台
+          <span class="mr-2 text-2xl">⚡</span> {{ $t('workflow.title') }}
         </h2>
-        <el-date-picker v-model="currentDate" type="date" placeholder="选择日期" :disabled-date="(d) => d > new Date()"
+        <el-date-picker v-model="currentDate" type="date" :placeholder="$t('workflow.selectDate')" :disabled-date="(d) => d > new Date()"
           @change="fetchData" class="!w-40 shadow-sm" />
-        <el-input v-model="menu.menu_content" placeholder="今日菜谱 (自动同步中...)" class="flex-1 max-w-xl shadow-sm">
-          <template #prepend>🍱 今日菜谱</template>
+        <el-input v-model="menu.menu_content" :placeholder="$t('workflow.todayMenuPlaceholder')" class="flex-1 max-w-xl shadow-sm">
+          <template #prepend>🍱 {{ $t('workflow.todayMenu') }}</template>
         </el-input>
       </div>
 
@@ -18,13 +18,13 @@
           :before-upload="beforeUpload" name="file" class="flex items-center">
           <el-button :icon="Camera" size="large" :type="menu.evidence_photo_url ? 'success' : 'info'" plain
             class="!rounded-xl">
-            {{ menu.evidence_photo_url ? '照片已上传' : '上传留样' }}
+            {{ menu.evidence_photo_url ? $t('workflow.photoUploaded') : $t('workflow.uploadPhoto') }}
           </el-button>
         </el-upload>
 
         <el-button type="primary" size="large" @click="handleSaveAll"
           class="!rounded-xl shadow-blue-200 shadow-lg font-bold">
-          🚀 一键生成日报
+          🚀 {{ $t('workflow.generateReport') }}
         </el-button>
       </div>
     </div>
@@ -46,10 +46,10 @@
 
           <div v-if="student.token"
             class="bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs px-2 py-1 rounded rotate-2 backdrop-blur-sm font-bold shadow-inner">
-            ✅ 已生成
+            ✅ {{ $t('workflow.generated') }}
           </div>
           <div v-else class="text-slate-500 text-xs bg-slate-900/50 px-2 py-1 rounded border border-slate-600">
-            ⏳ 待生成
+            ⏳ {{ $t('workflow.pending') }}
           </div>
         </div>
 
@@ -59,12 +59,12 @@
             <el-icon class="absolute top-1 right-1 text-blue-200 text-3xl">
               <Timer />
             </el-icon>
-            <div class="text-xs text-blue-500 font-bold z-10 mb-1">专注时长</div>
+            <div class="text-xs text-blue-500 font-bold z-10 mb-1">{{ $t('workflow.focusMinutes') }}</div>
             <div class="flex items-baseline z-10 w-full px-1">
               <el-input-number v-model="student.focus_minutes" :min="0" :step="10" controls-position="right"
                 class="!w-full enhanced-input-number" size="large" />
             </div>
-            <div class="text-[10px] text-blue-400 mt-1">分钟</div>
+            <div class="text-[10px] text-blue-400 mt-1">{{ $t('workflow.minutes') }}</div>
           </div>
 
           <div
@@ -72,12 +72,12 @@
             <el-icon class="absolute top-1 right-1 text-orange-200 text-3xl">
               <WarnTriangleFilled />
             </el-icon>
-            <div class="text-xs text-orange-500 font-bold z-10 mb-1">走神次数</div>
+            <div class="text-xs text-orange-500 font-bold z-10 mb-1">{{ $t('workflow.distractionCount') }}</div>
             <div class="flex items-baseline z-10 w-full px-1">
               <el-input-number v-model="student.distraction_count" :min="0" controls-position="right"
                 class="!w-full enhanced-input-number" size="large" @change="(val, oldVal) => handleDistractionChange(student, val, oldVal)" />
             </div>
-            <div class="text-[10px] text-orange-400 mt-1">次</div>
+            <div class="text-[10px] text-orange-400 mt-1">{{ $t('workflow.times') }}</div>
           </div>
         </div>
 
@@ -86,21 +86,21 @@
             <div>
               <div class="text-xs text-gray-400 mb-1.5 flex items-center"><el-icon class="mr-1">
                   <Notebook />
-                </el-icon>作业评级</div>
+                </el-icon>{{ $t('workflow.homeworkRating') }}</div>
               <el-select v-model="student.homework_rating" size="large" class="w-full">
-                <el-option label="A 🌟 优秀" value="A" />
-                <el-option label="B 👍 良好" value="B" />
-                <el-option label="C 🔨 待改进" value="C" />
+                <el-option :label="$t('report.homeworkRating.A')" value="A" />
+                <el-option :label="$t('report.homeworkRating.B')" value="B" />
+                <el-option :label="$t('report.homeworkRating.C')" value="C" />
               </el-select>
             </div>
             <div>
               <div class="text-xs text-gray-400 mb-1.5 flex items-center"><el-icon class="mr-1">
                   <Trophy />
-                </el-icon>行为习惯</div>
+                </el-icon>{{ $t('workflow.habitRating') }}</div>
               <el-select v-model="student.habit_rating" size="large" class="w-full">
-                <el-option label="A 🌟 模范" value="A" />
-                <el-option label="B 👍 遵守" value="B" />
-                <el-option label="C 🔔 提醒" value="C" />
+                <el-option :label="$t('report.habitRating.A')" value="A" />
+                <el-option :label="$t('report.habitRating.B')" value="B" />
+                <el-option :label="$t('report.habitRating.C')" value="C" />
               </el-select>
             </div>
           </div>
@@ -109,25 +109,25 @@
             <div class="text-xs text-gray-400 mb-2 flex items-center justify-between">
               <span><el-icon class="mr-1 relative top-0.5">
                   <Food />
-                </el-icon>用餐情况</span>
-              <span class="text-[10px] text-gray-300">点击切换</span>
+                </el-icon>{{ $t('workflow.mealStatus') }}</span>
+              <span class="text-[10px] text-gray-300">{{ $t('workflow.clickToSwitch') }}</span>
             </div>
             <el-radio-group v-model="student.meal_status" size="default" class="w-full flex">
-              <el-radio-button label="finished" class="flex-1 text-center">🥣 光盘</el-radio-button>
-              <el-radio-button label="leftovers" class="flex-1 text-center">🥡 剩菜</el-radio-button>
-              <el-radio-button label="little" class="flex-1 text-center">🤐 挑食</el-radio-button>
+              <el-radio-button label="finished" class="flex-1 text-center">🥣 {{ $t('workflow.finished') }}</el-radio-button>
+              <el-radio-button label="leftovers" class="flex-1 text-center">🥡 {{ $t('workflow.leftovers') }}</el-radio-button>
+              <el-radio-button label="little" class="flex-1 text-center">🤐 {{ $t('workflow.little') }}</el-radio-button>
             </el-radio-group>
           </div>
 
           <div>
-            <div class="text-xs text-gray-400 mb-1.5">存在问题 (可多选)</div>
-            <el-select v-model="student.homework_tags" multiple placeholder="无明显问题..." size="large" style="width:100%"
+            <div class="text-xs text-gray-400 mb-1.5">{{ $t('workflow.problems') }}</div>
+            <el-select v-model="student.homework_tags" multiple :placeholder="$t('workflow.noProblems')" size="large" style="width:100%"
               class="custom-tag-select">
-              <el-option label="✍️ 书写潦草" value="书写潦草" />
-              <el-option label="🧮 计算粗心" value="计算粗心" />
-              <el-option label="🐌 拖拉磨蹭" value="拖拉磨蹭" />
-              <el-option label="❌ 错题未改" value="错题未改" />
-              <el-option label="📖 阅读不专心" value="阅读不专心" />
+              <el-option :label="'✍️ ' + $t('workflow.handwriting')" value="书写潦草" />
+              <el-option :label="'🧮 ' + $t('workflow.calculation')" value="计算粗心" />
+              <el-option :label="'🐌 ' + $t('workflow.procrastination')" value="拖拉磨蹭" />
+              <el-option :label="'❌ ' + $t('workflow.wrongNotFixed')" value="错题未改" />
+              <el-option :label="'📖 ' + $t('workflow.readingDistraction')" value="阅读不专心" />
             </el-select>
           </div>
 
@@ -135,12 +135,12 @@
       </div>
     </div>
 
-    <el-dialog v-model="resultVisible" title="🎉 日报生成成功" width="600px" class="rounded-2xl">
+    <el-dialog v-model="resultVisible" :title="'🎉 ' + $t('workflow.dialogTitle')" width="600px" class="rounded-2xl">
       <div class="bg-green-50 text-green-700 p-3 rounded-lg mb-4 text-sm flex items-center">
         <el-icon class="mr-2 text-lg">
           <CircleCheckFilled />
         </el-icon>
-        所有日报已保存至云端，家长链接已更新。
+        {{ $t('workflow.allReportsSaved') }}
       </div>
       <div class="max-h-[400px] overflow-y-auto border border-gray-100 rounded-xl bg-gray-50">
         <div v-for="item in generatedLinks" :key="item.student_id"
@@ -155,14 +155,14 @@
 
           <el-button type="primary" plain :icon="CopyDocument" @click="copyToClipboard(getReportUrl(item.token))"
             class="!rounded-lg">
-            复制
+            {{ $t('workflow.copy') }}
           </el-button>
         </div>
       </div>
       <template #footer>
         <div class="flex justify-center pt-2">
           <el-button type="primary" size="large" @click="resultVisible = false"
-            class="!rounded-xl px-10">完成工作</el-button>
+            class="!rounded-xl px-10">{{ $t('workflow.complete') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -171,12 +171,15 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import {
   Camera, CopyDocument, Timer, WarnTriangleFilled,
   Notebook, Trophy, Food, CircleCheckFilled
 } from '@element-plus/icons-vue';
+
+const { t } = useI18n();
 
 const loading = ref(false);
 const currentDate = ref(new Date());
@@ -192,9 +195,9 @@ const getReportUrl = (token) => `${window.location.origin}/report/view?token=${t
 const copyToClipboard = async (text) => {
   try {
     await navigator.clipboard.writeText(text);
-    ElMessage.success({ message: '🔗 链接已复制', type: 'success' });
+    ElMessage.success({ message: '🔗 ' + t('workflow.copy') + ' ' + t('common.success'), type: 'success' });
   } catch (err) {
-    ElMessage.error('复制失败');
+    ElMessage.error(t('common.failed'));
   }
 };
 
@@ -236,7 +239,7 @@ const fetchData = async () => {
       }));
     }
   } catch (err) {
-    ElMessage.error('数据加载失败');
+    ElMessage.error(t('workflow.msgDataLoadFailed'));
   } finally {
     loading.value = false;
   }
@@ -251,13 +254,13 @@ const handleSaveAll = async () => {
 
     const res = await axios.post('/api/reports/workflow', payload);
     if (res.data.code === 200) {
-      ElMessage.success('🎉 所有日报已生成！');
+      ElMessage.success('🎉 ' + t('workflow.msgSuccess'));
       generatedLinks.value = res.data.data;
       resultVisible.value = true;
       fetchData();
     }
   } catch (err) {
-    ElMessage.error('保存失败');
+    ElMessage.error(t('workflow.msgSaveFailed'));
   } finally {
     loading.value = false;
   }
@@ -265,11 +268,11 @@ const handleSaveAll = async () => {
 
 const beforeUpload = (file) => {
   if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
-    ElMessage.error('只能上传 JPG/PNG');
+    ElMessage.error(t('workflow.msgOnlyJpgPng'));
     return false;
   }
   if (file.size / 1024 / 1024 > 5) {
-    ElMessage.error('图片不能超过 5MB');
+    ElMessage.error(t('workflow.msgImageTooLarge'));
     return false;
   }
   return true;
@@ -278,9 +281,9 @@ const beforeUpload = (file) => {
 const handleUploadSuccess = (res) => {
   if (res.code === 200) {
     menu.evidence_photo_url = res.url;
-    ElMessage.success('上传成功');
+    ElMessage.success(t('workflow.msgUploadSuccess'));
   } else {
-    ElMessage.error('上传失败');
+    ElMessage.error(t('workflow.msgUploadFailed'));
   }
 };
 

@@ -201,6 +201,14 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior(to, from, savedPosition) {
+    // 如果有保存的位置（比如浏览器前进/后退），则使用保存的位置
+    if (savedPosition) {
+      return savedPosition;
+    }
+    // 否则滚动到顶部
+    return { top: 0, left: 0, behavior: 'instant' };
+  },
 });
 
 // 🚀 路由守卫

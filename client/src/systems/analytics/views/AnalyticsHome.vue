@@ -292,6 +292,11 @@ const targetSystemName = computed(() => {
 const dialogTitle = computed(() => isLoggedIn.value ? t('login.identityTitle') : t('login.loginBtn'));
 
 onMounted(() => {
+  // 滚动到页面顶部
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  
   const token = localStorage.getItem('user_token');
   const infoStr = localStorage.getItem('user_info');
 

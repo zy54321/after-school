@@ -3,39 +3,39 @@
     <el-card shadow="never">
       <template #header>
         <div class="header-row">
-          <span class="title">🔐 权限配置管理</span>
+          <span class="title">🔐 {{ $t('permission.title') }}</span>
         </div>
       </template>
 
       <!-- 角色列表 -->
       <div class="role-section">
         <div class="section-header">
-          <h3>角色列表</h3>
-          <el-button type="primary" icon="Plus" @click="openCreateRoleDialog">新增角色</el-button>
+          <h3>{{ $t('permission.roleList') }}</h3>
+          <el-button type="primary" icon="Plus" @click="openCreateRoleDialog">{{ $t('permission.addRole') }}</el-button>
         </div>
 
         <el-table :data="roles" stripe v-loading="rolesLoading" style="margin-top: 20px">
           <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="name" label="角色名称" width="150" />
-          <el-table-column prop="code" label="角色代码" width="150" />
-          <el-table-column prop="description" label="描述" />
-          <el-table-column label="系统角色" width="100">
+          <el-table-column prop="name" :label="$t('permission.colRoleName')" width="150" />
+          <el-table-column prop="code" :label="$t('permission.colRoleCode')" width="150" />
+          <el-table-column prop="description" :label="$t('permission.colDescription')" />
+          <el-table-column :label="$t('permission.colSystemRole')" width="100">
             <template #default="scope">
-              <el-tag v-if="scope.row.is_system" type="danger">是</el-tag>
-              <el-tag v-else type="info">否</el-tag>
+              <el-tag v-if="scope.row.is_system" type="danger">{{ $t('permission.isSystem') }}</el-tag>
+              <el-tag v-else type="info">{{ $t('permission.notSystem') }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="200">
+          <el-table-column :label="$t('common.action')" width="200">
             <template #default="scope">
-              <el-button size="small" link type="primary" @click="selectRole(scope.row)">配置权限</el-button>
-              <el-button size="small" link type="primary" @click="openEditRoleDialog(scope.row)">编辑</el-button>
+              <el-button size="small" link type="primary" @click="selectRole(scope.row)">{{ $t('permission.configPermission') }}</el-button>
+              <el-button size="small" link type="primary" @click="openEditRoleDialog(scope.row)">{{ $t('permission.edit') }}</el-button>
               <el-button 
                 v-if="!scope.row.is_system" 
                 size="small" 
                 link 
                 type="danger" 
                 @click="handleDeleteRole(scope.row)">
-                删除
+                {{ $t('permission.delete') }}
               </el-button>
             </template>
           </el-table-column>
@@ -45,11 +45,11 @@
       <!-- 权限配置 -->
       <div class="permission-section" v-if="selectedRole">
         <div class="section-header">
-          <h3>权限配置（选中角色：{{ selectedRole.name }}）</h3>
+          <h3>{{ $t('permission.permissionConfig') }}（{{ $t('permission.selectedRole') }}：{{ selectedRole.name }}）</h3>
           <div>
-            <el-button size="small" @click="selectAll">全选</el-button>
-            <el-button size="small" @click="selectNone">全不选</el-button>
-            <el-button type="primary" @click="savePermissions" :loading="saving">保存权限配置</el-button>
+            <el-button size="small" @click="selectAll">{{ $t('permission.selectAll') }}</el-button>
+            <el-button size="small" @click="selectNone">{{ $t('permission.selectNone') }}</el-button>
+            <el-button type="primary" @click="savePermissions" :loading="saving">{{ $t('permission.savePermission') }}</el-button>
           </div>
         </div>
 
@@ -73,35 +73,35 @@
       </div>
 
       <div v-else class="empty-hint">
-        <el-empty description="请选择一个角色进行权限配置" />
+        <el-empty :description="$t('permission.emptyHint')" />
       </div>
     </el-card>
 
     <!-- 创建/编辑角色对话框 -->
     <el-dialog
       v-model="roleDialogVisible"
-      :title="isEditRole ? '编辑角色' : '新增角色'"
+      :title="isEditRole ? $t('permission.dialogEditRole') : $t('permission.dialogCreateRole')"
       width="500px"
     >
       <el-form :model="roleForm" :rules="roleRules" ref="roleFormRef" label-width="100px">
-        <el-form-item label="角色代码" prop="code">
-          <el-input v-model="roleForm.code" :disabled="isEditRole" placeholder="如：manager" />
+        <el-form-item :label="$t('permission.labelRoleCode')" prop="code">
+          <el-input v-model="roleForm.code" :disabled="isEditRole" :placeholder="$t('permission.placeholderRoleCode')" />
         </el-form-item>
-        <el-form-item label="角色名称" prop="name">
-          <el-input v-model="roleForm.name" placeholder="如：经理" />
+        <el-form-item :label="$t('permission.labelRoleName')" prop="name">
+          <el-input v-model="roleForm.name" :placeholder="$t('permission.placeholderRoleName')" />
         </el-form-item>
-        <el-form-item label="描述">
+        <el-form-item :label="$t('permission.labelDescription')">
           <el-input
             v-model="roleForm.description"
             type="textarea"
             :rows="3"
-            placeholder="角色描述"
+            :placeholder="$t('permission.placeholderDescription')"
           />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="roleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveRole" :loading="savingRole">确定</el-button>
+        <el-button @click="roleDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveRole" :loading="savingRole">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -109,6 +109,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   getAllRoles,
@@ -120,6 +121,8 @@ import {
   getPermissionTree,
 } from '@/api/permission';
 import { buildPermissionTree, flattenPermissionTree } from '@/utils/permissionTree';
+
+const { t } = useI18n();
 
 // 数据
 const roles = ref([]);
@@ -144,15 +147,15 @@ const roleFormRef = ref(null);
 const permissionTreeRef = ref(null);
 
 // 角色表单验证规则
-const roleRules = {
+const roleRules = computed(() => ({
   code: [
-    { required: true, message: '请输入角色代码', trigger: 'blur' },
-    { pattern: /^[a-zA-Z0-9_]+$/, message: '角色代码只能包含字母、数字和下划线', trigger: 'blur' },
+    { required: true, message: t('permission.placeholderRoleCode'), trigger: 'blur' },
+    { pattern: /^[a-zA-Z0-9_]+$/, message: t('permission.msgInvalidCode'), trigger: 'blur' },
   ],
   name: [
-    { required: true, message: '请输入角色名称', trigger: 'blur' },
+    { required: true, message: t('permission.placeholderRoleName'), trigger: 'blur' },
   ],
-};
+}));
 
 // 加载角色列表
 const loadRoles = async () => {
@@ -163,7 +166,7 @@ const loadRoles = async () => {
       roles.value = res.data.data;
     }
   } catch (error) {
-    ElMessage.error('加载角色列表失败');
+    ElMessage.error(t('common.failed'));
   } finally {
     rolesLoading.value = false;
   }
@@ -177,7 +180,7 @@ const loadPermissionTree = async () => {
       permissionTree.value = res.data.data;
     }
   } catch (error) {
-    ElMessage.error('加载权限树失败');
+    ElMessage.error(t('common.failed'));
   }
 };
 
@@ -193,7 +196,7 @@ const selectRole = async (role) => {
       checkedPermissionIds.value = res.data.data;
     }
   } catch (error) {
-    ElMessage.error('加载角色权限失败');
+    ElMessage.error(t('common.failed'));
   }
 };
 
@@ -213,7 +216,7 @@ const selectNone = () => {
 // 保存权限配置
 const savePermissions = async () => {
   if (!selectedRole.value) {
-    ElMessage.warning('请先选择角色');
+    ElMessage.warning(t('permission.emptyHint'));
     return;
   }
 
@@ -225,11 +228,11 @@ const savePermissions = async () => {
   try {
     const res = await assignRolePermissions(selectedRole.value.id, allCheckedKeys);
     if (res.data.code === 200) {
-      ElMessage.success('权限配置保存成功');
+      ElMessage.success(t('permission.msgSaveSuccess'));
       checkedPermissionIds.value = allCheckedKeys;
     }
   } catch (error) {
-    ElMessage.error('保存权限配置失败');
+    ElMessage.error(t('common.failed'));
   } finally {
     saving.value = false;
   }
@@ -277,7 +280,7 @@ const saveRole = async () => {
         });
 
         if (res.data.code === 200) {
-          ElMessage.success('角色更新成功');
+          ElMessage.success(t('permission.msgSaveSuccess'));
           roleDialogVisible.value = false;
           loadRoles();
         }
@@ -285,13 +288,13 @@ const saveRole = async () => {
         // 创建角色
         const res = await createRole(roleForm.value);
         if (res.data.code === 200) {
-          ElMessage.success('角色创建成功');
+          ElMessage.success(t('permission.msgSaveSuccess'));
           roleDialogVisible.value = false;
           loadRoles();
         }
       }
     } catch (error) {
-      ElMessage.error(isEditRole.value ? '更新角色失败' : '创建角色失败');
+      ElMessage.error(t('common.failed'));
     } finally {
       savingRole.value = false;
     }
@@ -302,18 +305,18 @@ const saveRole = async () => {
 const handleDeleteRole = async (role) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除角色"${role.name}"吗？`,
-      '确认删除',
+      t('permission.msgDeleteConfirm').replace('{name}', role.name),
+      t('common.confirm'),
       {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
         type: 'warning',
       }
     );
 
     const res = await deleteRole(role.id);
     if (res.data.code === 200) {
-      ElMessage.success('角色删除成功');
+      ElMessage.success(t('permission.msgDeleteSuccess'));
       if (selectedRole.value && selectedRole.value.id === role.id) {
         selectedRole.value = null;
         checkedPermissionIds.value = [];
@@ -322,7 +325,7 @@ const handleDeleteRole = async (role) => {
     }
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('删除角色失败');
+      ElMessage.error(t('common.failed'));
     }
   }
 };

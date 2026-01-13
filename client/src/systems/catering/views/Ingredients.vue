@@ -4,28 +4,28 @@
     <el-card shadow="hover" class="mb-4 flex-shrink-0">
       <div class="flex justify-between items-center">
         <div class="text-lg font-bold flex items-center">
-          <span class="mr-2">🥦</span> 食材库管理
+          <span class="mr-2">🥦</span> {{ $t('catering.ingredients.title') }}
         </div>
-        <el-button type="primary" icon="Plus" @click="openAddDialog">新增食材</el-button>
+        <el-button type="primary" icon="Plus" @click="openAddDialog">{{ $t('catering.ingredients.addBtn') }}</el-button>
       </div>
     </el-card>
 
     <div class="flex-1 overflow-hidden bg-white rounded border border-gray-200 shadow-sm">
       <el-table :data="tableData" stripe v-loading="loading" border :span-method="objectSpanMethod" height="100%"
         style="width: 100%">
-        <el-table-column prop="category" label="分类" width="120" align="center">
+        <el-table-column prop="category" :label="$t('catering.ingredients.colCategory')" width="120" align="center">
           <template #default="{ row }">
             <el-tag effect="dark" type="info" size="large">{{ row.category }}</el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" label="食材名称" min-width="150">
+        <el-table-column prop="name" :label="$t('catering.ingredients.colName')" min-width="150">
           <template #default="{ row }">
             <span class="font-bold text-gray-700">{{ row.name }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="unit" label="采购单位" width="120">
+        <el-table-column prop="unit" :label="$t('catering.ingredients.colUnit')" width="120">
           <template #default="{ row }">
             <span class="text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded text-xs">
               {{ getUnitLabel(row.unit) }}
@@ -33,14 +33,14 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="参考单价" width="120">
+        <el-table-column :label="$t('catering.ingredients.colPrice')" width="120">
           <template #default="{ row }">
             <span class="font-bold text-orange-600">¥{{ row.price }}</span>
             <span class="text-xs text-gray-400">/{{ row.unit }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="货源渠道" width="140">
+        <el-table-column :label="$t('catering.ingredients.colSource')" width="140">
           <template #default="{ row }">
             <el-tag :type="getSourceTagType(row.source)" effect="plain">
               {{ row.source }}
@@ -48,7 +48,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="风险标签 (过敏源)" width="160">
+        <el-table-column :label="$t('catering.ingredients.colAllergen')" width="160">
           <template #default="{ row }">
             <el-tag v-if="row.allergen_type !== '无'" type="danger" effect="light">
               ⚠️ {{ row.allergen_type }}
@@ -56,37 +56,37 @@
             <span v-else class="text-gray-400 text-xs flex items-center">
               <el-icon class="mr-1">
                 <CircleCheck />
-              </el-icon> 安全
+              </el-icon> {{ $t('catering.ingredients.safe') }}
             </span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="150" fixed="right" align="center">
+        <el-table-column :label="$t('common.action')" width="150" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
-            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button type="primary" link size="small" @click="openEditDialog(row)">{{ $t('common.edit') }}</el-button>
+            <el-button type="danger" link size="small" @click="handleDelete(row)">{{ $t('common.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑食材' : '新增食材'" width="500px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" :title="isEdit ? $t('catering.ingredients.dialogEdit') : $t('catering.ingredients.dialogAdd')" width="500px" destroy-on-close>
       <el-form :model="form" label-width="100px">
-        <el-form-item label="食材名称" required>
-          <el-input v-model="form.name" placeholder="如: 鸡蛋" />
+        <el-form-item :label="$t('catering.ingredients.labelName')" required>
+          <el-input v-model="form.name" :placeholder="$t('catering.ingredients.placeholderName')" />
         </el-form-item>
-        <el-form-item label="分类" required>
-          <el-select v-model="form.category" placeholder="请选择" style="width:100%">
+        <el-form-item :label="$t('catering.ingredients.labelCategory')" required>
+          <el-select v-model="form.category" :placeholder="$t('common.placeholderSelect')" style="width:100%">
             <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
           </el-select>
         </el-form-item>
-        <el-form-item label="采购单位" required>
-          <el-select v-model="form.unit" placeholder="请选择" style="width:100%">
+        <el-form-item :label="$t('catering.ingredients.labelUnit')" required>
+          <el-select v-model="form.unit" :placeholder="$t('common.placeholderSelect')" style="width:100%">
             <el-option v-for="u in unitOptions" :key="u.value" :label="u.label" :value="u.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="推荐货源" required>
-          <el-select v-model="form.source" placeholder="选择采购渠道" style="width:100%">
+        <el-form-item :label="$t('catering.ingredients.labelSource')" required>
+          <el-select v-model="form.source" :placeholder="$t('common.placeholderSelect')" style="width:100%">
             <el-option label="🔵 盒马鲜生" value="盒马鲜生" />
             <el-option label="🔵 山姆会员店" value="山姆" />
             <el-option label="🔵 麦德龙" value="麦德龙" />
@@ -95,14 +95,14 @@
             <el-option label="⚪ 菜市场/其他" value="其他" />
           </el-select>
         </el-form-item>
-        <el-form-item label="参考单价" required>
+        <el-form-item :label="$t('catering.ingredients.labelPrice')" required>
           <el-input-number v-model="form.price" :min="0" :precision="2" :step="0.5" controls-position="right"
             style="width: 100%">
             <template #prefix>¥</template>
           </el-input-number>
         </el-form-item>
-        <el-form-item label="风险标签">
-          <el-select v-model="form.allergen_type" placeholder="是否含常见过敏源?" style="width:100%">
+        <el-form-item :label="$t('catering.ingredients.labelAllergen')">
+          <el-select v-model="form.allergen_type" :placeholder="$t('common.placeholderSelect')" style="width:100%">
             <el-option label="无 (安全)" value="无" />
             <el-option label="🥜 花生/坚果" value="花生" />
             <el-option label="🦐 海鲜/虾蟹" value="海鲜" />
@@ -112,9 +112,9 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button @click="dialogVisible = false">{{ $t('common.cancel') }}</el-button>
         <el-button type="primary" @click="handleSubmit">
-          {{ isEdit ? '保存修改' : '确定新增' }}
+          {{ isEdit ? $t('common.save') : $t('common.confirm') }}
         </el-button>
       </template>
     </el-dialog>
@@ -123,9 +123,12 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, CircleCheck } from '@element-plus/icons-vue';
+
+const { t } = useI18n();
 
 const loading = ref(false);
 const tableData = ref([]);
@@ -196,7 +199,7 @@ const fetchData = async () => {
       tableData.value = res.data.data;
       calculateSpans(tableData.value);
     }
-  } catch (err) { ElMessage.error('获取失败'); }
+  } catch (err) { ElMessage.error(t('common.failed')); }
   finally { loading.value = false; }
 };
 
@@ -214,25 +217,25 @@ const openEditDialog = (row) => {
 };
 
 const handleSubmit = async () => {
-  if (!form.name) return ElMessage.warning('请输入名称');
+  if (!form.name) return ElMessage.warning(t('common.placeholderInput') + t('catering.ingredients.labelName'));
   try {
     let res;
     if (isEdit.value) res = await axios.put(`/api/catering/ingredients/${form.id}`, form);
     else res = await axios.post('/api/catering/ingredients', form);
     if (res.data.code === 200) {
-      ElMessage.success(isEdit.value ? '更新成功' : '添加成功');
+      ElMessage.success(t('catering.ingredients.msgSaveSuccess'));
       dialogVisible.value = false;
       fetchData();
     }
-  } catch (err) { ElMessage.error('操作失败'); }
+  } catch (err) { ElMessage.error(t('common.failed')); }
 };
 
 const handleDelete = async (row) => {
   try {
-    await ElMessageBox.confirm(`确定删除 ${row.name} 吗?`);
+    await ElMessageBox.confirm(t('catering.ingredients.msgDeleteConfirm').replace('{name}', row.name));
     const res = await axios.delete(`/api/catering/ingredients/${row.id}`);
-    if (res.data.code === 200) { ElMessage.success('删除成功'); fetchData(); }
-  } catch (err) { if (err !== 'cancel') ElMessage.error('删除失败'); }
+    if (res.data.code === 200) { ElMessage.success(t('catering.ingredients.msgDeleteSuccess')); fetchData(); }
+  } catch (err) { if (err !== 'cancel') ElMessage.error(t('common.failed')); }
 };
 
 onMounted(fetchData);

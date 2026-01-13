@@ -1,9 +1,10 @@
 <script setup>
 import { useRouter } from 'vue-router';
 import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { UserFilled, Plus, Setting, Delete, Edit, List, Goods, PriceTag, Warning, House, Trophy, Calendar, Box } from '@element-plus/icons-vue';
+import { UserFilled, Plus, Setting, Delete, Edit, List, Goods, PriceTag, Warning, House, Trophy, Calendar, Box, ArrowDown } from '@element-plus/icons-vue';
 import dayjs from 'dayjs';
 // 导入子组件
 import EarnTasks from '../components/EarnTasks.vue';
@@ -13,8 +14,18 @@ import Auctions from '../components/Auctions.vue';
 import BillCalendar from '../components/BillCalendar.vue';
 import Backpack from '../components/Backpack.vue';
 
+const { t, locale } = useI18n();
 const router = useRouter();
 const goHome = () => { router.push('/'); };
+
+// 语言切换
+const currentLang = ref(locale.value);
+const handleLangCommand = (command) => {
+  locale.value = command;
+  currentLang.value = command;
+  localStorage.setItem('lang', command);
+  ElMessage.success(command === 'zh' ? t('common.lang.switchedToZh') : t('common.lang.switchedToEn'));
+};
 
 // 组件引用
 const backpackRef = ref(null);
@@ -69,6 +80,12 @@ watch(() => currentDate.value, (newVal, oldVal) => {
 });
 
 onMounted(async () => {
+  // 初始化语言设置
+  const savedLang = localStorage.getItem('lang');
+  if (savedLang && (savedLang === 'zh' || savedLang === 'en')) {
+    locale.value = savedLang;
+    currentLang.value = savedLang;
+  }
   // 初始化数据
   await initData();
 });
@@ -140,15 +157,15 @@ const switchMember = (id) => { currentMemberId.value = id; loadMemberData(); };
 const handleTask = async (task) => {
   // 参数验证
   if (!currentMemberId.value) {
-    ElMessage.warning('请先选择成员');
+    ElMessage.warning(t('familyDashboard.msgSelectMember'));
     return;
   }
   if (!task || !task.id) {
-    ElMessage.error('任务信息不完整');
+    ElMessage.error(t('familyDashboard.msgTaskIncomplete'));
     return;
   }
   if (task.points === undefined || task.points === null) {
-    ElMessage.error('任务积分值无效');
+    ElMessage.error(t('familyDashboard.msgInvalidPoints'));
     return;
   }
 
@@ -164,24 +181,24 @@ const handleTask = async (task) => {
       loadMemberData();
     } else {
       dashboard.totalPoints -= task.points;
-      ElMessage.error(res.data.msg || '操作失败');
+      ElMessage.error(res.data.msg || t('familyDashboard.msgOperationFailed'));
     }
   } catch (err) {
     dashboard.totalPoints -= task.points;
     console.error('添加积分失败:', err);
-    const errorMsg = err.response?.data?.msg || err.response?.data?.error || err.message || '操作失败，请重试';
+    const errorMsg = err.response?.data?.msg || err.response?.data?.error || err.message || t('familyDashboard.msgOperationFailedRetry');
     ElMessage.error(errorMsg);
   }
 };
 
 // 处理兑换
 const handleRedeem = (reward) => {
-  if (dashboard.totalPoints < reward.cost) return ElMessage.warning('积分不足！');
+  if (dashboard.totalPoints < reward.cost) return ElMessage.warning(t('familyDashboard.msgInsufficientPoints'));
   const status = checkRewardStatus(reward);
   if (!status.available) return;
-  ElMessageBox.confirm(`确定兑换 "${reward.name}" 吗?`, '确认').then(async () => {
+  ElMessageBox.confirm(t('familyDashboard.msgRedeemConfirm').replace('{name}', reward.name), t('common.confirm')).then(async () => {
     const res = await axios.post('/api/family/redeem', { memberId: currentMemberId.value, rewardId: reward.id });
-    if (res.data.code === 200) { ElMessage.success('兑换成功！'); loadMemberData(); } else { ElMessage.warning(res.data.msg); }
+    if (res.data.code === 200) { ElMessage.success(t('familyDashboard.msgRedeemSuccess')); loadMemberData(); } else { ElMessage.warning(res.data.msg); }
   });
 };
 
@@ -189,9 +206,9 @@ const handleRedeem = (reward) => {
 const checkRewardStatus = (reward) => {
   if (reward.limit_type === 'unlimited') return { available: true, text: '' };
   const stat = dashboard.usageStats.find(s => s.reward_id === reward.id);
-  if (!stat) return { available: true, text: `限 ${reward.limit_max}` };
+  if (!stat) return { available: true, text: t('familyDashboard.msgLimitText').replace('{max}', reward.limit_max) };
   const left = reward.limit_max - parseInt(stat.usage_count);
-  return left <= 0 ? { available: false, text: '完' } : { available: true, text: `剩 ${left}` };
+  return left <= 0 ? { available: false, text: t('familyDashboard.msgSoldOut') } : { available: true, text: t('familyDashboard.msgRemaining').replace('{left}', left) };
 };
 
 // 处理竞拍点击
@@ -205,8 +222,8 @@ const openAuctionSettle = (auction) => {
 };
 
 const submitAuction = async () => {
-  if (!auctionForm.winnerId) return ElMessage.warning('请选择得标人');
-  if (auctionForm.bidPoints < auctionForm.startingPrice) return ElMessage.warning('低于起拍价');
+  if (!auctionForm.winnerId) return ElMessage.warning(t('familyDashboard.msgSelectWinner'));
+  if (auctionForm.bidPoints < auctionForm.startingPrice) return ElMessage.warning(t('familyDashboard.msgBelowStartingPrice'));
   await axios.post('/api/family/auction/settle', { auctionId: auctionForm.auctionId, memberId: auctionForm.winnerId, bidPoints: auctionForm.bidPoints });
   showAuctionModal.value = false;
   loadMemberData();
@@ -266,21 +283,37 @@ const handleCalendarMonthChange = (newDate) => {
     <div class="score-header">
       <div class="back-home" @click="goHome"><el-icon>
           <House />
-        </el-icon> 首页</div>
-      <div class="points-circle"><span class="number">{{ dashboard.totalPoints }}</span><span class="label">当前积分</span>
+        </el-icon> {{ $t('familyDashboard.home') }}</div>
+      <div class="points-circle"><span class="number">{{ dashboard.totalPoints }}</span><span class="label">{{ $t('familyDashboard.currentPoints') }}</span>
       </div>
-      <div class="admin-entry"><el-dropdown trigger="click"><span class="el-dropdown-link"
-            style="color:white; cursor:pointer"><el-icon>
-              <Setting />
-            </el-icon> 管理</span><template #dropdown><el-dropdown-menu><el-dropdown-item :icon="Plus"
-                @click="openAddRule">添加规则/奖品</el-dropdown-item><el-dropdown-item :icon="PriceTag"
-                @click="showCatModal = true">分类管理</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+      <div class="header-right">
+        <el-dropdown @command="handleLangCommand" style="margin-right: 15px; cursor: pointer;">
+          <span class="lang-switch-header">
+            🌐 {{ currentLang === 'zh' ? $t('common.lang.zh') : $t('common.lang.en') }}
+            <el-icon class="el-icon--right" style="font-size: 12px;">
+              <ArrowDown />
+            </el-icon>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="zh">{{ $t('common.lang.zh') }}</el-dropdown-item>
+              <el-dropdown-item command="en">{{ $t('common.lang.en') }}</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <div class="admin-entry"><el-dropdown trigger="click"><span class="el-dropdown-link"
+              style="color:white; cursor:pointer"><el-icon>
+                <Setting />
+              </el-icon> {{ $t('familyDashboard.manage') }}</span><template #dropdown><el-dropdown-menu><el-dropdown-item :icon="Plus"
+                  @click="openAddRule">{{ $t('familyDashboard.addRule') }}</el-dropdown-item><el-dropdown-item :icon="PriceTag"
+                  @click="showCatModal = true">{{ $t('familyDashboard.categoryManage') }}</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+        </div>
       </div>
     </div>
 
     <el-tabs type="border-card" class="action-tabs">
-      <el-tab-pane label="赚分">
-        <template #label><span class="tab-label"><el-icon><List /></el-icon> 赚分</span></template>
+      <el-tab-pane :label="$t('familyDashboard.earnPoints')">
+        <template #label><span class="tab-label"><el-icon><List /></el-icon> {{ $t('familyDashboard.earnPoints') }}</span></template>
         <EarnTasks
           :tasks="filteredTasks"
           :categories="categories"
@@ -288,8 +321,8 @@ const handleCalendarMonthChange = (newDate) => {
           @context-menu="handleContextMenu" />
       </el-tab-pane>
       
-      <el-tab-pane label="扣分">
-        <template #label><span class="tab-label" style="color:#F56C6C"><el-icon><Warning /></el-icon> 扣分</span></template>
+      <el-tab-pane :label="$t('familyDashboard.penaltyPoints')">
+        <template #label><span class="tab-label" style="color:#F56C6C"><el-icon><Warning /></el-icon> {{ $t('familyDashboard.penaltyPoints') }}</span></template>
         <PenaltyTasks
           :tasks="filteredTasks"
           :categories="categories"
@@ -297,8 +330,8 @@ const handleCalendarMonthChange = (newDate) => {
           @context-menu="handleContextMenu" />
       </el-tab-pane>
       
-      <el-tab-pane label="兑换">
-        <template #label><span class="tab-label"><el-icon><Goods /></el-icon> 兑换</span></template>
+      <el-tab-pane :label="$t('familyDashboard.redeem')">
+        <template #label><span class="tab-label"><el-icon><Goods /></el-icon> {{ $t('familyDashboard.redeem') }}</span></template>
         <Rewards
           :rewards="rewards"
           :current-member-id="currentMemberId"
@@ -309,8 +342,8 @@ const handleCalendarMonthChange = (newDate) => {
           @context-menu="handleContextMenu" />
       </el-tab-pane>
       
-      <el-tab-pane label="竞拍">
-        <template #label><span class="tab-label"><el-icon><Trophy /></el-icon> 竞拍</span></template>
+      <el-tab-pane :label="$t('familyDashboard.auction')">
+        <template #label><span class="tab-label"><el-icon><Trophy /></el-icon> {{ $t('familyDashboard.auction') }}</span></template>
         <Auctions
           :rewards="rewards"
           :current-member-id="currentMemberId"
@@ -320,10 +353,10 @@ const handleCalendarMonthChange = (newDate) => {
           @context-menu="handleContextMenu" />
       </el-tab-pane>
 
-      <el-tab-pane label="背包">
+      <el-tab-pane :label="$t('familyDashboard.backpack')">
         <template #label>
           <span class="tab-label">
-            <el-icon><Box /></el-icon> 背包
+            <el-icon><Box /></el-icon> {{ $t('familyDashboard.backpack') }}
             <el-badge v-if="backpackStats.unused_count > 0" 
                       :value="backpackStats.unused_count" 
                       class="badge" />
@@ -336,8 +369,8 @@ const handleCalendarMonthChange = (newDate) => {
           @refresh="loadMemberData" />
       </el-tab-pane>
 
-      <el-tab-pane label="账单">
-        <template #label><span class="tab-label"><el-icon><Calendar /></el-icon> 账单</span></template>
+      <el-tab-pane :label="$t('familyDashboard.bill')">
+        <template #label><span class="tab-label"><el-icon><Calendar /></el-icon> {{ $t('familyDashboard.bill') }}</span></template>
         <BillCalendar
           :history="dashboard.history"
           :current-date="currentDate"
@@ -347,54 +380,54 @@ const handleCalendarMonthChange = (newDate) => {
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="showAddModal" :title="addForm.id ? '编辑' : '添加'" width="90%"><el-form
-        label-position="top"><el-form-item label="类型"><el-radio-group v-model="addForm.type"><el-radio-button
-              label="task">赚分</el-radio-button><el-radio-button label="penalty">扣分</el-radio-button><el-radio-button
-              label="reward">奖品</el-radio-button><el-radio-button
-              label="auction">竞拍</el-radio-button></el-radio-group></el-form-item><el-form-item label="名称"><el-input
-            v-model="addForm.name" /></el-form-item><el-form-item v-if="addForm.type === 'auction'" label="描述"><el-input
-            v-model="addForm.description" type="textarea" :rows="4" placeholder="请输入竞拍品描述，支持换行" /></el-form-item><el-form-item label="分值"><el-input-number v-model="addForm.points"
+    <el-dialog v-model="showAddModal" :title="addForm.id ? $t('familyDashboard.edit') : $t('familyDashboard.add')" width="90%"><el-form
+        label-position="top"><el-form-item :label="$t('familyDashboard.type')"><el-radio-group v-model="addForm.type"><el-radio-button
+              label="task">{{ $t('familyDashboard.earnPoints') }}</el-radio-button><el-radio-button label="penalty">{{ $t('familyDashboard.penaltyPoints') }}</el-radio-button><el-radio-button
+              label="reward">{{ $t('familyDashboard.redeem') }}</el-radio-button><el-radio-button
+              label="auction">{{ $t('familyDashboard.auction') }}</el-radio-button></el-radio-group></el-form-item><el-form-item :label="$t('familyDashboard.name')"><el-input
+            v-model="addForm.name" /></el-form-item><el-form-item v-if="addForm.type === 'auction'" :label="$t('familyDashboard.description')"><el-input
+            v-model="addForm.description" type="textarea" :rows="4" :placeholder="$t('common.placeholderInput')" /></el-form-item><el-form-item :label="$t('familyDashboard.points')"><el-input-number v-model="addForm.points"
             :min="1" /></el-form-item><el-form-item v-if="addForm.type === 'reward' || addForm.type === 'auction'"
-          label="兑换限制"><el-radio-group v-model="addForm.limitType"><el-radio-button
-              label="unlimited">不限</el-radio-button><el-radio-button label="weekly">每周</el-radio-button><el-radio-button
-              label="monthly">每月</el-radio-button></el-radio-group></el-form-item><el-form-item
+          :label="$t('familyDashboard.redeemLimit')"><el-radio-group v-model="addForm.limitType"><el-radio-button
+              label="unlimited">{{ $t('familyDashboard.unlimited') }}</el-radio-button><el-radio-button label="weekly">{{ $t('familyDashboard.weekly') }}</el-radio-button><el-radio-button
+              label="monthly">{{ $t('familyDashboard.monthly') }}</el-radio-button></el-radio-group></el-form-item><el-form-item
           v-if="(addForm.type === 'reward' || addForm.type === 'auction') && addForm.limitType !== 'unlimited'"
-          label="周期内兑换次数"><el-input-number v-model="addForm.limitMax" :min="1" /></el-form-item><el-form-item v-if="addForm.type !== 'reward' && addForm.type !== 'auction'"
-          label="分类"><el-select v-model="addForm.category"><el-option v-for="c in categories" :key="c.key"
+          :label="$t('familyDashboard.periodLimit')"><el-input-number v-model="addForm.limitMax" :min="1" /></el-form-item><el-form-item v-if="addForm.type !== 'reward' && addForm.type !== 'auction'"
+          :label="$t('familyDashboard.category')"><el-select v-model="addForm.category"><el-option v-for="c in categories" :key="c.key"
               :label="c.name" :value="c.key" /></el-select></el-form-item><el-form-item v-if="addForm.type !== 'auction'"
-          label="对象"><el-checkbox-group v-model="addForm.targetMembers"><el-checkbox v-for="m in members" :key="m.id"
+          :label="$t('familyDashboard.target')"><el-checkbox-group v-model="addForm.targetMembers"><el-checkbox v-for="m in members" :key="m.id"
               :label="m.id">{{ m.name }}</el-checkbox></el-checkbox-group></el-form-item></el-form><template
-        #footer><el-button @click="showAddModal = false">取消</el-button><el-button type="primary"
-          @click="submitAddItem">保存</el-button></template></el-dialog>
-    <el-dialog v-model="showAuctionModal" title="竞拍结算" width="90%"><el-form label-position="top"><el-form-item
-          label="得标人"><el-select v-model="auctionForm.winnerId" style="width:100%"><el-option v-for="m in members"
+        #footer><el-button @click="showAddModal = false">{{ $t('familyDashboard.cancel') }}</el-button><el-button type="primary"
+          @click="submitAddItem">{{ $t('familyDashboard.save') }}</el-button></template></el-dialog>
+    <el-dialog v-model="showAuctionModal" :title="$t('familyDashboard.auctionSettle')" width="90%"><el-form label-position="top"><el-form-item
+          :label="$t('familyDashboard.winner')"><el-select v-model="auctionForm.winnerId" style="width:100%"><el-option v-for="m in members"
               :key="m.id" :label="m.name" :value="m.id" /></el-select></el-form-item><el-form-item
-          label="成交价"><el-input-number v-model="auctionForm.bidPoints" :min="auctionForm.startingPrice"
+          :label="$t('familyDashboard.bidPrice')"><el-input-number v-model="auctionForm.bidPoints" :min="auctionForm.startingPrice"
             style="width:100%" /></el-form-item></el-form><template #footer><el-button
-          @click="showAuctionModal = false">取消</el-button><el-button type="primary"
-          @click="submitAuction">成交</el-button></template></el-dialog>
-    <el-dialog v-model="showCatModal" title="分类" width="90%">
+          @click="showAuctionModal = false">{{ $t('familyDashboard.cancel') }}</el-button><el-button type="primary"
+          @click="submitAuction">{{ $t('familyDashboard.settle') }}</el-button></template></el-dialog>
+    <el-dialog v-model="showCatModal" :title="$t('familyDashboard.category')" width="90%">
       <div v-for="c in categories" :key="c.id" class="cat-item-row"><span>{{ c.name }}</span><el-button link type="danger"
           :icon="Delete" @click="deleteCat(c.id)" v-if="c.parent_id !== 0" /></div>
       <div style="margin-top:10px;display:flex;gap:5px"><el-input v-model="catForm.name" /><el-button type="primary"
-          @click="submitAddCat">加</el-button></div>
+          @click="submitAddCat">{{ $t('familyDashboard.msgAddCategory') }}</el-button></div>
     </el-dialog>
-    <el-dialog v-model="showMemberModal" title="成员" width="85%">
+    <el-dialog v-model="showMemberModal" :title="$t('familyDashboard.member')" width="85%">
       <div class="member-form">
         <div class="avatar-uploader" @click="$refs.fi.click()"><el-avatar :size="80"
             :src="$img(memberForm.avatarPreview)" /><input type="file" ref="fi" style="display:none"
             @change="handleFileChange"></div><el-input v-model="memberForm.name" style="margin-top:20px" />
-      </div><template #footer><el-button @click="showMemberModal = false">取消</el-button><el-button type="primary"
-          @click="submitMember">保存</el-button></template>
+      </div><template #footer><el-button @click="showMemberModal = false">{{ $t('familyDashboard.cancel') }}</el-button><el-button type="primary"
+          @click="submitMember">{{ $t('familyDashboard.save') }}</el-button></template>
     </el-dialog>
     <div v-if="contextMenu.visible" class="context-menu"
       :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }" @click.stop>
       <div class="menu-item" @click="handleMenuAction('edit')"><el-icon>
           <Edit />
-        </el-icon> 编辑</div>
+        </el-icon> {{ $t('familyDashboard.edit') }}</div>
       <div class="menu-item delete" @click="handleMenuAction('delete')"><el-icon>
           <Delete />
-        </el-icon> 删除</div>
+        </el-icon> {{ $t('familyDashboard.msgDelete') }}</div>
     </div>
   </div>
 </template>
@@ -442,6 +475,9 @@ const handleCalendarMonthChange = (newDate) => {
   background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
   color: white;
   position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .points-circle .number {
@@ -451,10 +487,33 @@ const handleCalendarMonthChange = (newDate) => {
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.admin-entry {
+.header-right {
   position: absolute;
   top: 10px;
   right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lang-switch-header {
+  color: white;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.lang-switch-header:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.admin-entry {
   background: rgba(255, 255, 255, 0.2);
   padding: 4px 8px;
   border-radius: 15px;

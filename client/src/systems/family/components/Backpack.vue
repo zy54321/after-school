@@ -1,8 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import dayjs from 'dayjs';
+
+const { t } = useI18n();
 
 const props = defineProps({
   memberId: {
@@ -75,7 +78,7 @@ const loadBackpack = async () => {
     }
   } catch (err) {
     console.error('加载背包失败:', err);
-    ElMessage.error('加载背包失败');
+    ElMessage.error(t('familyDashboard.loadBackpackFailed'));
   } finally {
     loading.value = false;
   }
@@ -84,17 +87,21 @@ const loadBackpack = async () => {
 // 使用物品
 const handleUse = async (item) => {
   if (item.status !== 'unused') {
-    ElMessage.warning('该物品已使用');
+    ElMessage.warning(t('familyDashboard.itemUsed'));
     return;
   }
 
   try {
+    const confirmMsg = item.quantity > 1 
+      ? t('familyDashboard.useConfirmWithQuantity').replace('{name}', item.reward_name).replace('{quantity}', item.quantity)
+      : t('familyDashboard.useConfirm').replace('{name}', item.reward_name);
+    
     await ElMessageBox.confirm(
-      `确定使用 "${item.reward_name}" 吗？${item.quantity > 1 ? `\n当前数量：${item.quantity}` : ''}`,
-      '确认使用',
+      confirmMsg,
+      t('common.confirm'),
       {
-        confirmButtonText: '使用',
-        cancelButtonText: '取消',
+        confirmButtonText: t('familyDashboard.use'),
+        cancelButtonText: t('familyDashboard.cancel'),
         type: 'info'
       }
     );
@@ -106,16 +113,16 @@ const handleUse = async (item) => {
     });
 
     if (res.data.code === 200) {
-      ElMessage.success('使用成功！');
+      ElMessage.success(t('familyDashboard.useSuccess'));
       await loadBackpack();
       emit('refresh'); // 通知父组件刷新
     } else {
-      ElMessage.warning(res.data.msg || '使用失败');
+      ElMessage.warning(res.data.msg || t('familyDashboard.useFailed'));
     }
   } catch (err) {
     if (err !== 'cancel') {
       console.error('使用物品失败:', err);
-      ElMessage.error(err.response?.data?.msg || '使用失败');
+      ElMessage.error(err.response?.data?.msg || t('familyDashboard.useFailed'));
     }
   }
 };
@@ -129,7 +136,7 @@ const formatTime = (time) => {
 // 打开转赠弹窗
 const openTransfer = (item) => {
   if (item.status !== 'unused') {
-    ElMessage.warning('只能转赠未使用的物品');
+    ElMessage.warning(t('familyDashboard.itemUsed'));
     return;
   }
   transferForm.value = {
@@ -144,11 +151,11 @@ const openTransfer = (item) => {
 // 确认转赠
 const confirmTransfer = async () => {
   if (!transferForm.value.toMemberId) {
-    ElMessage.warning('请选择转赠对象');
+    ElMessage.warning(t('familyDashboard.transferTo'));
     return;
   }
   if (transferForm.value.toMemberId === props.memberId) {
-    ElMessage.warning('不能转赠给自己');
+    ElMessage.warning(t('familyDashboard.cannotTransferToSelf'));
     return;
   }
 
@@ -161,16 +168,16 @@ const confirmTransfer = async () => {
     });
 
     if (res.data.code === 200) {
-      ElMessage.success('转赠成功！');
+      ElMessage.success(t('familyDashboard.transferSuccess'));
       showTransferModal.value = false;
       await loadBackpack();
       emit('refresh');
     } else {
-      ElMessage.warning(res.data.msg || '转赠失败');
+      ElMessage.warning(res.data.msg || t('familyDashboard.transferFailed'));
     }
   } catch (err) {
     console.error('转赠失败:', err);
-    ElMessage.error(err.response?.data?.msg || '转赠失败');
+    ElMessage.error(err.response?.data?.msg || t('familyDashboard.transferFailed'));
   }
 };
 
@@ -192,7 +199,7 @@ const loadUsageHistory = async () => {
     }
   } catch (err) {
     console.error('加载使用记录失败:', err);
-    ElMessage.error('加载使用记录失败');
+    ElMessage.error(t('common.failed'));
   } finally {
     loadingHistory.value = false;
   }
@@ -226,15 +233,15 @@ watch(() => filterStatus.value, () => {
     <div class="backpack-header">
       <div class="stats-bar">
         <div class="stat-item">
-          <span class="label">总数</span>
+          <span class="label">{{ $t('common.total') }}</span>
           <span class="value">{{ stats.total_items }}</span>
         </div>
         <div class="stat-item unused">
-          <span class="label">未使用</span>
+          <span class="label">{{ $t('familyDashboard.unused') }}</span>
           <span class="value">{{ stats.unused_count }}</span>
         </div>
         <div class="stat-item used">
-          <span class="label">已使用</span>
+          <span class="label">{{ $t('familyDashboard.used') }}</span>
           <span class="value">{{ stats.used_count }}</span>
         </div>
       </div>
@@ -244,33 +251,33 @@ watch(() => filterStatus.value, () => {
           class="filter-tab" 
           :class="{ active: filterStatus === 'all' }"
           @click="filterStatus = 'all'">
-          全部
+          {{ $t('familyDashboard.all') }}
         </div>
         <div 
           class="filter-tab" 
           :class="{ active: filterStatus === 'unused' }"
           @click="filterStatus = 'unused'">
-          未使用
+          {{ $t('familyDashboard.unused') }}
         </div>
         <div 
           class="filter-tab" 
           :class="{ active: filterStatus === 'used' }"
           @click="filterStatus = 'used'">
-          已使用
+          {{ $t('familyDashboard.used') }}
         </div>
         <div 
           class="filter-tab history-tab"
           @click="openUsageHistory">
-          使用记录
+          {{ $t('familyDashboard.usageHistory') }}
         </div>
       </div>
     </div>
 
     <!-- 物品列表 -->
-    <div v-if="loading" class="loading">加载中...</div>
+    <div v-if="loading" class="loading">{{ $t('common.loading') }}</div>
     <div v-else-if="filteredItems.length === 0" class="empty">
       <div class="empty-icon">🎒</div>
-      <div class="empty-text">背包空空如也</div>
+      <div class="empty-text">{{ $t('familyDashboard.emptyBackpack') }}</div>
     </div>
     <div v-else class="backpack-grid">
       <div
@@ -282,9 +289,9 @@ watch(() => filterStatus.value, () => {
         <div class="item-info">
           <div class="item-name">{{ item.reward_name }}</div>
           <div class="item-meta">
-            <span class="item-time">获得：{{ formatTime(item.obtained_at) }}</span>
+            <span class="item-time">{{ $t('familyDashboard.obtainedAt') }}：{{ formatTime(item.obtained_at) }}</span>
             <span v-if="item.status === 'used'" class="item-time">
-              使用：{{ formatTime(item.used_at) }}
+              {{ $t('familyDashboard.usedAt') }}：{{ formatTime(item.used_at) }}
             </span>
           </div>
         </div>
@@ -297,7 +304,7 @@ watch(() => filterStatus.value, () => {
               size="small"
               round
               @click="handleUse(item)">
-              使用
+              {{ $t('familyDashboard.use') }}
             </el-button>
             <el-button
               v-if="item.status === 'unused'"
@@ -305,19 +312,19 @@ watch(() => filterStatus.value, () => {
               size="small"
               round
               @click="openTransfer(item)">
-              转赠
+              {{ $t('familyDashboard.transfer') }}
             </el-button>
-            <el-tag v-if="item.status === 'used'" type="info" size="small">已使用</el-tag>
+            <el-tag v-if="item.status === 'used'" type="info" size="small">{{ $t('familyDashboard.used') }}</el-tag>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 转赠弹窗 -->
-    <el-dialog v-model="showTransferModal" title="转赠物品" width="90%">
+    <el-dialog v-model="showTransferModal" :title="$t('familyDashboard.transfer')" width="90%">
       <el-form label-position="top">
-        <el-form-item label="转赠给">
-          <el-select v-model="transferForm.toMemberId" placeholder="请选择成员" style="width: 100%">
+        <el-form-item :label="$t('familyDashboard.transferTo')">
+          <el-select v-model="transferForm.toMemberId" :placeholder="$t('common.placeholderSelect')" style="width: 100%">
             <el-option
               v-for="member in members.filter(m => m.id !== memberId)"
               :key="member.id"
@@ -326,25 +333,25 @@ watch(() => filterStatus.value, () => {
             </el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="转赠数量">
+        <el-form-item :label="$t('familyDashboard.quantity')">
           <el-input-number v-model="transferForm.quantity" :min="1" :max="transferForm.maxQuantity" />
           <div style="font-size: 0.75rem; color: #909399; margin-top: 4px;">
-            最多可转赠：{{ transferForm.maxQuantity }}
+            {{ $t('familyDashboard.maxTransfer') }}：{{ transferForm.maxQuantity }}
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showTransferModal = false">取消</el-button>
-        <el-button type="primary" @click="confirmTransfer">确认转赠</el-button>
+        <el-button @click="showTransferModal = false">{{ $t('familyDashboard.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmTransfer">{{ $t('familyDashboard.confirmTransfer') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 使用记录弹窗 -->
-    <el-dialog v-model="showUsageHistoryModal" title="使用记录" width="90%">
-      <div v-if="loadingHistory" class="loading">加载中...</div>
+    <el-dialog v-model="showUsageHistoryModal" :title="$t('familyDashboard.usageHistory')" width="90%">
+      <div v-if="loadingHistory" class="loading">{{ $t('common.loading') }}</div>
       <div v-else-if="usageHistory.length === 0" class="empty">
         <div class="empty-icon">📝</div>
-        <div class="empty-text">暂无使用记录</div>
+        <div class="empty-text">{{ $t('familyDashboard.noHistory') }}</div>
       </div>
       <div v-else class="usage-history-list">
         <div
@@ -355,8 +362,8 @@ watch(() => filterStatus.value, () => {
           <div class="record-info">
             <div class="record-name">{{ record.reward_name }}</div>
             <div class="record-meta">
-              <span class="record-time">使用时间：{{ formatTime(record.used_at) }}</span>
-              <span v-if="record.quantity > 1" class="record-quantity">数量：{{ record.quantity }}</span>
+              <span class="record-time">{{ $t('familyDashboard.usedAt') }}：{{ formatTime(record.used_at) }}</span>
+              <span v-if="record.quantity > 1" class="record-quantity">{{ $t('familyDashboard.usedQuantity') }}：{{ record.quantity }}</span>
             </div>
           </div>
         </div>

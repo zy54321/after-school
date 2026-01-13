@@ -3,15 +3,15 @@
     <el-card shadow="never">
       <template #header>
         <div class="header-row">
-          <span class="title">👥 用户角色分配</span>
+          <span class="title">👥 {{ $t('userRole.title') }}</span>
         </div>
       </template>
 
       <el-table :data="users" stripe v-loading="loading">
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="username" label="用户名" width="150" />
-        <el-table-column prop="real_name" label="真实姓名" width="150" />
-        <el-table-column label="当前角色" width="200">
+        <el-table-column prop="username" :label="$t('userRole.colUsername')" width="150" />
+        <el-table-column prop="real_name" :label="$t('userRole.colRealName')" width="150" />
+        <el-table-column :label="$t('userRole.colRoles')" width="200">
           <template #default="scope">
             <el-tag
               v-for="role in getUserRolesLocal(scope.row.id)"
@@ -21,13 +21,13 @@
             >
               {{ role.name }}
             </el-tag>
-            <span v-if="getUserRolesLocal(scope.row.id).length === 0" style="color: #909399">未分配</span>
+            <span v-if="getUserRolesLocal(scope.row.id).length === 0" style="color: #909399">{{ $t('userRole.notAssigned') }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150">
+        <el-table-column :label="$t('common.action')" width="150">
           <template #default="scope">
             <el-button size="small" link type="primary" @click="openAssignDialog(scope.row)">
-              分配角色
+              {{ $t('userRole.assignRole') }}
             </el-button>
           </template>
         </el-table-column>
@@ -35,10 +35,10 @@
     </el-card>
 
     <!-- 分配角色对话框 -->
-    <el-dialog v-model="assignDialogVisible" title="分配角色" width="500px">
+    <el-dialog v-model="assignDialogVisible" :title="$t('userRole.dialogTitle')" width="500px">
       <div v-if="selectedUser">
         <p style="margin-bottom: 20px">
-          <strong>用户：</strong>{{ selectedUser.real_name }} ({{ selectedUser.username }})
+          <strong>{{ $t('user.colRealName') }}：</strong>{{ selectedUser.real_name }} ({{ selectedUser.username }})
         </p>
         <el-checkbox-group v-model="selectedRoleIds">
           <el-checkbox
@@ -49,14 +49,14 @@
           >
             {{ role.name }}
             <el-tag v-if="role.is_system" type="danger" size="small" style="margin-left: 5px">
-              系统角色
+              {{ $t('permission.colSystemRole') }}
             </el-tag>
           </el-checkbox>
         </el-checkbox-group>
       </div>
       <template #footer>
-        <el-button @click="assignDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveUserRoles" :loading="saving">确定</el-button>
+        <el-button @click="assignDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveUserRoles" :loading="saving">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -64,9 +64,12 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import { getAllRoles, getUserRoles, assignUserRoles } from '@/api/permission';
 import axios from 'axios';
+
+const { t } = useI18n();
 
 // 数据
 const users = ref([]);
@@ -91,7 +94,7 @@ const loadUsers = async () => {
       await loadAllUserRoles();
     }
   } catch (error) {
-    ElMessage.error('加载用户列表失败');
+    ElMessage.error(t('common.failed'));
   } finally {
     loading.value = false;
   }
@@ -121,7 +124,7 @@ const loadRoles = async () => {
       roles.value = res.data.data;
     }
   } catch (error) {
-    ElMessage.error('加载角色列表失败');
+    ElMessage.error(t('common.failed'));
   }
 };
 
@@ -148,7 +151,7 @@ const openAssignDialog = async (user) => {
       selectedRoleIds.value = res.data.data.map(r => r.id);
     }
   } catch (error) {
-    ElMessage.error('加载用户角色失败');
+    ElMessage.error(t('common.failed'));
     selectedRoleIds.value = [];
   }
   
@@ -163,7 +166,7 @@ const saveUserRoles = async () => {
   try {
     const res = await assignUserRoles(selectedUser.value.id, selectedRoleIds.value);
     if (res.data.code === 200) {
-      ElMessage.success('角色分配成功');
+      ElMessage.success(t('userRole.msgSaveSuccess'));
       assignDialogVisible.value = false;
       // 重新加载用户角色
       const roleRes = await getUserRoles(selectedUser.value.id);
@@ -172,7 +175,7 @@ const saveUserRoles = async () => {
       }
     }
   } catch (error) {
-    ElMessage.error('分配角色失败');
+    ElMessage.error(t('common.failed'));
   } finally {
     saving.value = false;
   }

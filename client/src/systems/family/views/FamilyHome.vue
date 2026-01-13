@@ -15,15 +15,15 @@
 
         <el-dropdown @command="handleLangCommand" style="margin-right: 15px; cursor: pointer; line-height: 32px;">
           <span class="lang-switch">
-            🌐 {{ currentLang === 'zh' ? '中文' : 'English' }}
+            🌐 {{ currentLang === 'zh' ? $t('common.lang.zh') : $t('common.lang.en') }}
             <el-icon class="el-icon--right">
               <ArrowDown />
             </el-icon>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="zh">中文</el-dropdown-item>
-              <el-dropdown-item command="en">English</el-dropdown-item>
+              <el-dropdown-item command="zh">{{ $t('common.lang.zh') }}</el-dropdown-item>
+              <el-dropdown-item command="en">{{ $t('common.lang.en') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -78,7 +78,7 @@
             <div class="stat-label">{{ $t('family.home.stats.stat2') }}</div>
           </div>
           <div class="stat-item">
-            <div class="stat-number">多成员</div>
+            <div class="stat-number">{{ $t('family.home.stats.stat3') }}</div>
             <div class="stat-label">{{ $t('family.home.stats.stat3') }}</div>
           </div>
         </div>
@@ -122,8 +122,8 @@
     <section class="features-section">
       <div class="container">
         <div class="section-header">
-          <h2 class="section-title">核心功能</h2>
-          <p class="section-subtitle">一站式解决家庭教育管理需求</p>
+          <h2 class="section-title">{{ $t('family.home.features.title') }}</h2>
+          <p class="section-subtitle">{{ $t('family.home.features.subtitle') }}</p>
         </div>
         <div class="features-grid">
           <div class="feature-card">
@@ -240,8 +240,8 @@
     <section class="cta-section">
       <div class="container">
         <div class="cta-content">
-          <h2 class="cta-title">准备好开始了吗？</h2>
-          <p class="cta-desc">立即体验家庭成长银行，让好习惯养成更有趣</p>
+          <h2 class="cta-title">{{ $t('family.home.cta.title') }}</h2>
+          <p class="cta-desc">{{ $t('family.home.cta.desc') }}</p>
           <el-button v-if="!isLoggedIn" type="primary" size="large" class="cta-btn-large" @click="showLoginModal">
             {{ $t('family.home.ctaBtn') }}
             <el-icon class="el-icon--right">
@@ -265,7 +265,7 @@
         <h3>{{ $t('login.identityTitle') }}, {{ displayUserName }}</h3>
 
         <el-tag type="info" style="margin-bottom: 20px;">
-          家庭成长银行
+          {{ $t('family.home.title') }}
         </el-tag>
 
         <el-button type="primary" size="large" class="full-width-btn" @click="handleEnterSystem">
@@ -333,7 +333,7 @@ const rules = {
 const displayUserName = computed(() => {
   if (!userInfo.value) return '';
   if (userInfo.value.username === 'visitor') {
-    return '游客';
+    return t('login.visitor');
   }
   return userInfo.value.real_name || userInfo.value.username;
 });
@@ -342,6 +342,11 @@ const targetPath = computed(() => route.query.redirect || '/family/dashboard');
 const dialogTitle = computed(() => isLoggedIn.value ? t('login.identityTitle') : t('login.loginBtn'));
 
 onMounted(() => {
+  // 滚动到页面顶部
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  
   const token = localStorage.getItem('user_token');
   const infoStr = localStorage.getItem('user_info');
 
@@ -378,12 +383,12 @@ const handleLogin = async () => {
           isLoggedIn.value = true;
           userInfo.value = res.data.data;
 
-          ElMessage.success('登录成功');
+          ElMessage.success(t('common.success'));
         } else {
-          ElMessage.error(res.data.msg || 'Login Failed');
+          ElMessage.error(res.data.msg || t('common.failed'));
         }
       } catch (err) {
-        ElMessage.error('Server Error');
+        ElMessage.error(t('common.failed'));
       } finally {
         loading.value = false;
       }

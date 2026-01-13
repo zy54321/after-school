@@ -12,15 +12,15 @@
           <div class="text-3xl font-bold mb-2 flex items-center tracking-wide">
             {{ report.student_name }}
             <span class="text-xs bg-white/20 px-2 py-0.5 rounded-full ml-3 font-normal border border-white/10">{{
-              report.grade || '学员' }}</span>
+              report.grade || $t('common.student') }}</span>
           </div>
           <div class="text-blue-100 text-sm bg-blue-800/30 inline-block px-3 py-1 rounded-lg backdrop-blur-sm">
-            🎯 今日特训: {{ report.habit_goals ? report.habit_goals.join(' & ') : '全面发展' }}
+            🎯 {{ $t('report.todayTraining') }}: {{ report.habit_goals ? report.habit_goals.join(' & ') : $t('report.overallDevelopment') }}
           </div>
         </div>
         <div
           class="bg-white/10 backdrop-blur-md rounded-2xl p-3 text-center min-w-[80px] border border-white/20 shadow-lg">
-          <div class="text-xs text-blue-100 mb-1">综合评分</div>
+          <div class="text-xs text-blue-100 mb-1">{{ $t('report.overallScore') }}</div>
           <div class="text-3xl font-bold font-mono">{{ getOverallScore(report) }}</div>
         </div>
       </div>
@@ -34,7 +34,7 @@
             <el-icon class="mr-2 text-amber-500 bg-amber-100 p-1 rounded">
               <Warning />
             </el-icon>
-            今日提醒
+            {{ $t('report.todayReminder') }}
           </div>
         </div>
         <div class="p-4 space-y-3">
@@ -67,7 +67,7 @@
           <el-icon class="mr-2 text-indigo-500 bg-indigo-50 p-1 rounded">
             <DataAnalysis />
           </el-icon>
-          今日能力模型
+          {{ $t('report.abilityModel') }}
         </div>
         <div ref="radarChartRef" class="w-full h-[250px]"></div>
       </div>
@@ -78,7 +78,7 @@
           <el-icon class="mr-2 text-blue-500 bg-blue-50 p-1 rounded">
             <TrendCharts />
           </el-icon>
-          专注力成长曲线 ({{ report.history.length }}天)
+          {{ $t('report.focusGrowth') }} ({{ report.history.length }}{{ $t('report.days') }})
         </div>
         <div ref="lineChartRef" class="w-full h-[220px]"></div>
       </div>
@@ -89,7 +89,7 @@
             <el-icon class="mr-2 text-orange-500 bg-orange-100 p-1 rounded">
               <Food />
             </el-icon>
-            营养与膳食
+            {{ $t('report.nutrition') }}
           </div>
           <div class="text-xs font-bold px-2 py-1 rounded text-orange-600 bg-orange-100">
             {{ getMealStatusText(report.meal_status) }}
@@ -108,7 +108,7 @@
           </div>
           <div v-else
             class="text-gray-400 text-sm text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-            今日菜谱数据同步中...
+            {{ $t('report.menuSyncing') }}
           </div>
 
           <div v-if="report.evidence_photo_url" class="mt-2 flex justify-center">
@@ -131,7 +131,7 @@
             <div class="text-xs text-gray-400 mb-2 flex items-center">
               <el-icon class="mr-1">
                 <ShoppingCart />
-              </el-icon> 食材来源追溯 (只选大牌 严控品质)
+              </el-icon> {{ $t('report.ingredientSource') }}
             </div>
             <div class="flex flex-wrap gap-2">
               <span v-for="(item, idx) in report.sourcing_data" :key="idx"
@@ -155,12 +155,12 @@
             <el-icon class="mr-2 text-purple-500 bg-purple-50 p-1 rounded">
               <DataAnalysis />
             </el-icon>
-            数据关联分析
+            {{ $t('report.dataAnalysis') }}
           </div>
           <div class="text-xs text-gray-500 ml-8">
-            基于个人表现数据，分析不同指标之间的关联性
+            {{ $t('report.analysisDesc') }}
             <span v-if="hasValidCorrelations(report.correlations)" class="text-purple-500">
-              （需要至少3天数据）
+              {{ $t('report.need3Days') }}
             </span>
           </div>
         </div>
@@ -171,7 +171,7 @@
           <el-icon class="text-4xl mb-2 text-gray-300">
             <InfoFilled />
           </el-icon>
-          <div class="text-sm mb-1 font-medium text-gray-500">数据积累中</div>
+          <div class="text-sm mb-1 font-medium text-gray-500">{{ $t('report.dataAccumulating') }}</div>
           <div class="text-xs text-gray-400 px-4">
             {{ getCorrelationMessage(report.correlations) }}
           </div>
@@ -180,25 +180,25 @@
         <!-- 专注时长与作业质量 -->
         <div v-if="report.correlations.focus_homework?.hasEnoughData" class="mb-6">
           <div class="flex items-center justify-between mb-2">
-            <div class="text-sm font-semibold text-gray-700">专注时长与作业质量的关系</div>
+            <div class="text-sm font-semibold text-gray-700">{{ $t('report.focusHomeworkTitle') }}</div>
             <div class="text-xs text-gray-400">
-              样本量: {{ report.correlations.focus_homework.dataCount }}天
+              {{ $t('report.sampleSize') }}: {{ report.correlations.focus_homework.dataCount }}{{ $t('report.daysUnit') }}
               <span v-if="report.correlations.focus_homework.correlation" class="ml-2">
-                相关系数: {{ report.correlations.focus_homework.correlation > 0 ? '+' : '' }}{{ report.correlations.focus_homework.correlation }}
+                {{ $t('report.correlation') }}: {{ report.correlations.focus_homework.correlation > 0 ? '+' : '' }}{{ report.correlations.focus_homework.correlation }}
               </span>
             </div>
           </div>
           <div ref="focusHomeworkChartRef" class="w-full h-[240px] mb-3"></div>
           <div class="text-xs text-gray-500 mb-2 px-1">
-            <span class="font-semibold">图表说明：</span>
-            横轴表示专注时长范围，纵轴表示该范围内作业评级的数量分布。柱状图高度越高，表示该专注时长范围下的作业评级数量越多。
+            <span class="font-semibold">{{ $t('report.chartDesc') }}：</span>
+            {{ $t('report.focusHomeworkChartDesc') }}
           </div>
           <div class="text-xs text-gray-600 bg-gray-50 rounded p-3 border border-gray-100">
-            <div class="font-semibold mb-1">📊 分析洞察：</div>
+            <div class="font-semibold mb-1">📊 {{ $t('report.insight') }}：</div>
             <div class="mb-2">{{ report.correlations.focus_homework.insight }}</div>
             <div class="text-gray-700 leading-relaxed mb-2">{{ report.correlations.focus_homework.explanation }}</div>
             <div class="text-gray-500 italic mt-2 pt-2 border-t border-gray-200">
-              <span class="text-[10px]">注：本分析基于最近{{ report.correlations.focus_homework.dataCount }}天的个人数据，旨在发现数据趋势，仅供参考。相关性不等于因果性。</span>
+              <span class="text-[10px]">{{ $t('report.note').replace('{count}', report.correlations.focus_homework.dataCount) }}</span>
             </div>
           </div>
         </div>
@@ -206,25 +206,25 @@
         <!-- 走神次数与作业质量 -->
         <div v-if="report.correlations.distraction_homework?.hasEnoughData">
           <div class="flex items-center justify-between mb-2">
-            <div class="text-sm font-semibold text-gray-700">走神次数与作业质量的关系</div>
+            <div class="text-sm font-semibold text-gray-700">{{ $t('report.distractionHomeworkTitle') }}</div>
             <div class="text-xs text-gray-400">
-              样本量: {{ report.correlations.distraction_homework.dataCount }}天
+              {{ $t('report.sampleSize') }}: {{ report.correlations.distraction_homework.dataCount }}{{ $t('report.daysUnit') }}
               <span v-if="report.correlations.distraction_homework.correlation" class="ml-2">
-                相关系数: {{ report.correlations.distraction_homework.correlation > 0 ? '+' : '' }}{{ report.correlations.distraction_homework.correlation }}
+                {{ $t('report.correlation') }}: {{ report.correlations.distraction_homework.correlation > 0 ? '+' : '' }}{{ report.correlations.distraction_homework.correlation }}
               </span>
             </div>
           </div>
           <div ref="distractionHomeworkChartRef" class="w-full h-[240px] mb-3"></div>
           <div class="text-xs text-gray-500 mb-2 px-1">
-            <span class="font-semibold">图表说明：</span>
-            横轴表示走神次数范围，纵轴表示该范围内作业评级的数量分布。柱状图高度越高，表示该走神次数范围下的作业评级数量越多。
+            <span class="font-semibold">{{ $t('report.chartDesc') }}：</span>
+            {{ $t('report.distractionHomeworkChartDesc') }}
           </div>
           <div class="text-xs text-gray-600 bg-gray-50 rounded p-3 border border-gray-100">
-            <div class="font-semibold mb-1">📊 分析洞察：</div>
+            <div class="font-semibold mb-1">📊 {{ $t('report.insight') }}：</div>
             <div class="mb-2">{{ report.correlations.distraction_homework.insight }}</div>
             <div class="text-gray-700 leading-relaxed mb-2">{{ report.correlations.distraction_homework.explanation }}</div>
             <div class="text-gray-500 italic mt-2 pt-2 border-t border-gray-200">
-              <span class="text-[10px]">注：本分析基于最近{{ report.correlations.distraction_homework.dataCount }}天的个人数据，旨在发现数据趋势，仅供参考。相关性不等于因果性。</span>
+              <span class="text-[10px]">{{ $t('report.note').replace('{count}', report.correlations.distraction_homework.dataCount) }}</span>
             </div>
           </div>
         </div>
@@ -235,7 +235,7 @@
           <el-icon class="mr-2 text-green-500 bg-green-50 p-1 rounded">
             <ChatDotRound />
           </el-icon>
-          老师寄语
+          {{ $t('report.teacherComment') }}
         </div>
         <div class="relative">
           <span class="absolute -top-2 -left-2 text-4xl text-gray-100 font-serif">"</span>
@@ -254,7 +254,7 @@
           <DocumentDelete />
         </el-icon>
       </div>
-      <p class="text-sm">报告未找到或链接已失效</p>
+      <p class="text-sm">{{ $t('report.notFound') }}</p>
     </div>
 
     <div class="text-center text-gray-300 text-[10px] mt-8 pb-4 font-mono">
@@ -266,9 +266,12 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import axios from 'axios';
 import * as echarts from 'echarts';
 import { Food, ChatDotRound, TrendCharts, DocumentDelete, DataAnalysis, ShoppingCart, Warning, InfoFilled, CircleClose } from '@element-plus/icons-vue';
+
+const { t } = useI18n();
 
 const route = useRoute();
 const loading = ref(true);
@@ -288,7 +291,14 @@ const formatDateShort = (str) => {
   const d = new Date(str);
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
-const getMealStatusText = (status) => ({ finished: '光盘行动 🌟', leftovers: '少量剩菜', little: '挑食/少吃' }[status] || status);
+const getMealStatusText = (status) => {
+  const map = {
+    finished: t('report.mealStatus.finished'),
+    leftovers: t('report.mealStatus.leftovers'),
+    little: t('report.mealStatus.little'),
+  };
+  return map[status] || status;
+};
 
 const getOverallScore = (r) => {
   let score = 80;
@@ -356,7 +366,7 @@ const hasValidCorrelations = (correlations) => {
 
 // 获取关联分析数据不足的提示信息
 const getCorrelationMessage = (correlations) => {
-  if (!correlations) return '暂无数据分析';
+  if (!correlations) return t('report.dataAccumulating');
   
   const focusData = correlations.focus_homework;
   const distractionData = correlations.distraction_homework;
@@ -364,21 +374,21 @@ const getCorrelationMessage = (correlations) => {
   if (focusData && !focusData.hasEnoughData && distractionData && !distractionData.hasEnoughData) {
     const dataCount = focusData?.dataCount || distractionData?.dataCount || 0;
     if (dataCount === 0) {
-      return '今天是第一天，数据积累中，请继续关注后续表现';
+      return t('report.firstDay');
     } else if (dataCount < 3) {
-      return `目前有${dataCount}天数据，需要至少3天数据才能进行分析。继续加油，数据会越来越丰富！`;
+      return t('report.needMoreData').replace('{count}', dataCount);
     }
   }
   
   if (focusData && !focusData.hasEnoughData) {
-    return focusData.message || '专注时长与作业质量的数据不足，无法进行分析';
+    return focusData.message || t('report.focusHomework');
   }
   
   if (distractionData && !distractionData.hasEnoughData) {
-    return distractionData.message || '走神次数与作业质量的数据不足，无法进行分析';
+    return distractionData.message || t('report.distractionHomework');
   }
   
-  return '数据积累中，请继续关注后续表现';
+  return t('report.continueFocus');
 };
 
 const initRadarChart = () => {
@@ -511,16 +521,16 @@ const initFocusHomeworkChart = () => {
           const percentage = total > 0 ? ((param.value / total) * 100).toFixed(0) : 0;
           result += `<div style="margin: 3px 0;">
             <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; margin-right: 5px;"></span>
-            ${param.seriesName}: ${param.value}次 (${percentage}%)
+            ${param.seriesName}: ${param.value}${t('workflow.times')} (${percentage}%)
           </div>`;
         });
         const group = data.groupedData[params[0].dataIndex];
-        result += `<div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #eee; font-size: 11px; color: #999;">总计: ${group.total}次</div>`;
+        result += `<div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #eee; font-size: 11px; color: #999;">${t('common.total')}: ${group.total}${t('workflow.times')}</div>`;
         return result;
       }
     },
     legend: {
-      data: ['A级', 'B级', 'C级'],
+      data: [t('report.homeworkRating.A'), t('report.homeworkRating.B'), t('report.homeworkRating.C')],
       top: 10,
       textStyle: { fontSize: 11 },
       itemGap: 15
@@ -529,7 +539,7 @@ const initFocusHomeworkChart = () => {
     xAxis: {
       type: 'category',
       data: ranges,
-      name: '专注时长范围',
+      name: t('report.focusHomeworkTitle'),
       nameLocation: 'middle',
       nameGap: 25,
       nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#666' },
@@ -538,7 +548,7 @@ const initFocusHomeworkChart = () => {
     },
     yAxis: {
       type: 'value',
-      name: '作业评级次数',
+      name: t('report.homeworkRatingCount'),
       nameLocation: 'middle',
       nameGap: 40,
       nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#666' },
@@ -548,21 +558,21 @@ const initFocusHomeworkChart = () => {
     },
     series: [
       {
-        name: 'A级',
+        name: t('report.homeworkRating.A'),
         type: 'bar',
         stack: 'total',
         data: aData,
         itemStyle: { color: '#10b981' }
       },
       {
-        name: 'B级',
+        name: t('report.homeworkRating.B'),
         type: 'bar',
         stack: 'total',
         data: bData,
         itemStyle: { color: '#f59e0b' }
       },
       {
-        name: 'C级',
+        name: t('report.homeworkRating.C'),
         type: 'bar',
         stack: 'total',
         data: cData,
@@ -596,16 +606,16 @@ const initDistractionHomeworkChart = () => {
           const percentage = total > 0 ? ((param.value / total) * 100).toFixed(0) : 0;
           result += `<div style="margin: 3px 0;">
             <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; margin-right: 5px;"></span>
-            ${param.seriesName}: ${param.value}次 (${percentage}%)
+            ${param.seriesName}: ${param.value}${t('workflow.times')} (${percentage}%)
           </div>`;
         });
         const group = data.groupedData[params[0].dataIndex];
-        result += `<div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #eee; font-size: 11px; color: #999;">总计: ${group.total}次</div>`;
+        result += `<div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #eee; font-size: 11px; color: #999;">${t('common.total')}: ${group.total}${t('workflow.times')}</div>`;
         return result;
       }
     },
     legend: {
-      data: ['A级', 'B级', 'C级'],
+      data: [t('report.homeworkRating.A'), t('report.homeworkRating.B'), t('report.homeworkRating.C')],
       top: 10,
       textStyle: { fontSize: 11 },
       itemGap: 15
@@ -614,7 +624,7 @@ const initDistractionHomeworkChart = () => {
     xAxis: {
       type: 'category',
       data: ranges,
-      name: '走神次数范围',
+      name: t('report.distractionHomeworkTitle'),
       nameLocation: 'middle',
       nameGap: 25,
       nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#666' },
@@ -623,7 +633,7 @@ const initDistractionHomeworkChart = () => {
     },
     yAxis: {
       type: 'value',
-      name: '作业评级次数',
+      name: t('report.homeworkRatingCount'),
       nameLocation: 'middle',
       nameGap: 40,
       nameTextStyle: { fontSize: 11, fontWeight: 'bold', color: '#666' },
@@ -633,21 +643,21 @@ const initDistractionHomeworkChart = () => {
     },
     series: [
       {
-        name: 'A级',
+        name: t('report.homeworkRating.A'),
         type: 'bar',
         stack: 'total',
         data: aData,
         itemStyle: { color: '#10b981' }
       },
       {
-        name: 'B级',
+        name: t('report.homeworkRating.B'),
         type: 'bar',
         stack: 'total',
         data: bData,
         itemStyle: { color: '#f59e0b' }
       },
       {
-        name: 'C级',
+        name: t('report.homeworkRating.C'),
         type: 'bar',
         stack: 'total',
         data: cData,

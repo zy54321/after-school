@@ -54,19 +54,19 @@
               <el-icon>
                 <Lock />
               </el-icon>
-              <span>权限管理</span>
+              <span>{{ $t('permission.title') }}</span>
             </template>
             <el-menu-item index="/system/permissions">
               <el-icon>
                 <Lock />
               </el-icon>
-              权限配置
+              {{ $t('permission.permissionConfig') }}
             </el-menu-item>
             <el-menu-item index="/system/user-roles">
               <el-icon>
                 <User />
               </el-icon>
-              用户角色分配
+              {{ $t('userRole.title') }}
             </el-menu-item>
           </el-sub-menu>
 
@@ -74,39 +74,39 @@
             <template #title>
               <el-icon>
                 <Food />
-              </el-icon> <span>餐饮管理</span>
+              </el-icon> <span>{{ $t('catering.menu.title') }}</span>
             </template>
             <el-menu-item index="/system/catering/ingredients">
               <el-icon>
                 <Apple />
-              </el-icon> 食材库
+              </el-icon> {{ $t('catering.menu.ingredients') }}
             </el-menu-item>
             <el-menu-item index="/system/catering/dishes">
               <el-icon>
                 <Dish />
-              </el-icon> 菜品库
+              </el-icon> {{ $t('catering.menu.dishes') }}
             </el-menu-item>
             <el-menu-item index="/system/catering/weekly-menu">
               <el-icon>
                 <Calendar />
-              </el-icon> 食谱排期
+              </el-icon> {{ $t('catering.menu.weeklyMenu') }}
             </el-menu-item>
             <el-menu-item index="/system/catering/shopping-list">
               <el-icon>
                 <ShoppingCart />
-              </el-icon> 智能采购
+              </el-icon> {{ $t('catering.menu.shoppingList') }}
             </el-menu-item>
             <el-menu-item index="/system/catering/cost-analysis">
               <el-icon>
                 <Money />
-              </el-icon> 成本控制
+              </el-icon> {{ $t('catering.menu.costAnalysis') }}
             </el-menu-item>
           </el-sub-menu>
 
           <el-menu-item index="/system/daily-workflow">
             <el-icon>
               <DataBoard />
-            </el-icon> <span>特训工作台</span>
+            </el-icon> <span>{{ $t('workflow.title') }}</span>
           </el-menu-item>
 
           <el-menu-item index="PORTAL_LINK" @click="goHome">
@@ -125,12 +125,12 @@
           <div class="header-right">
             <el-dropdown @command="handleLangCommand" style="margin-right: 20px; cursor: pointer;">
               <span class="lang-switch-dark">
-                🌐 {{ currentLang === 'zh' ? '中文' : 'English' }}
+                🌐 {{ currentLang === 'zh' ? $t('common.lang.zh') : $t('common.lang.en') }}
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="zh">中文</el-dropdown-item>
-                  <el-dropdown-item command="en">English</el-dropdown-item>
+                  <el-dropdown-item command="zh">{{ $t('common.lang.zh') }}</el-dropdown-item>
+                  <el-dropdown-item command="en">{{ $t('common.lang.en') }}</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -158,7 +158,7 @@ import axios from 'axios';
 
 const router = useRouter();
 const route = useRoute();
-const { locale } = useI18n(); // 获取 i18n
+const { locale, t } = useI18n(); // 获取 i18n
 const currentLang = ref(locale.value);
 
 const userInfoStr = localStorage.getItem('user_info');
@@ -187,7 +187,7 @@ const handleLogout = () => {
   localStorage.removeItem('user_permissions');
   clearUserPermissions();
   router.push('/');
-  ElMessage.success('Logout success');
+  ElMessage.success(t('header.logout') + ' ' + t('common.success'));
 };
 
 const goHome = () => {
@@ -199,7 +199,8 @@ const handleLangCommand = (command) => {
   locale.value = command;
   currentLang.value = command;
   localStorage.setItem('lang', command);
-  ElMessage.success(command === 'zh' ? '已切换至中文' : 'Switched to English');
+  const { t } = useI18n();
+  ElMessage.success(command === 'zh' ? t('common.lang.switchedToZh') : t('common.lang.switchedToEn'));
 };
 </script>
 
