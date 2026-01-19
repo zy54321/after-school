@@ -1,10 +1,10 @@
 /**
- * 权限代码常量定义
+ * 前端权限代码常量定义
+ * ⚠️ 必须与 server/src/shared/constants/permissions.js 完全一致
  * 格式: module:action
- * 与数据库 permissions 表的 code 字段对应
  */
 
-const PERMISSIONS = {
+export const PERMISSIONS = {
   // 用户管理
   USER: {
     READ: 'user:read',
@@ -82,4 +82,4 @@ const PERMISSIONS = {
   },
 };
 
-module.exports = PERMISSIONS;
+export default PERMISSIONS;

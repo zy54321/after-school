@@ -29,7 +29,6 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 // === 引入拦截器 ===
 const checkAuth = require('./src/shared/middleware/authMiddleware');
-const checkAdmin = require('./src/shared/middleware/adminMiddleware');
 const checkGuest = require('./src/shared/middleware/guestMiddleware');
 
 const app = express();
@@ -113,7 +112,7 @@ app.use('/api/dashboard', checkAuth, dashboardRoutes);
 app.use('/api/reports', dailyReportRoutes);
 app.use('/api/catering', cateringRoutes);
 app.use('/api/amap', checkAuth, amapRoutes);
-app.use('/api/users', checkAuth, checkAdmin, userRoutes);
+app.use('/api/users', checkAuth, userRoutes);
 app.use('/api/permissions', permissionRoutes); // 权限管理路由（内部已包含权限检查）
 app.use('/api/mapbox/dictionary', checkAuth, dictionaryRoutes);
 app.use('/api/mapbox', checkAuth, mapboxRoutes);

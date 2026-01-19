@@ -1,10 +1,11 @@
 /**
  * 权限组合式函数
- * 提供权限检查功能
+ * 提供权限检查功能，与后端 RBAC 体系对齐
  */
 import { ref, computed } from 'vue';
+import { getCachedPermissions } from '@/router';
 
-// 用户权限列表（从 localStorage 或 API 获取）
+// 用户权限列表（响应式）
 const userPermissions = ref([]);
 
 /**
@@ -13,7 +14,7 @@ const userPermissions = ref([]);
  */
 export function initUserPermissions(permissions) {
   userPermissions.value = permissions || [];
-  // 同时存储到 localStorage（可选）
+  // 同时存储到 localStorage（用于页面刷新后恢复）
   if (permissions) {
     localStorage.setItem('user_permissions', JSON.stringify(permissions));
   }
@@ -35,11 +36,30 @@ export function loadUserPermissionsFromStorage() {
 }
 
 /**
+ * 从 Session 缓存同步权限
+ * 在路由守卫校验成功后调用
+ */
+export function syncPermissionsFromCache() {
+  const cached = getCachedPermissions();
+  if (cached && Array.isArray(cached)) {
+    userPermissions.value = cached;
+    localStorage.setItem('user_permissions', JSON.stringify(cached));
+  }
+}
+
+/**
  * 清除用户权限
  */
 export function clearUserPermissions() {
   userPermissions.value = [];
   localStorage.removeItem('user_permissions');
+}
+
+/**
+ * 获取当前权限列表（非响应式）
+ */
+export function getPermissionsList() {
+  return [...userPermissions.value];
 }
 
 /**
@@ -63,7 +83,7 @@ export function usePermission() {
    */
   const hasAnyPermission = (permissionCodes) => {
     if (!permissionCodes || permissionCodes.length === 0) return false;
-    return permissionCodes.some(code => hasPermission(code));
+    return permissionCodes.some(code => userPermissions.value.includes(code));
   };
 
   /**
@@ -73,7 +93,7 @@ export function usePermission() {
    */
   const hasAllPermissions = (permissionCodes) => {
     if (!permissionCodes || permissionCodes.length === 0) return false;
-    return permissionCodes.every(code => hasPermission(code));
+    return permissionCodes.every(code => userPermissions.value.includes(code));
   };
 
   /**
@@ -84,11 +104,21 @@ export function usePermission() {
     return [...userPermissions.value];
   };
 
+  /**
+   * 计算属性：检查是否有指定权限（用于模板中）
+   * @param {string} permissionCode - 权限代码
+   * @returns {ComputedRef<boolean>} 响应式的权限检查结果
+   */
+  const canDo = (permissionCode) => {
+    return computed(() => userPermissions.value.includes(permissionCode));
+  };
+
   return {
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
     getPermissions,
+    canDo,
     // 响应式权限列表（只读）
     permissions: computed(() => userPermissions.value),
   };
@@ -96,4 +126,3 @@ export function usePermission() {
 
 // 初始化时从 localStorage 加载权限
 loadUserPermissionsFromStorage();
-

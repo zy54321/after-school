@@ -4,7 +4,7 @@
       <template #header>
         <div class="header-row">
           <span class="title">👥 {{ $t('user.title') }}</span>
-          <el-button type="primary" icon="Plus" @click="openCreateDialog">{{ $t('user.addBtn') }}</el-button>
+          <el-button v-if="hasPermission(PERMISSIONS.USER.CREATE)" type="primary" icon="Plus" @click="openCreateDialog">{{ $t('user.addBtn') }}</el-button>
         </div>
       </template>
 
@@ -33,9 +33,9 @@
 
         <el-table-column :label="$t('common.action')" width="200">
           <template #default="scope">
-            <el-button size="small" link type="primary" @click="openEditDialog(scope.row)">{{ $t('common.edit')
+            <el-button v-if="hasPermission(PERMISSIONS.USER.UPDATE)" size="small" link type="primary" @click="openEditDialog(scope.row)">{{ $t('common.edit')
               }}</el-button>
-            <el-button size="small" link type="warning" @click="openResetPwdDialog(scope.row)">{{ $t('user.btnResetPwd')
+            <el-button v-if="hasPermission(PERMISSIONS.USER.RESET_PASSWORD)" size="small" link type="warning" @click="openResetPwdDialog(scope.row)">{{ $t('user.btnResetPwd')
               }}</el-button>
           </template>
         </el-table-column>
@@ -85,7 +85,11 @@ import { ref, reactive, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import { useI18n } from 'vue-i18n';
+import { usePermission } from '@/composables/usePermission';
+import { PERMISSIONS } from '@/constants/permissions';
+
 const { t } = useI18n();
+const { hasPermission } = usePermission();
 
 const tableData = ref([]);
 const loading = ref(false);

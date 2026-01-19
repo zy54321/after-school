@@ -2,8 +2,8 @@
 const express = require('express');
 const router = express.Router();
 const studentController = require('../controllers/studentController');
-// 引入管理员中间件
-const checkAdmin = require('../../../shared/middleware/adminMiddleware');
+const { checkPermission } = require('../../../shared/middleware/permissionMiddleware');
+const PERMISSIONS = require('../../../shared/constants/permissions');
 
 // 定义路径
 router.get('/', studentController.getStudents);   // GET /api/students
@@ -13,10 +13,10 @@ router.get('/nearby', studentController.getNearbyStudents); // GET /api/students
 router.put('/:id', studentController.updateStudent); // PUT /api/students/:id
 router.get('/:id', studentController.getStudentDetail); // GET /api/students/:id
 
-// 🛑 给删除接口加锁
-router.delete('/:id', checkAdmin, studentController.deleteStudent);
-// 🛑 办理退课/退费接口 (管理员权限)
-router.post('/:id/drop', checkAdmin, studentController.dropClass);
+// 🛑 删除接口（需要 STUDENT.DELETE 权限）
+router.delete('/:id', checkPermission(PERMISSIONS.STUDENT.DELETE), studentController.deleteStudent);
+
+// 🛑 办理退课/退费接口（需要 ORDER.REFUND 权限）
+router.post('/:id/drop', checkPermission(PERMISSIONS.ORDER.REFUND), studentController.dropClass);
 
 module.exports = router;
-

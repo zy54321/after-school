@@ -57,7 +57,7 @@
             </el-button>
             <el-button size="small" type="primary" link @click="openEditDialog(scope.row)">{{ $t('common.edit')
               }}</el-button>
-            <el-button size="small" type="danger" link @click="handleDelete(scope.row)">{{ $t('common.delete')
+            <el-button v-if="hasPermission(PERMISSIONS.CLASS.DELETE)" size="small" type="danger" link @click="handleDelete(scope.row)">{{ $t('common.delete')
               }}</el-button>
           </template>
         </el-table-column>
@@ -191,7 +191,11 @@ import { ref, reactive, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useI18n } from 'vue-i18n';
+import { usePermission } from '@/composables/usePermission';
+import { PERMISSIONS } from '@/constants/permissions';
+
 const { t } = useI18n();
+const { hasPermission } = usePermission();
 
 const tableData = ref([]);
 const loading = ref(false);

@@ -95,8 +95,8 @@
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item @click="openEditDialog(scope.row)">编辑档案</el-dropdown-item>
-                    <el-dropdown-item v-if="role === 'admin'" @click="openDropDialog(scope.row)">办理退课</el-dropdown-item>
-                    <el-dropdown-item v-if="role === 'admin'" divided class="text-red-500"
+                    <el-dropdown-item v-if="hasPermission(PERMISSIONS.ORDER.REFUND)" @click="openDropDialog(scope.row)">办理退课</el-dropdown-item>
+                    <el-dropdown-item v-if="hasPermission(PERMISSIONS.STUDENT.DELETE)" divided class="text-red-500"
                       @click="handleDelete(scope.row)">删除学员</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -281,10 +281,13 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { Location, Warning, ArrowDown, Plus } from '@element-plus/icons-vue';
 import MapPicker from '../../../shared/components/MapPicker.vue';
 import { useI18n } from 'vue-i18n';
+import { usePermission } from '@/composables/usePermission';
+import { PERMISSIONS } from '@/constants/permissions';
 
 const { t } = useI18n();
+const { hasPermission } = usePermission();
 
-// 简单的权限判断
+// 保留 role 用于兼容（可逐步移除）
 const userInfoStr = localStorage.getItem('user_info');
 const role = userInfoStr ? JSON.parse(userInfoStr).role : 'teacher';
 

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/cateringController');
 const checkAuth = require('../../../shared/middleware/authMiddleware');
+const { checkPermission } = require('../../../shared/middleware/permissionMiddleware');
+const PERMISSIONS = require('../../../shared/constants/permissions');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -27,25 +29,25 @@ const upload = multer({ storage: storage });
 // 所有接口都需要登录权限
 router.use(checkAuth);
 
-// 📷 上传接口 (新增)
-router.post('/upload', upload.single('file'), controller.uploadImage);
+// 📷 上传接口
+router.post('/upload', checkPermission(PERMISSIONS.CATERING.CREATE), upload.single('file'), controller.uploadImage);
 
 // 🥦 食材接口
 router.get('/ingredients', controller.getIngredients);
-router.post('/ingredients', controller.createIngredient);
-router.put('/ingredients/:id', controller.updateIngredient);
-router.delete('/ingredients/:id', controller.deleteIngredient);
+router.post('/ingredients', checkPermission(PERMISSIONS.CATERING.CREATE), controller.createIngredient);
+router.put('/ingredients/:id', checkPermission(PERMISSIONS.CATERING.UPDATE), controller.updateIngredient);
+router.delete('/ingredients/:id', checkPermission(PERMISSIONS.CATERING.DELETE), controller.deleteIngredient);
 
 // 🍲 菜品接口
 router.get('/dishes', controller.getDishes);
-router.post('/dishes', controller.createDish);
-router.put('/dishes/:id', controller.updateDish);
-router.delete('/dishes/:id', controller.deleteDish);
+router.post('/dishes', checkPermission(PERMISSIONS.CATERING.CREATE), controller.createDish);
+router.put('/dishes/:id', checkPermission(PERMISSIONS.CATERING.UPDATE), controller.updateDish);
+router.delete('/dishes/:id', checkPermission(PERMISSIONS.CATERING.DELETE), controller.deleteDish);
 
 // 📅 食谱排期接口
 router.get('/menus', controller.getMenus);      
-router.post('/menus', controller.addMenuItem);
-router.delete('/menus/:id', controller.removeMenuItem);
+router.post('/menus', checkPermission(PERMISSIONS.CATERING.CREATE), controller.addMenuItem);
+router.delete('/menus/:id', checkPermission(PERMISSIONS.CATERING.DELETE), controller.removeMenuItem);
 router.get('/shopping-list', controller.getShoppingList);
 router.get('/cost-analysis', controller.getCostAnalysis);
 router.get('/public/weekly-menu', controller.getPublicWeeklyMenu);

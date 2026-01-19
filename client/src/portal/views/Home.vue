@@ -6,6 +6,7 @@ import { Location, User, Lock } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import axios from 'axios';
 import { initUserPermissions, clearUserPermissions } from '@/composables/usePermission';
+import { clearSessionCache } from '@/router';
 
 const router = useRouter();
 const { locale, t } = useI18n();
@@ -215,6 +216,7 @@ const handleLogout = () => {
   localStorage.removeItem('user_info');
   localStorage.removeItem('user_permissions');
   clearUserPermissions();
+  clearSessionCache(); // 清除 Session 缓存
   isLoggedIn.value = false;
   userInfo.value = {};
   loginForm.username = '';

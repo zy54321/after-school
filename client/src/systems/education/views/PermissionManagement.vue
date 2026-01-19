@@ -373,6 +373,8 @@ onMounted(() => {
   margin-top: 40px;
   padding-top: 20px;
   border-top: 1px solid #ebeef5;
+  max-height: 380px;
+  overflow-y: auto;
 }
 
 .empty-hint {

@@ -154,6 +154,7 @@ import { ElMessage } from 'element-plus';
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { usePermission, clearUserPermissions } from '@/composables/usePermission';
+import { clearSessionCache } from '@/router';
 import axios from 'axios';
 
 const router = useRouter();
@@ -186,6 +187,7 @@ const handleLogout = () => {
   localStorage.removeItem('user_info');
   localStorage.removeItem('user_permissions');
   clearUserPermissions();
+  clearSessionCache(); // 清除 Session 缓存
   router.push('/');
   ElMessage.success(t('header.logout') + ' ' + t('common.success'));
 };

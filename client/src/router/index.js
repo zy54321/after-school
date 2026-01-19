@@ -1,9 +1,71 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import axios from 'axios';
+import { PERMISSIONS } from '@/constants/permissions';
 
 // 引入布局组件（新结构）
 import PortalLayout from '../portal/layout/PortalLayout.vue';
 import EducationLayout from '../systems/education/layout/EducationLayout.vue';
 import AnalyticsLayout from '../systems/analytics/layout/AnalyticsLayout.vue';
+
+// ========== Session 校验缓存 ==========
+// 缓存有效期：5分钟（毫秒）
+const SESSION_CACHE_TTL = 5 * 60 * 1000;
+let sessionCache = {
+  isValid: false,
+  timestamp: 0,
+  permissions: null,
+};
+
+/**
+ * 校验 Session 是否有效（带缓存）
+ * @returns {Promise<boolean>} Session 是否有效
+ */
+async function checkSessionValid() {
+  const now = Date.now();
+  
+  // 如果缓存有效且未过期，直接返回缓存结果
+  if (sessionCache.isValid && (now - sessionCache.timestamp) < SESSION_CACHE_TTL) {
+    return true;
+  }
+  
+  try {
+    const res = await axios.get('/api/permissions/auth/permissions');
+    if (res.data && res.data.code === 200) {
+      // 更新缓存
+      sessionCache = {
+        isValid: true,
+        timestamp: now,
+        permissions: res.data.data,
+      };
+      return true;
+    }
+    // 非 200 响应，清除缓存
+    clearSessionCache();
+    return false;
+  } catch (err) {
+    // 401 或其他错误，清除缓存
+    clearSessionCache();
+    return false;
+  }
+}
+
+/**
+ * 清除 Session 缓存（登出时调用）
+ */
+export function clearSessionCache() {
+  sessionCache = {
+    isValid: false,
+    timestamp: 0,
+    permissions: null,
+  };
+}
+
+/**
+ * 获取缓存的权限数据
+ */
+export function getCachedPermissions() {
+  return sessionCache.permissions;
+}
 
 const routes = [
   // 1. 门户层 (Portal) - 公开访问
@@ -81,18 +143,28 @@ const routes = [
         path: 'users',
         name: 'Users',
         component: () => import('../systems/education/views/UserList.vue'),
+        meta: { 
+          title: '用户管理',
+          permissions: [PERMISSIONS.USER.READ],
+        },
       },
       {
         path: 'permissions',
         name: 'Permissions',
         component: () => import('../systems/education/views/PermissionManagement.vue'),
-        meta: { title: '权限配置管理' },
+        meta: { 
+          title: '权限配置管理',
+          permissions: [PERMISSIONS.PERMISSION.MANAGE],
+        },
       },
       {
         path: 'user-roles',
         name: 'UserRoles',
         component: () => import('../systems/education/views/UserRoleAssignment.vue'),
-        meta: { title: '用户角色分配' },
+        meta: { 
+          title: '用户角色分配',
+          permissions: [PERMISSIONS.PERMISSION.MANAGE],
+        },
       },
       {
         path: 'grid-map',
@@ -177,7 +249,11 @@ const routes = [
         name: 'DictionaryManagement',
         component: () =>
           import('../systems/analytics/views/DictionaryManagement.vue'),
-        meta: { requiresAuth: true, requiresAdmin: true }, // 需要管理员权限
+        meta: { 
+          requiresAuth: true, 
+          title: '字典管理',
+          permissions: [PERMISSIONS.MAP.MANAGE],
+        },
       },
     ],
   },
@@ -211,38 +287,58 @@ const router = createRouter({
   },
 });
 
-// 🚀 路由守卫
-router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('user_token');
+// 🚀 路由守卫（基于 Session 校验 + 权限校验）
+router.beforeEach(async (to, from, next) => {
+  // 不需要鉴权的路由，直接放行
+  if (!to.meta.requiresAuth) {
+    return next();
+  }
 
-  // 1. 需要登录，但没 Token -> 根据目标路径跳转到对应的系统首页
-  if (to.meta.requiresAuth && !token) {
-    // 判断目标路径属于哪个系统
+  // 需要鉴权的路由，校验 Session
+  const isLoggedIn = await checkSessionValid();
+
+  if (!isLoggedIn) {
+    // Session 无效，根据目标路径跳转到对应的系统首页
     if (to.fullPath.startsWith('/strategy')) {
-      // 商业分析系统，跳转到商业分析系统首页
-      next({
+      return next({
         path: '/strategy/home',
         query: { redirect: to.fullPath },
       });
     } else if (to.fullPath.startsWith('/family')) {
-      // (新增)
-      // 家庭系统，跳转到家庭介绍页
-      next({
+      return next({
         path: '/family/home',
         query: { redirect: to.fullPath },
       });
     } else {
-      // 其他系统（教务系统等），跳转到教务系统首页
-      next({
+      return next({
         path: '/system/home',
         query: { redirect: to.fullPath },
       });
     }
   }
-  // 3. 其他情况，放行
-  else {
-    next();
+
+  // Session 有效，同步权限到前端状态
+  const { syncPermissionsFromCache } = await import('@/composables/usePermission');
+  syncPermissionsFromCache();
+
+  // 检查路由权限（如果配置了 meta.permissions）
+  const requiredPermissions = to.meta.permissions;
+  if (requiredPermissions && requiredPermissions.length > 0) {
+    const cachedPermissions = getCachedPermissions() || [];
+    const hasPermission = requiredPermissions.some(p => cachedPermissions.includes(p));
+    
+    if (!hasPermission) {
+      // 没有权限，跳转到仪表盘并提示
+      console.warn(`权限不足：需要 ${requiredPermissions.join(' 或 ')}`);
+      return next({
+        path: '/system/dashboard',
+        query: { permissionDenied: '1' },
+      });
+    }
   }
+
+  // 放行
+  next();
 });
 
 export default router;

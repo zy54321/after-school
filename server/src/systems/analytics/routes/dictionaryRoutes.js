@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const dictionaryController = require('../controllers/dictionaryController');
-const checkAdmin = require('../../../shared/middleware/adminMiddleware');
+const { checkPermission } = require('../../../shared/middleware/permissionMiddleware');
+const PERMISSIONS = require('../../../shared/constants/permissions');
 
 // ============================================
 // 字典类型路由
@@ -13,14 +14,14 @@ router.get('/types', dictionaryController.getTypes);
 // 获取单个类型详情（包含字段）
 router.get('/types/:id', dictionaryController.getTypeById);
 
-// 创建类型（需要管理员权限）
-router.post('/types', checkAdmin, dictionaryController.createType);
+// 创建类型（需要 MAP.MANAGE 权限）
+router.post('/types', checkPermission(PERMISSIONS.MAP.MANAGE), dictionaryController.createType);
 
-// 更新类型（需要管理员权限）
-router.put('/types/:id', checkAdmin, dictionaryController.updateType);
+// 更新类型（需要 MAP.MANAGE 权限）
+router.put('/types/:id', checkPermission(PERMISSIONS.MAP.MANAGE), dictionaryController.updateType);
 
-// 删除类型（需要管理员权限）
-router.delete('/types/:id', checkAdmin, dictionaryController.deleteType);
+// 删除类型（需要 MAP.MANAGE 权限）
+router.delete('/types/:id', checkPermission(PERMISSIONS.MAP.MANAGE), dictionaryController.deleteType);
 
 // ============================================
 // 字典字段路由
@@ -32,14 +33,14 @@ router.get('/fields', dictionaryController.getFields);
 // 获取单个字段详情
 router.get('/fields/:id', dictionaryController.getFieldById);
 
-// 创建字段（需要管理员权限）
-router.post('/fields', checkAdmin, dictionaryController.createField);
+// 创建字段（需要 MAP.MANAGE 权限）
+router.post('/fields', checkPermission(PERMISSIONS.MAP.MANAGE), dictionaryController.createField);
 
-// 更新字段（需要管理员权限）
-router.put('/fields/:id', checkAdmin, dictionaryController.updateField);
+// 更新字段（需要 MAP.MANAGE 权限）
+router.put('/fields/:id', checkPermission(PERMISSIONS.MAP.MANAGE), dictionaryController.updateField);
 
-// 删除字段（需要管理员权限）
-router.delete('/fields/:id', checkAdmin, dictionaryController.deleteField);
+// 删除字段（需要 MAP.MANAGE 权限）
+router.delete('/fields/:id', checkPermission(PERMISSIONS.MAP.MANAGE), dictionaryController.deleteField);
 
 // ============================================
 // 完整配置路由（用于前端）
@@ -49,4 +50,3 @@ router.delete('/fields/:id', checkAdmin, dictionaryController.deleteField);
 router.get('/full', dictionaryController.getFullConfig);
 
 module.exports = router;
-

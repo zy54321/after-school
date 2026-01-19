@@ -82,6 +82,16 @@ CREATE EXTENSION postgis; -- ⚠️ 必须启用此插件
 -- 导入 database/init.sql (如果有)
 ```
 
+### 2.1 RBAC 权限初始化 ⚠️ 必须执行
+
+```bash
+# 在项目根目录执行，初始化 RBAC 权限体系
+psql -U your_user -d after_school -f server/migrations/001_init_rbac.sql
+```
+
+> **说明**：此脚本会创建角色表、权限表，并为 admin 角色分配所有权限。
+> 如果不执行此脚本，用户管理、学员删除、退款等功能将因权限校验失败而无法使用。
+
 ### 3\. 启动后端
 
 ```bash

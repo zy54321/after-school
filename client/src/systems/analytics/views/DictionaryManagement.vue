@@ -300,8 +300,14 @@ import { Back, Plus, Delete } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import axios from 'axios';
 import Sortable from 'sortablejs';
+import { usePermission } from '@/composables/usePermission';
+import { PERMISSIONS } from '@/constants/permissions';
 
 const router = useRouter();
+const { hasPermission } = usePermission();
+
+// 检查是否有管理权限
+const canManage = computed(() => hasPermission(PERMISSIONS.MAP.MANAGE));
 const { locale, t } = useI18n();
 
 // 状态

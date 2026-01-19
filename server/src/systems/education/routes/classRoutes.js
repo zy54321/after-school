@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const classController = require('../controllers/classController');
-const checkAdmin = require('../../../shared/middleware/adminMiddleware');
+const { checkPermission } = require('../../../shared/middleware/permissionMiddleware');
+const PERMISSIONS = require('../../../shared/constants/permissions');
 
 // 报名下拉框用 (保持不变)
 router.get('/active', classController.getActiveClasses);
@@ -15,8 +16,7 @@ router.get('/:id/enrollment-history', classController.getClassEnrollmentHistory)
 
 router.put('/:id', classController.updateClass);
 
-// 🛑 给删除接口加锁
-router.delete('/:id', checkAdmin, classController.deleteClass);
+// 🛑 删除接口（需要 CLASS.DELETE 权限）
+router.delete('/:id', checkPermission(PERMISSIONS.CLASS.DELETE), classController.deleteClass);
 
 module.exports = router;
-

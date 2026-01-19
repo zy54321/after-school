@@ -258,6 +258,7 @@ import { ElMessage } from 'element-plus';
 import { User, Lock, Right, ArrowDown, HomeFilled } from '@element-plus/icons-vue';
 import axios from 'axios';
 import { useI18n } from 'vue-i18n';
+import { clearSessionCache } from '@/router';
 
 const { locale, t } = useI18n();
 const router = useRouter();
@@ -353,6 +354,7 @@ const handleEnterSystem = () => {
 const handleLogout = () => {
   localStorage.removeItem('user_token');
   localStorage.removeItem('user_info');
+  clearSessionCache(); // 清除 Session 缓存
   isLoggedIn.value = false;
   loginForm.username = '';
   loginForm.password = '';
