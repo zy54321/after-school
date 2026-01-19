@@ -43,18 +43,26 @@ const displayUserName = computed(() => {
   return userInfo.value.real_name || userInfo.value.username;
 });
 
-onMounted(() => {
+onMounted(async () => {
   // 滚动到页面顶部
   window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   document.documentElement.scrollTop = 0;
   document.body.scrollTop = 0;
   
-  const token = localStorage.getItem('user_token');
-  const infoStr = localStorage.getItem('user_info');
-
-  if (token && infoStr) {
-    isLoggedIn.value = true;
-    userInfo.value = JSON.parse(infoStr);
+  // 通过 Session 校验判断登录状态
+  try {
+    const res = await axios.get('/api/permissions/auth/permissions');
+    if (res.data && res.data.code === 200) {
+      isLoggedIn.value = true;
+      const infoStr = localStorage.getItem('user_info');
+      if (infoStr) {
+        userInfo.value = JSON.parse(infoStr);
+      }
+      initUserPermissions(res.data.data);
+    }
+  } catch (err) {
+    // Session 无效，保持未登录状态
+    isLoggedIn.value = false;
   }
 });
 
@@ -156,7 +164,7 @@ const handleLogin = async () => {
       try {
         const res = await axios.post('/api/login', loginForm);
         if (res.data.code === 200) {
-          localStorage.setItem('user_token', 'logged_in');
+          // 只保存用户信息，不再使用 token
           localStorage.setItem('user_info', JSON.stringify(res.data.data));
 
           // 更新登录状态
@@ -212,11 +220,11 @@ const handleLogin = async () => {
 
 // 切换账号
 const handleLogout = () => {
-  localStorage.removeItem('user_token');
+  // 清除用户信息和权限缓存（不再使用 user_token）
   localStorage.removeItem('user_info');
   localStorage.removeItem('user_permissions');
   clearUserPermissions();
-  clearSessionCache(); // 清除 Session 缓存
+  clearSessionCache();
   isLoggedIn.value = false;
   userInfo.value = {};
   loginForm.username = '';

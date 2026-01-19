@@ -484,6 +484,8 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import gcoord from 'gcoord';
 import * as turf from '@turf/turf';
 import DemographicsAnalysis from '../components/DemographicsAnalysis.vue';
+import { usePermission } from '@/composables/usePermission';
+import PERMISSIONS from '@/constants/permissions';
 
 const router = useRouter();
 const route = useRoute();
@@ -497,13 +499,11 @@ const toggleLang = () => {
   ElMessage.success(`Language switched to ${locale.value.toUpperCase()}`);
 };
 
-const token = localStorage.getItem('user_token');
-const userInfoStr = localStorage.getItem('user_info');
-
-const userInfo = userInfoStr ? JSON.parse(userInfoStr) : {};
-const userRole = userInfo.role || 'visitor';
-const isAdmin = computed(() => userRole === 'admin');
-const isVisitor = computed(() => userRole === 'visitor' || userInfo.username === 'visitor');
+// 使用 RBAC 权限判断，不再依赖 user_token 和 role
+const { hasPermission } = usePermission();
+const canManageMap = computed(() => hasPermission(PERMISSIONS.MAP.MANAGE));
+// 保留 isAdmin 作为别名，保持模板兼容性
+const isAdmin = canManageMap;
 
 const saving = ref(false);
 const isCanceling = ref(false);

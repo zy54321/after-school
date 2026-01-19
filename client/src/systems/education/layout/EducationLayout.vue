@@ -164,7 +164,6 @@ const currentLang = ref(locale.value);
 
 const userInfoStr = localStorage.getItem('user_info');
 const userInfo = userInfoStr ? JSON.parse(userInfoStr) : {};
-const role = userInfo.role || 'teacher';
 
 // 权限检查
 const { hasPermission } = usePermission();
@@ -183,11 +182,11 @@ onMounted(async () => {
 });
 
 const handleLogout = () => {
-  localStorage.removeItem('user_token');
+  // 清除用户信息和缓存（不再使用 user_token）
   localStorage.removeItem('user_info');
   localStorage.removeItem('user_permissions');
   clearUserPermissions();
-  clearSessionCache(); // 清除 Session 缓存
+  clearSessionCache();
   router.push('/');
   ElMessage.success(t('header.logout') + ' ' + t('common.success'));
 };

@@ -23,7 +23,7 @@
         </el-card>
       </el-col>
 
-      <el-col :span="6" v-if="role === 'admin'">
+      <el-col :span="6" v-if="canViewIncome">
         <el-card shadow="hover">
           <template #header>
             <div class="card-header">
@@ -107,7 +107,11 @@ import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import { useI18n } from 'vue-i18n';
+import { usePermission } from '@/composables/usePermission';
+import PERMISSIONS from '@/constants/permissions';
+
 const { t } = useI18n();
+const { hasPermission } = usePermission();
 
 const stats = ref({
   totalStudents: 0,
@@ -120,8 +124,8 @@ const activities = ref([]);
 const lowBalanceList = ref([]);
 const loading = ref(false);
 
-const userInfoStr = localStorage.getItem('user_info');
-const role = userInfoStr ? JSON.parse(userInfoStr).role : 'teacher';
+// 使用 RBAC 权限判断是否可查看收入
+const canViewIncome = hasPermission(PERMISSIONS.ORDER.READ);
 
 const formatTime = (isoString) => {
   const date = new Date(isoString);
