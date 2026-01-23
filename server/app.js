@@ -46,6 +46,12 @@ const amapRoutes = require('./src/systems/education/routes/amapRoutes');
 const dailyReportRoutes = require('./src/systems/education/routes/dailyReportRoutes');
 const cateringRoutes = require('./src/systems/catering/routes/cateringRoutes');
 const familyRoutes = require('./src/systems/family/routes/familyRoutes');
+const marketplaceRoutes = require('./src/systems/family/routes/marketplaceRoutes');
+const auctionRoutes = require('./src/systems/family/routes/auctionRoutes');
+const bountyRoutes = require('./src/systems/family/routes/bountyRoutes');
+const lotteryRoutes = require('./src/systems/family/routes/lotteryRoutes');
+const issueRoutes = require('./src/systems/family/routes/issueRoutes');
+const reminderRoutes = require('./src/systems/family/routes/reminderRoutes');
 const mapboxRoutes = require('./src/systems/analytics/routes/mapboxRoutes');
 const dictionaryRoutes = require('./src/systems/analytics/routes/dictionaryRoutes');
 const demographicsRoutes = require('./src/systems/analytics/routes/demographicsRoutes');
@@ -118,6 +124,12 @@ app.use('/api/mapbox/dictionary', checkAuth, dictionaryRoutes);
 app.use('/api/mapbox', checkAuth, mapboxRoutes);
 app.use('/api/analytics/demographics', checkAuth, demographicsRoutes);
 app.use('/api/family', checkAuth, familyRoutes);
+app.use('/api/v2', checkAuth, marketplaceRoutes);
+app.use('/api/v2/auction', checkAuth, auctionRoutes);
+app.use('/api/v2/tasks', checkAuth, bountyRoutes);
+app.use('/api/v2/draw', checkAuth, lotteryRoutes);
+app.use('/api/v2/issues', checkAuth, issueRoutes);
+app.use('/api/v2', checkAuth, reminderRoutes);
 
 // 启动服务
 app.listen(port, () => {

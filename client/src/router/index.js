@@ -270,6 +270,36 @@ const routes = [
         component: () => import('../systems/family/views/Dashboard.vue'),
         meta: { requiresAuth: true }, // 保护路由
       },
+      {
+        path: 'auction',
+        name: 'FamilyAuction',
+        component: () => import('../systems/family/views/AuctionPage.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: 'bounty',
+        name: 'FamilyBounty',
+        component: () => import('../systems/family/views/BountyPage.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: 'lottery',
+        name: 'FamilyLottery',
+        component: () => import('../systems/family/views/LotteryPage.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: 'issues',
+        name: 'FamilyIssues',
+        component: () => import('../systems/family/views/IssuePage.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: 'reminders',
+        name: 'FamilyReminders',
+        component: () => import('../systems/family/views/ReminderPage.vue'),
+        meta: { requiresAuth: true },
+      },
     ],
   },
 ];

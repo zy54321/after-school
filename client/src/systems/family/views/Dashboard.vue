@@ -344,6 +344,52 @@ const handleCalendarMonthChange = (newDate) => {
       
       <el-tab-pane :label="$t('familyDashboard.auction')">
         <template #label><span class="tab-label"><el-icon><Trophy /></el-icon> {{ $t('familyDashboard.auction') }}</span></template>
+        <!-- 新版拍卖入口 -->
+        <div class="auction-entry-card" @click="router.push('/family/auction')">
+          <div class="auction-entry-icon">🔨</div>
+          <div class="auction-entry-content">
+            <h3>拍卖大厅</h3>
+            <p>参与密封出价拍卖，赢取稀有奖品</p>
+          </div>
+          <div class="auction-entry-arrow">→</div>
+        </div>
+        <!-- 悬赏任务入口 -->
+        <div class="auction-entry-card bounty-card" @click="router.push('/family/bounty')">
+          <div class="auction-entry-icon">📋</div>
+          <div class="auction-entry-content">
+            <h3>悬赏任务</h3>
+            <p>发布或领取悬赏任务，赚取积分奖励</p>
+          </div>
+          <div class="auction-entry-arrow">→</div>
+        </div>
+        <!-- 幸运抽奖入口 -->
+        <div class="auction-entry-card lottery-card" @click="router.push('/family/lottery')">
+          <div class="auction-entry-icon">🎰</div>
+          <div class="auction-entry-content">
+            <h3>幸运抽奖</h3>
+            <p>使用抽奖券参与转盘抽奖，赢取丰厚奖励</p>
+          </div>
+          <div class="auction-entry-arrow">→</div>
+        </div>
+        <!-- 问题关注入口 -->
+        <div class="auction-entry-card issue-card" @click="router.push('/family/issues')">
+          <div class="auction-entry-icon">📋</div>
+          <div class="auction-entry-content">
+            <h3>问题关注</h3>
+            <p>追踪行为问题，设置干预措施</p>
+          </div>
+          <div class="auction-entry-arrow">→</div>
+        </div>
+        <!-- 提醒中心入口 -->
+        <div class="auction-entry-card reminder-card" @click="router.push('/family/reminders')">
+          <div class="auction-entry-icon">🔔</div>
+          <div class="auction-entry-content">
+            <h3>提醒中心</h3>
+            <p>管理待办提醒，查看逾期事项</p>
+          </div>
+          <div class="auction-entry-arrow">→</div>
+        </div>
+        <!-- 旧版拍卖列表 -->
         <Auctions
           :rewards="rewards"
           :current-member-id="currentMemberId"
@@ -692,5 +738,142 @@ const handleCalendarMonthChange = (newDate) => {
 
 .badge {
   margin-left: 4px;
+}
+
+/* 拍卖入口卡片 */
+.auction-entry-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.auction-entry-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.25);
+}
+
+.auction-entry-card:active {
+  transform: scale(0.98);
+}
+
+.auction-entry-icon {
+  font-size: 40px;
+}
+
+.auction-entry-content {
+  flex: 1;
+}
+
+.auction-entry-content h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.auction-entry-content p {
+  margin: 0;
+  font-size: 14px;
+  color: #92400e;
+}
+
+.auction-entry-arrow {
+  font-size: 24px;
+  color: #f59e0b;
+}
+
+/* 悬赏任务入口卡片 */
+.auction-entry-card.bounty-card {
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  border-color: #6366f1;
+}
+
+.auction-entry-card.bounty-card:hover {
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+}
+
+.auction-entry-card.bounty-card .auction-entry-content h3 {
+  color: #4338ca;
+}
+
+.auction-entry-card.bounty-card .auction-entry-content p {
+  color: #4f46e5;
+}
+
+.auction-entry-card.bounty-card .auction-entry-arrow {
+  color: #6366f1;
+}
+
+/* 幸运抽奖入口卡片 */
+.auction-entry-card.lottery-card {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-color: #ffd700;
+}
+
+.auction-entry-card.lottery-card:hover {
+  box-shadow: 0 8px 24px rgba(255, 215, 0, 0.25);
+}
+
+.auction-entry-card.lottery-card .auction-entry-content h3 {
+  color: #ffd700;
+}
+
+.auction-entry-card.lottery-card .auction-entry-content p {
+  color: #e2e8f0;
+}
+
+.auction-entry-card.lottery-card .auction-entry-arrow {
+  color: #ffd700;
+}
+
+/* 问题关注入口卡片 */
+.auction-entry-card.issue-card {
+  background: linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 100%);
+  border-color: #f56c6c;
+}
+
+.auction-entry-card.issue-card:hover {
+  box-shadow: 0 8px 24px rgba(245, 108, 108, 0.25);
+}
+
+.auction-entry-card.issue-card .auction-entry-content h3 {
+  color: #f56c6c;
+}
+
+.auction-entry-card.issue-card .auction-entry-content p {
+  color: #e0e0e0;
+}
+
+.auction-entry-card.issue-card .auction-entry-arrow {
+  color: #f56c6c;
+}
+
+/* 提醒中心入口卡片 */
+.auction-entry-card.reminder-card {
+  background: linear-gradient(135deg, #2d3436 0%, #000000 100%);
+  border-color: #faad14;
+}
+
+.auction-entry-card.reminder-card:hover {
+  box-shadow: 0 8px 24px rgba(250, 173, 20, 0.25);
+}
+
+.auction-entry-card.reminder-card .auction-entry-content h3 {
+  color: #faad14;
+}
+
+.auction-entry-card.reminder-card .auction-entry-content p {
+  color: #e0e0e0;
+}
+
+.auction-entry-card.reminder-card .auction-entry-arrow {
+  color: #faad14;
 }
 </style>
