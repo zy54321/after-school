@@ -30,10 +30,6 @@
         </nav>
         
         <div class="user-section">
-          <div v-if="currentMember" class="current-member">
-            <span class="member-avatar">{{ currentMember.name?.charAt(0) || '?' }}</span>
-            <span class="member-name">{{ currentMember.name }}</span>
-          </div>
           <button @click="handleLogout" class="logout-btn">退出</button>
         </div>
       </div>
@@ -47,41 +43,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import axios from 'axios';
 import { clearSessionCache } from '@/router';
 
 const route = useRoute();
 const router = useRouter();
 
-const members = ref([]);
-const currentMember = ref(null);
-
 // 从路由获取当前成员ID
 const currentMemberId = computed(() => {
   return route.params.id || localStorage.getItem('currentMemberId');
 });
-
-// 加载成员列表
-const loadMembers = async () => {
-  try {
-    const res = await axios.get('/api/v2/family/members');
-    if (res.data?.code === 200) {
-      members.value = res.data.data?.members || [];
-      
-      // 设置当前成员
-      if (currentMemberId.value) {
-        currentMember.value = members.value.find(m => m.id === parseInt(currentMemberId.value));
-      } else if (members.value.length > 0) {
-        currentMember.value = members.value[0];
-        localStorage.setItem('currentMemberId', members.value[0].id);
-      }
-    }
-  } catch (err) {
-    console.error('加载成员列表失败:', err);
-  }
-};
 
 // 登出
 const handleLogout = async () => {
@@ -95,9 +67,6 @@ const handleLogout = async () => {
   router.push('/family/home');
 };
 
-onMounted(() => {
-  loadMembers();
-});
 </script>
 
 <style scoped>
@@ -189,32 +158,6 @@ onMounted(() => {
   gap: 16px;
 }
 
-.current-member {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-}
-
-.member-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 600;
-  font-size: 12px;
-}
-
-.member-name {
-  color: #fff;
-  font-size: 14px;
-}
 
 .logout-btn {
   padding: 8px 16px;
@@ -258,8 +201,5 @@ onMounted(() => {
     padding: 10px 14px;
   }
   
-  .member-name {
-    display: none;
-  }
 }
 </style>

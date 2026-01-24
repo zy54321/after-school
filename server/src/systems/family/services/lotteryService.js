@@ -376,6 +376,133 @@ exports.getDrawOverview = async (parentId) => {
   };
 };
 
+// ========== 管理后台：抽奖池配置 ==========
+
+/**
+ * 获取所有抽奖池（含非 active）
+ */
+exports.getAllPools = async (parentId) => {
+  return await lotteryRepo.getAllPoolsByParentId(parentId);
+};
+
+/**
+ * 创建抽奖池
+ */
+exports.createPool = async ({
+  parentId,
+  name,
+  description,
+  icon,
+  entryTicketTypeId,
+  ticketsPerDraw,
+  status,
+  poolType,
+  config
+}) => {
+  return await lotteryRepo.createPool({
+    parentId,
+    name,
+    description,
+    icon,
+    entryTicketTypeId,
+    ticketsPerDraw,
+    status,
+    poolType,
+    config
+  });
+};
+
+/**
+ * 更新抽奖池
+ */
+exports.updatePool = async ({
+  poolId,
+  parentId,
+  name,
+  description,
+  icon,
+  entryTicketTypeId,
+  ticketsPerDraw,
+  status,
+  poolType,
+  config
+}) => {
+  const pool = await lotteryRepo.getPoolById(poolId);
+  if (!pool || pool.parent_id !== parentId) {
+    throw new Error('抽奖池不存在或无权限');
+  }
+  return await lotteryRepo.updatePool({
+    poolId,
+    name: name || pool.name,
+    description: description !== undefined ? description : pool.description,
+    icon: icon !== undefined ? icon : pool.icon,
+    entryTicketTypeId: entryTicketTypeId !== undefined ? entryTicketTypeId : pool.entry_ticket_type_id,
+    ticketsPerDraw: ticketsPerDraw !== undefined ? ticketsPerDraw : pool.tickets_per_draw,
+    status: status || pool.status,
+    poolType: poolType || pool.pool_type,
+    config: config !== undefined ? config : (pool.config || {})
+  });
+};
+
+/**
+ * 停用抽奖池
+ */
+exports.deactivatePool = async (poolId, parentId) => {
+  const pool = await lotteryRepo.getPoolById(poolId);
+  if (!pool || pool.parent_id !== parentId) {
+    throw new Error('抽奖池不存在或无权限');
+  }
+  return await lotteryRepo.deactivatePool(poolId);
+};
+
+/**
+ * 创建抽奖池版本
+ */
+exports.createPoolVersion = async ({
+  parentId,
+  poolId,
+  prizes,
+  minGuaranteeCount,
+  guaranteePrizeId,
+  config,
+  createdBy
+}) => {
+  const pool = await lotteryRepo.getPoolById(poolId);
+  if (!pool || pool.parent_id !== parentId) {
+    throw new Error('抽奖池不存在或无权限');
+  }
+
+  const totalWeight = (prizes || []).reduce((sum, p) => sum + (parseInt(p.weight) || 0), 0);
+  if (totalWeight <= 0) {
+    throw new Error('奖品权重总和必须大于 0');
+  }
+
+  const poolVersionNumber = (await lotteryRepo.getLatestVersionNumber(poolId)) + 1;
+  const poolDb = lotteryRepo.getPool();
+  const client = await poolDb.connect();
+  try {
+    await client.query('BEGIN');
+    await lotteryRepo.clearCurrentVersion(poolId, client);
+    const version = await lotteryRepo.createPoolVersion({
+      poolId,
+      version: poolVersionNumber,
+      prizes,
+      totalWeight,
+      minGuaranteeCount,
+      guaranteePrizeId,
+      config,
+      createdBy
+    }, client);
+    await client.query('COMMIT');
+    return version;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
 // ========== 成员消费入口（Member-level）==========
 
 /**

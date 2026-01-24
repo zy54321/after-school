@@ -19,6 +19,28 @@ router.get('/skus', controller.getSkus);
 // GET /api/v2/offers - 获取 Offer 列表
 router.get('/offers', controller.getOffers);
 
+// ========== 管理后台 ==========
+// GET /api/v2/admin/skus - 获取家庭 SKU 列表
+router.get('/admin/skus', controller.getAdminSkus);
+// POST /api/v2/skus - 创建 SKU
+router.post('/skus', controller.createSku);
+// PUT /api/v2/skus/:id - 更新 SKU
+router.put('/skus/:id', controller.updateSku);
+// DELETE /api/v2/skus/:id - 停用 SKU
+router.delete('/skus/:id', controller.deleteSku);
+
+// GET /api/v2/admin/offers - 获取家庭 Offer 列表
+router.get('/admin/offers', controller.getAdminOffers);
+// POST /api/v2/offers - 创建 Offer
+router.post('/offers', controller.createOffer);
+// PUT /api/v2/offers/:id - 更新 Offer
+router.put('/offers/:id', controller.updateOffer);
+// DELETE /api/v2/offers/:id - 停用 Offer
+router.delete('/offers/:id', controller.deleteOffer);
+
+// GET /api/v2/family/members - 获取家庭成员列表（供选择成员使用）
+router.get('/family/members', controller.getMembers);
+
 // ========== 订单相关 ==========
 
 // POST /api/v2/orders - 创建订单

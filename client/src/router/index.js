@@ -328,6 +328,21 @@ const routes = [
         name: 'FamilyMarketReminders',
         component: () => import('../systems/family/views/market/MarketReminders.vue'),
       },
+      {
+        path: 'market/admin',
+        name: 'FamilyMarketAdmin',
+        component: () => import('../systems/family/views/market/MarketAdmin.vue'),
+      },
+      {
+        path: 'market/admin/draw',
+        name: 'FamilyMarketDrawAdmin',
+        component: () => import('../systems/family/views/market/MarketDrawAdmin.vue'),
+      },
+      {
+        path: 'market/admin/auction',
+        name: 'FamilyMarketAuctionAdmin',
+        component: () => import('../systems/family/views/market/MarketAuctionAdmin.vue'),
+      },
 
       // ========== 成员资产层（必须 member）==========
       {

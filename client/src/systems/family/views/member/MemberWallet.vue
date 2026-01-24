@@ -32,6 +32,11 @@
         </div>
       </div>
 
+      <div class="wallet-actions">
+        <button class="action-btn add" @click="openAdjustModal('add')">+ 加分</button>
+        <button class="action-btn deduct" @click="openAdjustModal('deduct')">- 扣分</button>
+      </div>
+
       <!-- 资产导航 -->
       <nav class="asset-nav">
         <router-link :to="`/family/member/${currentMemberId}/wallet`" class="asset-nav-item" exact-active-class="active">
@@ -102,6 +107,27 @@
     <div class="loading-state" v-else-if="loading">
       加载中...
     </div>
+
+    <!-- 加扣分弹窗 -->
+    <div class="modal-overlay" v-if="showAdjustModal" @click.self="closeAdjustModal">
+      <div class="modal-content">
+        <h3>{{ adjustForm.type === 'add' ? '加分' : '扣分' }}</h3>
+        <div class="form-group">
+          <label>积分值</label>
+          <input type="number" v-model.number="adjustForm.points" min="1" />
+        </div>
+        <div class="form-group">
+          <label>原因（可选）</label>
+          <input v-model="adjustForm.reason" placeholder="例如：表现优秀" />
+        </div>
+        <div class="modal-actions">
+          <button class="cancel-btn" @click="closeAdjustModal">取消</button>
+          <button class="confirm-btn" @click="submitAdjust" :disabled="adjusting">
+            {{ adjusting ? '提交中...' : '确认' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -117,6 +143,14 @@ const member = ref(null);
 const balance = ref(0);
 const logs = ref([]);
 const loading = ref(false);
+const showAdjustModal = ref(false);
+const adjusting = ref(false);
+
+const adjustForm = ref({
+  type: 'add',
+  points: 1,
+  reason: '',
+});
 const hasMore = ref(true);
 
 const filter = ref({
@@ -227,8 +261,54 @@ const getReasonLabel = (code) => {
     escrow: '托管',
     mystery_shop: '神秘商店',
     mystery_shop_refresh: '商店刷新',
+    manual: '手动调整',
   };
   return labels[code] || code;
+};
+
+const openAdjustModal = (type) => {
+  adjustForm.value = {
+    type,
+    points: 1,
+    reason: '',
+  };
+  showAdjustModal.value = true;
+};
+
+const closeAdjustModal = () => {
+  showAdjustModal.value = false;
+  adjusting.value = false;
+};
+
+const submitAdjust = async () => {
+  if (!currentMemberId.value) return;
+  if (!adjustForm.value.points || adjustForm.value.points <= 0) {
+    alert('请输入有效积分值');
+    return;
+  }
+
+  adjusting.value = true;
+  try {
+    const delta = adjustForm.value.type === 'add'
+      ? adjustForm.value.points
+      : -adjustForm.value.points;
+    const title = adjustForm.value.reason || (delta > 0 ? '手动加分' : '手动扣分');
+    const res = await axios.post('/api/family/action', {
+      memberId: currentMemberId.value,
+      points: delta,
+      customTitle: title,
+      reasonCode: 'manual',
+    });
+    if (res.data?.code === 200) {
+      closeAdjustModal();
+      await loadWallet();
+      await loadLogs();
+    }
+  } catch (err) {
+    alert(err.response?.data?.msg || '操作失败');
+  } finally {
+    adjusting.value = false;
+  }
 };
 
 // 监听路由变化
@@ -353,6 +433,30 @@ onMounted(() => {
   padding: 16px 32px;
   border-radius: 16px;
   text-align: center;
+}
+
+.wallet-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.action-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.action-btn.add {
+  background: linear-gradient(135deg, #38ef7d, #11998e);
+  color: #fff;
+}
+
+.action-btn.deduct {
+  background: linear-gradient(135deg, #ff6b6b, #ee5253);
+  color: #fff;
 }
 
 .balance-label {
@@ -541,5 +645,72 @@ onMounted(() => {
   text-align: center;
   padding: 40px;
   color: rgba(255, 255, 255, 0.5);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #1a1a2e;
+  padding: 24px;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 420px;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.cancel-btn,
+.confirm-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.cancel-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.confirm-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  font-weight: 600;
 }
 </style>

@@ -121,7 +121,7 @@ exports.getMemberDashboard = async (req, res) => {
 };
 
 exports.logAction = async (req, res) => {
-  const { memberId, taskId, customTitle, points } = req.body;
+  const { memberId, taskId, customTitle, points, reasonCode } = req.body;
   
   if (!memberId) {
     return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
@@ -131,7 +131,7 @@ exports.logAction = async (req, res) => {
   }
 
   try {
-    await familyService.logAction({ memberId, taskId, customTitle, points });
+    await familyService.logAction({ memberId, taskId, customTitle, points, reasonCode });
     res.json({ code: 200, msg: '记录成功' });
   } catch (err) {
     console.error('logAction 错误:', err);

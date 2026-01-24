@@ -52,6 +52,17 @@ exports.updateSessionStatus = async (sessionId, status, client = pool) => {
 };
 
 /**
+ * 更新拍卖场次配置
+ */
+exports.updateSessionConfig = async (sessionId, config, client = pool) => {
+  const result = await client.query(
+    `UPDATE auction_session SET config = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
+    [JSON.stringify(config || {}), sessionId]
+  );
+  return result.rows[0];
+};
+
+/**
  * 获取用户的拍卖场次列表
  */
 exports.getSessionsByParentId = async (parentId, status = null, client = pool) => {

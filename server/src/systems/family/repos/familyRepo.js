@@ -131,10 +131,10 @@ exports.getMemberUsageStats = async (memberId) => {
 /**
  * 创建积分流水记录
  */
-exports.createPointsLog = async (memberId, taskId, description, pointsChange) => {
+exports.createPointsLog = async (memberId, taskId, description, pointsChange, reasonCode = null) => {
   const result = await pool.query(
-    'INSERT INTO family_points_log (member_id, task_id, description, points_change) VALUES ($1, $2, $3, $4) RETURNING *',
-    [memberId, taskId || null, description, pointsChange]
+    'INSERT INTO family_points_log (member_id, task_id, description, points_change, reason_code) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+    [memberId, taskId || null, description, pointsChange, reasonCode]
   );
   return result.rows[0];
 };

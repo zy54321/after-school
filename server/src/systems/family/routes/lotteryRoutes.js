@@ -13,6 +13,18 @@ const controller = require('../controllers/lotteryController');
 // GET /api/v2/draw/overview - 获取抽奖概览
 router.get('/overview', controller.getOverview);
 
+// ========== 管理后台 ==========
+// GET /api/v2/draw/admin/pools - 获取所有抽奖池
+router.get('/admin/pools', controller.getAdminPools);
+// POST /api/v2/draw/pools - 创建抽奖池
+router.post('/pools', controller.createPool);
+// PUT /api/v2/draw/pools/:id - 更新抽奖池
+router.put('/pools/:id', controller.updatePool);
+// DELETE /api/v2/draw/pools/:id - 停用抽奖池
+router.delete('/pools/:id', controller.deletePool);
+// POST /api/v2/draw/pools/:id/versions - 创建抽奖池版本
+router.post('/pools/:id/versions', controller.createPoolVersion);
+
 // ========== 抽奖操作（Member-level，需要 member_id） ==========
 
 // POST /api/v2/draw/spin - 执行抽奖

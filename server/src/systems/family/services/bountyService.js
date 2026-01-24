@@ -22,6 +22,7 @@
 const bountyRepo = require('../repos/bountyRepo');
 const walletRepo = require('../repos/walletRepo');
 const marketplaceRepo = require('../repos/marketplaceRepo');
+const reminderRepo = require('../repos/reminderRepo');
 
 // ========== 发布任务 ==========
 
@@ -201,6 +202,22 @@ exports.claimTask = async (taskId, claimerMemberId) => {
 
     // ========== 8. 更新任务状态 ==========
     await bountyRepo.updateTaskStatus(taskId, 'claimed', client);
+
+    // ========== 9. 创建任务提醒（如果有截止时间） ==========
+    if (task.due_at) {
+      await reminderRepo.createEvent({
+        parentId: task.parent_id,
+        memberId: claimerMemberId,
+        targetType: 'task',
+        targetId: task.id,
+        title: `任务截止提醒：${task.title}`,
+        message: `任务「${task.title}」将在 ${new Date(task.due_at).toLocaleString('zh-CN')} 截止`,
+        data: { task_id: task.id },
+        fireAt: new Date(task.due_at),
+        channel: 'app',
+        status: 'pending',
+      }, client);
+    }
 
     await client.query('COMMIT');
 

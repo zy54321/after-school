@@ -1,10 +1,10 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import dayjs from 'dayjs';
-import { ArrowLeft, Refresh, Coin } from '@element-plus/icons-vue';
+import { ArrowLeft, Refresh } from '@element-plus/icons-vue';
 import MemberSelector from '../components/MemberSelector.vue';
 
 const router = useRouter();
@@ -13,7 +13,6 @@ const route = useRoute();
 // ========== 状态 ==========
 const loading = ref(false);
 const spinning = ref(false);
-const members = ref([]);
 const currentMemberId = ref(null);
 
 // 抽奖池数据
@@ -37,63 +36,79 @@ const isWheelSpinning = ref(false);
 const showMemberSelector = ref(false);
 
 // ========== 计算属性 ==========
-const currentMember = computed(() => {
-  return members.value.find((m) => m.id === currentMemberId.value);
-});
-
-const memberBalance = computed(() => {
-  return currentMember.value?.balance || 0;
-});
-
 const canSpin = computed(() => {
   if (!selectedPool.value) return false;
+  if (!poolDetail.value?.version || (poolDetail.value?.version?.prizes || []).length === 0) {
+    return false;
+  }
   // 不再在这里检查成员是否有券，因为成员可能还没选择
   return true;
 });
 
+const wheelSectors = computed(() => {
+  const prizes = poolDetail.value?.version?.prizes || [];
+  if (prizes.length === 0) return [];
+  const sectorAngle = 360 / prizes.length;
+  const gapAngle = sectorAngle >= 15 ? 2 : sectorAngle >= 8 ? 1 : 0;
+  const span = sectorAngle - gapAngle;
+  let current = 0;
+  return prizes.map((prize, index) => {
+    const angleMid = current + span / 2;
+    const sector = {
+      key: `${prize.id || index}-${index}`,
+      prize,
+      angleStart: current,
+      angleSpan: span,
+      angleMid,
+    };
+    current += span + gapAngle;
+    return sector;
+  });
+});
+
+const wheelBackground = computed(() => {
+  const prizes = poolDetail.value?.version?.prizes || [];
+  if (prizes.length === 0) {
+    return 'conic-gradient(#2f2f3a 0deg 360deg)';
+  }
+  const sectorAngle = 360 / prizes.length;
+  const gapAngle = sectorAngle >= 15 ? 2 : sectorAngle >= 8 ? 1 : 0;
+  const span = sectorAngle - gapAngle;
+  let current = 0;
+  const parts = [];
+  prizes.forEach((_, index) => {
+    const color = getPrizeColor(index, prizes.length);
+    const start = current;
+    const end = current + span;
+    parts.push(`${color} ${start}deg ${end}deg`);
+    current = end;
+    if (gapAngle > 0) {
+      parts.push(`rgba(0,0,0,0.2) ${current}deg ${current + gapAngle}deg`);
+      current += gapAngle;
+    }
+  });
+  return `conic-gradient(from -90deg, ${parts.join(', ')})`;
+});
+
 // ========== API 调用 ==========
-const loadMembers = async () => {
-  try {
-    const res = await axios.get('/api/family/init');
-    if (res.data.code === 200) {
-      members.value = res.data.data.members || [];
-      if (members.value.length > 0 && !currentMemberId.value) {
-        currentMemberId.value = members.value[0].id;
-      }
-    }
-  } catch (err) {
-    console.error('加载成员失败:', err);
-  }
-};
-
-const loadMemberBalance = async () => {
-  if (!currentMemberId.value) return;
-  try {
-    const res = await axios.get('/api/family/member-dashboard', {
-      params: { memberId: currentMemberId.value },
-    });
-    if (res.data.code === 200) {
-      const member = members.value.find((m) => m.id === currentMemberId.value);
-      if (member) {
-        member.balance = res.data.data.totalPoints || 0;
-      }
-    }
-  } catch (err) {
-    console.error('加载余额失败:', err);
-  }
-};
-
-const loadPools = async () => {
-  if (!currentMemberId.value) return;
+const loadPools = async (preferredPoolId = null) => {
   loading.value = true;
   try {
-    const res = await axios.get('/api/v2/draw/pools', {
-      params: { member_id: currentMemberId.value },
-    });
-    if (res.data.code === 200) {
-      pools.value = res.data.data.pools || [];
-      if (pools.value.length > 0 && !selectedPool.value) {
-        selectPool(pools.value[0]);
+    const res = await axios.get('/api/v2/draw/pools');
+    if (res.data?.code === 200) {
+      pools.value = res.data.data?.pools || [];
+      console.log('[lottery] pools loaded', {
+        count: pools.value.length,
+        preferredPoolId,
+      });
+      if (pools.value.length > 0) {
+        const preferred =
+          preferredPoolId && pools.value.find((pool) => pool.id === preferredPoolId);
+        if (preferred) {
+          selectPool(preferred);
+        } else if (!selectedPool.value) {
+          selectPool(pools.value[0]);
+        }
       }
     }
   } catch (err) {
@@ -106,11 +121,16 @@ const loadPools = async () => {
 
 const selectPool = async (pool) => {
   selectedPool.value = pool;
+  console.log('[lottery] select pool', { poolId: pool?.id });
   loading.value = true;
   try {
     const res = await axios.get(`/api/v2/draw/pools/${pool.id}`);
     if (res.data.code === 200) {
       poolDetail.value = res.data.data;
+      console.log('[lottery] pool detail', {
+        hasVersion: !!poolDetail.value?.version,
+        prizeCount: poolDetail.value?.version?.prizes?.length || 0,
+      });
     }
   } catch (err) {
     console.error('加载抽奖池详情失败:', err);
@@ -121,18 +141,14 @@ const selectPool = async (pool) => {
 
 // 点击抽奖按钮
 const handleSpinClick = () => {
+  console.log('[lottery] spin click', {
+    selectedPoolId: selectedPool.value?.id,
+    memberSelected: !!currentMemberId.value,
+  });
   if (!selectedPool.value || spinning.value) return;
-  
-  // 如果已选择成员且有足够的券，直接抽奖
   if (currentMemberId.value) {
-    const pool = selectedPool.value;
-    if (pool.entry_ticket_type_id && (pool.memberTicketCount || 0) < (pool.tickets_per_draw || 1)) {
-      ElMessage.warning('抽奖券不足，请先获取抽奖券');
-      return;
-    }
     doSpin(currentMemberId.value);
   } else {
-    // 否则弹出成员选择器
     showMemberSelector.value = true;
   }
 };
@@ -141,17 +157,6 @@ const handleSpinClick = () => {
 const handleMemberConfirm = async ({ memberId }) => {
   currentMemberId.value = memberId;
   showMemberSelector.value = false;
-  
-  // 刷新该成员的券数量
-  await loadPools();
-  
-  // 检查是否有足够的券
-  const pool = selectedPool.value;
-  if (pool?.entry_ticket_type_id && (pool.memberTicketCount || 0) < (pool.tickets_per_draw || 1)) {
-    ElMessage.warning('该成员抽奖券不足');
-    return;
-  }
-  
   doSpin(memberId);
 };
 
@@ -164,13 +169,16 @@ const closeMemberSelector = () => {
 const doSpin = async (memberId) => {
   if (!selectedPool.value || spinning.value) return;
 
+  console.log('[lottery] spin start', {
+    poolId: selectedPool.value?.id,
+    memberId,
+    currentRotation: wheelRotation.value,
+  });
   spinning.value = true;
-  isWheelSpinning.value = true;
   showResult.value = false;
-
-  // 先启动转盘动画
-  const spins = 5 + Math.random() * 3; // 5-8 圈
-  wheelRotation.value += 360 * spins;
+  isWheelSpinning.value = true;
+  wheelRotation.value += 360 * (2 + Math.floor(Math.random() * 2));
+  console.log('[lottery] pre-spin rotation set', { wheelRotation: wheelRotation.value });
 
   try {
     const res = await axios.post('/api/v2/draw/spin', {
@@ -178,25 +186,36 @@ const doSpin = async (memberId) => {
       member_id: memberId,
     });
 
-    // 等待动画完成
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-
     if (res.data.code === 200) {
       spinResult.value = res.data.data;
+      const prizeId = spinResult.value?.prize?.id;
+      const prizes = poolDetail.value?.version?.prizes || [];
+      const targetRotation = getTargetRotation(prizes, prizeId);
+      console.log('[lottery] spin result', {
+        prizeId,
+        prizeName: spinResult.value?.prize?.name,
+        prizesCount: prizes.length,
+        targetRotation,
+      });
+      await nextTick();
+      wheelRotation.value = targetRotation;
+      console.log('[lottery] target rotation set', { wheelRotation: wheelRotation.value });
+
+      await new Promise((resolve) => setTimeout(resolve, 3000));
       showResult.value = true;
       
-      // 刷新数据
       await loadPools();
-      await loadMemberBalance();
       await loadHistory();
     } else {
       ElMessage.error(res.data.msg);
     }
   } catch (err) {
     ElMessage.error(err.response?.data?.msg || '抽奖失败');
+    console.error('[lottery] spin error', err);
   } finally {
     spinning.value = false;
     isWheelSpinning.value = false;
+    console.log('[lottery] spin end', { wheelRotation: wheelRotation.value });
   }
 };
 
@@ -206,8 +225,8 @@ const loadHistory = async () => {
     const res = await axios.get('/api/v2/draw/history', {
       params: { member_id: currentMemberId.value, limit: 20 },
     });
-    if (res.data.code === 200) {
-      history.value = res.data.data.history || [];
+    if (res.data?.code === 200) {
+      history.value = res.data.data?.history || [];
     }
   } catch (err) {
     console.error('加载历史记录失败:', err);
@@ -215,7 +234,7 @@ const loadHistory = async () => {
 };
 
 const goBack = () => {
-  router.push('/family/dashboard');
+  router.push('/family/market/draw');
 };
 
 // ========== 辅助函数 ==========
@@ -225,6 +244,18 @@ const getPrizeColor = (index, total) => {
     '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
   ];
   return colors[index % colors.length];
+};
+
+const getTargetRotation = (prizes, prizeId) => {
+  if (!prizes.length) {
+    return wheelRotation.value + 360 * (5 + Math.floor(Math.random() * 3));
+  }
+  const prizeIndex = prizes.findIndex((prize) => prize.id === prizeId);
+  const finalIndex = prizeIndex >= 0 ? prizeIndex : Math.floor(Math.random() * prizes.length);
+  const angle = 360 / prizes.length;
+  const targetAngle = 360 - (finalIndex * angle + angle / 2);
+  const spins = 5 + Math.floor(Math.random() * 3);
+  return wheelRotation.value + 360 * spins + targetAngle;
 };
 
 const getResultTypeLabel = (type) => {
@@ -239,19 +270,27 @@ const getResultTypeLabel = (type) => {
 
 // ========== 生命周期 ==========
 onMounted(async () => {
-  await loadMembers();
-  await loadMemberBalance();
-  await loadPools();
-  await loadHistory();
+  console.log('[lottery] page mounted', {
+    route: route.fullPath,
+    poolId: route.params.poolId,
+  });
+  const routePoolId = parseInt(route.params.poolId, 10);
+  await loadPools(Number.isFinite(routePoolId) ? routePoolId : null);
 });
 
 watch(currentMemberId, async () => {
-  selectedPool.value = null;
-  poolDetail.value = null;
-  await loadMemberBalance();
-  await loadPools();
   await loadHistory();
 });
+
+watch(
+  () => route.params.poolId,
+  async (poolId) => {
+    const parsedId = parseInt(poolId, 10);
+    if (Number.isFinite(parsedId)) {
+      await loadPools(parsedId);
+    }
+  }
+);
 </script>
 
 <template>
@@ -261,24 +300,6 @@ watch(currentMemberId, async () => {
       <div class="header-left">
         <el-button :icon="ArrowLeft" circle @click="goBack" />
         <h1>🎰 幸运抽奖</h1>
-      </div>
-      <div class="header-right">
-        <el-select
-          v-model="currentMemberId"
-          placeholder="选择成员"
-          style="width: 140px"
-        >
-          <el-option
-            v-for="m in members"
-            :key="m.id"
-            :label="m.name"
-            :value="m.id"
-          />
-        </el-select>
-        <div class="balance-badge" v-if="currentMember">
-          <el-icon><Coin /></el-icon>
-          <span>{{ memberBalance }}</span>
-        </div>
       </div>
     </header>
 
@@ -294,14 +315,11 @@ watch(currentMemberId, async () => {
         >
           <span class="pool-icon">{{ pool.icon }}</span>
           <span class="pool-name">{{ pool.name }}</span>
-          <span class="ticket-count" v-if="pool.entry_ticket_type_id">
-            {{ pool.memberTicketCount || 0 }} 张券
-          </span>
         </div>
       </div>
 
       <!-- 转盘区域 -->
-      <div class="wheel-section" v-if="poolDetail?.version">
+      <div class="wheel-section" v-if="poolDetail?.version && (poolDetail.version.prizes || []).length > 0">
         <div class="wheel-container">
           <!-- 转盘 -->
           <div
@@ -309,20 +327,23 @@ watch(currentMemberId, async () => {
             :style="{
               transform: `rotate(${wheelRotation}deg)`,
               transition: isWheelSpinning ? 'transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
+              background: wheelBackground,
             }"
           >
-            <div
-              v-for="(prize, index) in poolDetail.version.prizes"
-              :key="prize.id"
-              class="wheel-sector"
-              :style="{
-                transform: `rotate(${(360 / poolDetail.version.prizes.length) * index}deg)`,
-                backgroundColor: getPrizeColor(index, poolDetail.version.prizes.length),
-              }"
-            >
-              <div class="sector-content">
-                <span class="prize-icon">{{ prize.icon }}</span>
-                <span class="prize-name">{{ prize.name }}</span>
+            <div class="wheel-labels">
+              <div
+                v-for="sector in wheelSectors"
+                :key="sector.key"
+                class="wheel-label"
+                :style="{ transform: `rotate(${sector.angleMid}deg)` }"
+              >
+                <div
+                  class="label-content"
+                  :style="{ transform: `translateY(18px) rotate(${-sector.angleMid}deg)` }"
+                >
+                  <span class="prize-icon">{{ sector.prize.icon }}</span>
+                  <span class="prize-name">{{ sector.prize.name }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -351,6 +372,14 @@ watch(currentMemberId, async () => {
         <div class="guarantee-info" v-if="poolDetail.version.minGuaranteeCount">
           <span>🎁 {{ poolDetail.version.minGuaranteeCount }} 次保底大奖</span>
         </div>
+      </div>
+
+      <!-- 未配置奖品版本 -->
+      <div class="empty-state" v-else-if="!loading && selectedPool">
+        <p>该抽奖池尚未配置奖品，请先在“抽奖池管理-配置奖品”中设置。</p>
+        <el-button type="primary" @click="router.push('/family/market/admin/draw')">
+          去配置奖品
+        </el-button>
       </div>
 
       <!-- 无抽奖池提示 -->
@@ -445,25 +474,9 @@ watch(currentMemberId, async () => {
   font-weight: 700;
   margin: 0;
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.balance-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: rgba(255, 215, 0, 0.2);
-  border-radius: 20px;
-  font-weight: 700;
-  color: #ffd700;
 }
 
 /* Main */
@@ -544,26 +557,26 @@ watch(currentMemberId, async () => {
   border: 4px solid #ffd700;
 }
 
-.wheel-sector {
+.wheel-labels {
   position: absolute;
-  width: 50%;
-  height: 50%;
-  top: 0;
-  right: 0;
-  transform-origin: bottom left;
+  inset: 0;
+  pointer-events: none;
+}
+
+.wheel-label {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 20px;
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
 }
 
-.sector-content {
+.label-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: rotate(22.5deg);
   text-align: center;
+  max-width: 70px;
 }
 
 .prize-icon {
@@ -575,7 +588,6 @@ watch(currentMemberId, async () => {
   font-weight: 600;
   color: #fff;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-  max-width: 50px;
   word-break: break-all;
 }
 
@@ -805,6 +817,7 @@ watch(currentMemberId, async () => {
   font-weight: 700;
   margin-bottom: 8px;
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

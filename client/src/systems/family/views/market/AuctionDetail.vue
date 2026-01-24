@@ -6,32 +6,64 @@
       <span class="separator">/</span>
       <router-link to="/family/market/auction">拍卖大厅</router-link>
       <span class="separator">/</span>
-      <span class="current">{{ session?.name || '加载中...' }}</span>
+      <span class="current">{{ session?.title || '加载中...' }}</span>
     </nav>
 
     <div v-if="session" class="session-detail">
       <header class="detail-header">
         <div class="header-info">
-          <h1>{{ session.name }}</h1>
+          <h1>{{ session.title }}</h1>
           <span class="session-status" :class="session.status">
             {{ getStatusLabel(session.status) }}
           </span>
         </div>
-        <div class="session-timer" v-if="session.status === 'active'">
-          <span class="timer-label">剩余时间</span>
-          <span class="timer-value">{{ countdown }}</span>
-        </div>
       </header>
 
-      <!-- 拍品列表 -->
+      <!-- 当前拍品 -->
       <div class="lots-section">
-        <h2>🎯 拍品列表</h2>
+        <h2>🎯 当前拍品</h2>
+        <div class="lots-grid" v-if="currentLot">
+          <div class="lot-card active">
+            <div class="lot-image">
+              <span class="lot-icon">{{ currentLot.sku_icon || '🎁' }}</span>
+            </div>
+            <div class="lot-info">
+              <div class="lot-name">{{ currentLot.sku_name }}</div>
+              <div class="lot-desc">{{ currentLot.description }}</div>
+            </div>
+            <div class="lot-pricing">
+              <div class="price-row">
+                <span class="price-label">起拍价</span>
+                <span class="price-value start">{{ currentLot.start_price }}</span>
+              </div>
+              <div class="price-row current">
+                <span class="price-label">当前最高</span>
+                <span class="price-value">{{ currentLot.current_bid || currentLot.start_price }}</span>
+              </div>
+              <div class="bid-count">{{ currentLot.bid_count || 0 }} 人出价</div>
+            </div>
+            <button 
+              v-if="session.status === 'active'"
+              class="bid-btn"
+              @click="openBidModal(currentLot)"
+            >
+              出价竞拍
+            </button>
+          </div>
+        </div>
+        <div class="empty-state" v-else>
+          <p>暂无当前拍品</p>
+        </div>
+      </div>
+
+      <!-- 待拍列表 -->
+      <div class="lots-section">
+        <h2>📌 待拍列表</h2>
         <div class="lots-grid">
           <div 
-            v-for="lot in lots" 
+            v-for="lot in upcomingLots" 
             :key="lot.id" 
             class="lot-card"
-            :class="{ active: session.status === 'active' }"
           >
             <div class="lot-image">
               <span class="lot-icon">{{ lot.sku_icon || '🎁' }}</span>
@@ -46,20 +78,9 @@
                 <span class="price-value start">{{ lot.start_price }}</span>
               </div>
               <div class="price-row current">
-                <span class="price-label">当前最高</span>
-                <span class="price-value">{{ lot.current_bid || lot.start_price }}</span>
+                <span class="price-label">稀有度</span>
+                <span class="price-value">{{ lot.rarity }}</span>
               </div>
-              <div class="bid-count">{{ lot.bid_count || 0 }} 人出价</div>
-            </div>
-            <button 
-              v-if="session.status === 'active'"
-              class="bid-btn"
-              @click="openBidModal(lot)"
-            >
-              出价竞拍
-            </button>
-            <div v-else class="lot-ended">
-              {{ lot.winner_name ? `由 ${lot.winner_name} 得标` : '未结算' }}
             </div>
           </div>
         </div>
@@ -125,7 +146,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import MemberSelector from '../../components/MemberSelector.vue';
@@ -135,8 +156,7 @@ const route = useRoute();
 const loading = ref(false);
 const session = ref(null);
 const lots = ref([]);
-const countdown = ref('--:--:--');
-let countdownTimer = null;
+const currentLotIndex = ref(0);
 
 // 出价流程
 const showBidModal = ref(false);
@@ -159,6 +179,7 @@ const loadSession = async () => {
     if (res.data?.code === 200) {
       session.value = res.data.data?.session;
       lots.value = res.data.data?.lots || [];
+      currentLotIndex.value = res.data.data?.currentLotIndex || 0;
     }
   } catch (err) {
     console.error('加载拍卖详情失败:', err);
@@ -167,36 +188,21 @@ const loadSession = async () => {
   }
 };
 
-// 更新倒计时
-const updateCountdown = () => {
-  if (!session.value?.end_time) {
-    countdown.value = '--:--:--';
-    return;
-  }
-  
-  const now = new Date();
-  const end = new Date(session.value.end_time);
-  const diff = end - now;
-  
-  if (diff <= 0) {
-    countdown.value = '已结束';
-    loadSession(); // 刷新状态
-    return;
-  }
-  
-  const hours = Math.floor(diff / 3600000);
-  const minutes = Math.floor((diff % 3600000) / 60000);
-  const seconds = Math.floor((diff % 60000) / 1000);
-  
-  countdown.value = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-};
+const currentLot = computed(() => {
+  return lots.value[currentLotIndex.value] || null;
+});
+
+const upcomingLots = computed(() => {
+  return lots.value.slice(currentLotIndex.value + 1);
+});
 
 // 获取状态标签
 const getStatusLabel = (status) => {
   const labels = {
-    pending: '待开始',
+    draft: '草稿',
+    scheduled: '已排期',
     active: '竞拍中',
-    settled: '已结束',
+    ended: '已结束',
     cancelled: '已取消',
   };
   return labels[status] || status;
@@ -256,13 +262,6 @@ const handleMemberConfirm = async ({ memberId }) => {
 
 onMounted(() => {
   loadSession();
-  countdownTimer = setInterval(updateCountdown, 1000);
-});
-
-onUnmounted(() => {
-  if (countdownTimer) {
-    clearInterval(countdownTimer);
-  }
 });
 </script>
 
@@ -316,7 +315,12 @@ onUnmounted(() => {
   border-radius: 20px;
 }
 
-.session-status.pending {
+.session-status.draft {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.session-status.scheduled {
   background: rgba(255, 193, 7, 0.2);
   color: #ffc107;
 }
@@ -326,31 +330,9 @@ onUnmounted(() => {
   color: #4facfe;
 }
 
-.session-status.settled {
+.session-status.ended {
   background: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.5);
-}
-
-.session-timer {
-  text-align: center;
-  padding: 16px 24px;
-  background: rgba(79, 172, 254, 0.1);
-  border: 1px solid rgba(79, 172, 254, 0.3);
-  border-radius: 16px;
-}
-
-.timer-label {
-  display: block;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  margin-bottom: 4px;
-}
-
-.timer-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: #4facfe;
-  font-family: monospace;
 }
 
 /* 拍品区域 */

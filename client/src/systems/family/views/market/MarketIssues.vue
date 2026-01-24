@@ -8,11 +8,16 @@
     </nav>
 
     <header class="page-header">
-      <h1>
-        <span class="header-icon">⚠️</span>
-        问题关注
-      </h1>
-      <p>追踪家庭成员的行为问题，促进成长</p>
+      <div class="header-left">
+        <h1>
+          <span class="header-icon">⚠️</span>
+          问题关注
+        </h1>
+        <p>追踪家庭成员的行为问题，促进成长</p>
+      </div>
+      <button class="create-btn" @click="openCreateModal">
+        + 新增问题
+      </button>
     </header>
 
     <!-- 问题列表 -->
@@ -74,15 +79,84 @@
     <div class="loading-state" v-if="loading">
       加载中...
     </div>
+
+    <!-- 新增问题弹窗 -->
+    <div class="modal-overlay" v-if="showCreateModal" @click.self="closeCreateModal">
+      <div class="modal-content">
+        <h3>新增问题</h3>
+        
+        <div class="form-group">
+          <label>所属成员</label>
+          <button class="member-pick-btn" @click="showMemberSelector = true">
+            {{ createForm.ownerMemberName || '选择成员' }}
+          </button>
+        </div>
+        
+        <div class="form-group">
+          <label>标题</label>
+          <input v-model="createForm.title" placeholder="例如：作业拖延" />
+        </div>
+        
+        <div class="form-group">
+          <label>描述</label>
+          <textarea v-model="createForm.description" rows="3" placeholder="简要说明问题表现"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>标签（逗号分隔）</label>
+          <input v-model="createForm.tagsText" placeholder="学习,习惯,作业" />
+        </div>
+        
+        <div class="form-group">
+          <label>严重程度</label>
+          <select v-model="createForm.severity">
+            <option value="low">低</option>
+            <option value="medium">中</option>
+            <option value="high">高</option>
+          </select>
+        </div>
+        
+        <div class="modal-actions">
+          <button class="cancel-btn" @click="closeCreateModal">取消</button>
+          <button class="confirm-btn" @click="submitIssue" :disabled="creating">
+            {{ creating ? '创建中...' : '创建' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 统一成员选择器 -->
+    <MemberSelector
+      v-model:visible="showMemberSelector"
+      title="选择问题关联成员"
+      action-icon="⚠️"
+      confirm-text="确认"
+      :loading="false"
+      @confirm="handleMemberConfirm"
+      @cancel="showMemberSelector = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
+import MemberSelector from '../../components/MemberSelector.vue';
 
 const loading = ref(false);
 const issues = ref([]);
+const showCreateModal = ref(false);
+const showMemberSelector = ref(false);
+const creating = ref(false);
+
+const createForm = ref({
+  ownerMemberId: null,
+  ownerMemberName: '',
+  title: '',
+  description: '',
+  tagsText: '',
+  severity: 'medium',
+});
 
 // 加载问题列表
 const loadIssues = async () => {
@@ -150,6 +224,65 @@ const viewDetail = (issue) => {
   alert(`查看问题 #${issue.id} 详情`);
 };
 
+const openCreateModal = () => {
+  showCreateModal.value = true;
+};
+
+const closeCreateModal = () => {
+  showCreateModal.value = false;
+  showMemberSelector.value = false;
+  createForm.value = {
+    ownerMemberId: null,
+    ownerMemberName: '',
+    title: '',
+    description: '',
+    tagsText: '',
+    severity: 'medium',
+  };
+};
+
+const handleMemberConfirm = ({ memberId, memberName }) => {
+  createForm.value.ownerMemberId = memberId;
+  createForm.value.ownerMemberName = memberName;
+  showMemberSelector.value = false;
+};
+
+const submitIssue = async () => {
+  if (!createForm.value.ownerMemberId) {
+    alert('请选择成员');
+    return;
+  }
+  if (!createForm.value.title) {
+    alert('请输入标题');
+    return;
+  }
+
+  const tags = createForm.value.tagsText
+    ? createForm.value.tagsText.split(',').map(t => t.trim()).filter(Boolean)
+    : [];
+
+  creating.value = true;
+  try {
+    const res = await axios.post('/api/v2/issues', {
+      owner_member_id: createForm.value.ownerMemberId,
+      title: createForm.value.title,
+      description: createForm.value.description || undefined,
+      tags,
+      severity: createForm.value.severity,
+    });
+
+    if (res.data?.code === 200) {
+      alert('创建成功');
+      closeCreateModal();
+      loadIssues();
+    }
+  } catch (err) {
+    alert(err.response?.data?.msg || '创建失败');
+  } finally {
+    creating.value = false;
+  }
+};
+
 onMounted(() => {
   loadIssues();
 });
@@ -185,6 +318,15 @@ onMounted(() => {
 
 .page-header {
   margin-bottom: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-left p {
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
 }
 
 .page-header h1 {
@@ -200,9 +342,19 @@ onMounted(() => {
   font-size: 32px;
 }
 
-.page-header p {
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0;
+.create-btn {
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+  border: none;
+  border-radius: 10px;
+  color: #000;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.create-btn:hover {
+  transform: scale(1.03);
 }
 
 /* 问题列表 */
@@ -355,6 +507,87 @@ onMounted(() => {
 .action-btn.secondary {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* 弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #1a1a2e;
+  padding: 24px;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 420px;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.member-pick-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  text-align: left;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.cancel-btn,
+.confirm-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.cancel-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.confirm-btn {
+  background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+  color: #000;
+  font-weight: 600;
 }
 
 /* 空状态 & 加载 */

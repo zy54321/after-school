@@ -32,6 +32,15 @@ router.get('/sessions/:id', controller.getSessionDetail);
 // POST /api/v2/auction/sessions/:id/generate-lots - 生成拍卖品
 router.post('/sessions/:id/generate-lots', controller.generateLots);
 
+// POST /api/v2/auction/sessions/:id/pool - 设置拍卖品池子
+router.post('/sessions/:id/pool', controller.setSessionPool);
+
+// POST /api/v2/auction/sessions/:id/start - 开始拍卖
+router.post('/sessions/:id/start', controller.startSession);
+
+// POST /api/v2/auction/sessions/:id/next - 进入下一拍品
+router.post('/sessions/:id/next', controller.advanceSessionLot);
+
 // POST /api/v2/auction/sessions/:id/settle - 结算场次
 router.post('/sessions/:id/settle', controller.settleSession);
 

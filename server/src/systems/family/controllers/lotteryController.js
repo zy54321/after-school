@@ -105,6 +105,157 @@ exports.getPools = async (req, res) => {
 };
 
 /**
+ * GET /api/v2/draw/admin/pools
+ * 获取所有抽奖池（含非 active）
+ */
+exports.getAdminPools = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const pools = await lotteryService.getAllPools(userId);
+    res.json({ code: 200, data: { pools, total: pools.length } });
+  } catch (err) {
+    console.error('getAdminPools 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取抽奖池失败', error: err.message });
+  }
+};
+
+/**
+ * POST /api/v2/draw/pools
+ * 创建抽奖池
+ */
+exports.createPool = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const {
+      name,
+      description,
+      icon,
+      entry_ticket_type_id: entryTicketTypeId,
+      tickets_per_draw: ticketsPerDraw,
+      status,
+      pool_type: poolType,
+      config
+    } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ code: 400, msg: '抽奖池名称不能为空' });
+    }
+
+    const pool = await lotteryService.createPool({
+      parentId: userId,
+      name,
+      description,
+      icon,
+      entryTicketTypeId,
+      ticketsPerDraw,
+      status,
+      poolType,
+      config
+    });
+
+    res.json({ code: 200, data: { pool }, msg: '抽奖池创建成功' });
+  } catch (err) {
+    console.error('createPool 错误:', err);
+    res.status(500).json({ code: 500, msg: '创建抽奖池失败', error: err.message });
+  }
+};
+
+/**
+ * PUT /api/v2/draw/pools/:id
+ * 更新抽奖池
+ */
+exports.updatePool = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const poolId = parseInt(req.params.id);
+    const {
+      name,
+      description,
+      icon,
+      entry_ticket_type_id: entryTicketTypeId,
+      tickets_per_draw: ticketsPerDraw,
+      status,
+      pool_type: poolType,
+      config
+    } = req.body;
+
+    const pool = await lotteryService.updatePool({
+      poolId,
+      parentId: userId,
+      name,
+      description,
+      icon,
+      entryTicketTypeId,
+      ticketsPerDraw,
+      status,
+      poolType,
+      config
+    });
+
+    res.json({ code: 200, data: { pool }, msg: '抽奖池更新成功' });
+  } catch (err) {
+    console.error('updatePool 错误:', err);
+    if (err.message.includes('无权限')) {
+      return res.status(403).json({ code: 403, msg: err.message });
+    }
+    res.status(500).json({ code: 500, msg: '更新抽奖池失败', error: err.message });
+  }
+};
+
+/**
+ * DELETE /api/v2/draw/pools/:id
+ * 停用抽奖池
+ */
+exports.deletePool = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const poolId = parseInt(req.params.id);
+    const pool = await lotteryService.deactivatePool(poolId, userId);
+    res.json({ code: 200, data: { pool }, msg: '抽奖池已停用' });
+  } catch (err) {
+    console.error('deletePool 错误:', err);
+    if (err.message.includes('无权限')) {
+      return res.status(403).json({ code: 403, msg: err.message });
+    }
+    res.status(500).json({ code: 500, msg: '停用抽奖池失败', error: err.message });
+  }
+};
+
+/**
+ * POST /api/v2/draw/pools/:id/versions
+ * 创建抽奖池版本（奖品配置）
+ */
+exports.createPoolVersion = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const poolId = parseInt(req.params.id);
+    const { prizes, min_guarantee_count: minGuaranteeCount, guarantee_prize_id: guaranteePrizeId, config } = req.body;
+
+    if (!Array.isArray(prizes) || prizes.length === 0) {
+      return res.status(400).json({ code: 400, msg: '奖品配置不能为空' });
+    }
+
+    const version = await lotteryService.createPoolVersion({
+      parentId: userId,
+      poolId,
+      prizes,
+      minGuaranteeCount,
+      guaranteePrizeId,
+      config,
+      createdBy: null
+    });
+
+    res.json({ code: 200, data: { version }, msg: '版本创建成功' });
+  } catch (err) {
+    console.error('createPoolVersion 错误:', err);
+    if (err.message.includes('无权限') || err.message.includes('权重')) {
+      return res.status(400).json({ code: 400, msg: err.message });
+    }
+    res.status(500).json({ code: 500, msg: '创建版本失败', error: err.message });
+  }
+};
+
+/**
  * GET /api/v2/draw/overview
  * 获取抽奖概览（Family-level，不需要 member_id）
  */

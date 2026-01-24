@@ -23,6 +23,11 @@ const marketplaceRepo = require('../repos/marketplaceRepo');
  * - 默认数量权重（用于随机抽取时的概率）
  */
 const RARITY_CONFIG = {
+  r: { priceMultiplier: 1, weight: 40 },
+  sr: { priceMultiplier: 1.5, weight: 30 },
+  ssr: { priceMultiplier: 2.5, weight: 20 },
+  ur: { priceMultiplier: 5, weight: 10 },
+  // 兼容旧稀有度
   common: { priceMultiplier: 1, weight: 40 },
   rare: { priceMultiplier: 1.5, weight: 30 },
   epic: { priceMultiplier: 2.5, weight: 20 },
@@ -58,10 +63,40 @@ const randomPick = (array, count) => {
  * @param {string} rarity - 稀有度
  * @returns {number} 起拍价
  */
+const normalizeRarity = (rarity) => {
+  const map = {
+    common: 'r',
+    rare: 'sr',
+    epic: 'ssr',
+    legendary: 'ur',
+  };
+  return map[rarity] || rarity || 'r';
+};
+
 const calculateStartPrice = (baseCost, rarity) => {
-  const config = RARITY_CONFIG[rarity] || RARITY_CONFIG.common;
+  const normalized = normalizeRarity(rarity);
+  const config = RARITY_CONFIG[normalized] || RARITY_CONFIG.r;
   // 起拍价 = 基础成本 * 倍数 * 0.5（起拍价通常低于实际价值）
   return Math.max(1, Math.floor(baseCost * config.priceMultiplier * 0.5));
+};
+
+const parseSessionConfig = (config) => {
+  if (!config) return {};
+  if (typeof config === 'string') {
+    try {
+      return JSON.parse(config);
+    } catch (err) {
+      return {};
+    }
+  }
+  return config;
+};
+
+const getRarityOrderScore = (rarity) => {
+  const order = ['r', 'sr', 'ssr', 'ur'];
+  const normalized = normalizeRarity(rarity);
+  const idx = order.indexOf(normalized);
+  return idx === -1 ? 999 : idx;
 };
 
 /**
@@ -107,20 +142,25 @@ exports.generateLots = async (sessionId, rarityCounts = {}) => {
     }
     
     // ========== 3. 获取可拍卖的 SKU 池 ==========
-    const skuPool = await auctionRepo.getAuctionableSkus(session.parent_id, client);
+    let skuPool = await auctionRepo.getAuctionableSkus(session.parent_id, client);
+    const sessionConfig = parseSessionConfig(session.config);
+    if (Array.isArray(sessionConfig.pool_sku_ids) && sessionConfig.pool_sku_ids.length > 0) {
+      const poolSet = new Set(sessionConfig.pool_sku_ids.map((id) => parseInt(id)));
+      skuPool = skuPool.filter((sku) => poolSet.has(sku.id));
+    }
     if (skuPool.length === 0) {
       throw new Error('没有可用的拍卖品，请先创建 SKU');
     }
     
     // ========== 4. 按稀有度分配并抽取 ==========
     const counts = {
-      common: rarityCounts.common || 0,
-      rare: rarityCounts.rare || 0,
-      epic: rarityCounts.epic || 0,
-      legendary: rarityCounts.legendary || 0,
+      r: rarityCounts.r || 0,
+      sr: rarityCounts.sr || 0,
+      ssr: rarityCounts.ssr || 0,
+      ur: rarityCounts.ur || 0,
     };
     
-    const totalRequested = counts.common + counts.rare + counts.epic + counts.legendary;
+    const totalRequested = counts.r + counts.sr + counts.ssr + counts.ur;
     if (totalRequested === 0) {
       throw new Error('请至少指定一个稀有度的数量');
     }
@@ -130,7 +170,7 @@ exports.generateLots = async (sessionId, rarityCounts = {}) => {
     let sortOrder = 1;
     
     // 按稀有度从高到低生成（传说 -> 史诗 -> 稀有 -> 普通）
-    const rarities = ['legendary', 'epic', 'rare', 'common'];
+    const rarities = ['ur', 'ssr', 'sr', 'r'];
     
     for (const rarity of rarities) {
       const count = counts[rarity];
@@ -171,9 +211,9 @@ exports.generateLots = async (sessionId, rarityCounts = {}) => {
           sessionId,
           skuId: sku.id,
           offerId: null,
-          rarity,
+        rarity,
           startPrice,
-          buyNowPrice: Math.floor(baseCost * (RARITY_CONFIG[rarity]?.priceMultiplier || 1) * 2),
+        buyNowPrice: Math.floor(baseCost * (RARITY_CONFIG[normalizeRarity(rarity)]?.priceMultiplier || 1) * 2),
           quantity: 1,
           status: 'pending',
           sortOrder: sortOrder++,
@@ -227,10 +267,10 @@ exports.generateLots = async (sessionId, rarityCounts = {}) => {
     
     // ========== 7. 统计结果 ==========
     const summary = {
-      common: createdLots.filter(l => l.rarity === 'common').length,
-      rare: createdLots.filter(l => l.rarity === 'rare').length,
-      epic: createdLots.filter(l => l.rarity === 'epic').length,
-      legendary: createdLots.filter(l => l.rarity === 'legendary').length,
+      r: createdLots.filter(l => normalizeRarity(l.rarity) === 'r').length,
+      sr: createdLots.filter(l => normalizeRarity(l.rarity) === 'sr').length,
+      ssr: createdLots.filter(l => normalizeRarity(l.rarity) === 'ssr').length,
+      ur: createdLots.filter(l => normalizeRarity(l.rarity) === 'ur').length,
     };
     
     return {
@@ -258,13 +298,25 @@ exports.getSessionWithLots = async (sessionId) => {
   if (!session) {
     throw new Error('拍卖场次不存在');
   }
-  
+
   const lots = await auctionRepo.getLotDetails(sessionId);
-  
+  const sortedLots = [...lots].sort((a, b) => {
+    const aScore = getRarityOrderScore(a.rarity);
+    const bScore = getRarityOrderScore(b.rarity);
+    if (aScore !== bScore) return aScore - bScore;
+    return (a.sort_order || 0) - (b.sort_order || 0);
+  });
+
+  const sessionConfig = parseSessionConfig(session.config);
+  const currentIndex = Number.isInteger(sessionConfig.current_lot_index)
+    ? sessionConfig.current_lot_index
+    : 0;
+
   return {
     session,
-    lots,
-    lotCount: lots.length,
+    lots: sortedLots,
+    lotCount: sortedLots.length,
+    currentLotIndex: currentIndex,
   };
 };
 
@@ -291,6 +343,61 @@ exports.createSession = async ({
  */
 exports.getSessionsByParentId = async (parentId, status = null) => {
   return await auctionRepo.getSessionsByParentId(parentId, status);
+};
+
+// ========== 管理后台流程 ==========
+
+exports.setSessionPool = async (sessionId, parentId, skuIds = []) => {
+  const session = await auctionRepo.getSessionById(sessionId);
+  if (!session || session.parent_id !== parentId) {
+    throw new Error('拍卖场次不存在或无权限');
+  }
+  const config = parseSessionConfig(session.config);
+  config.pool_sku_ids = Array.isArray(skuIds) ? skuIds.map((id) => parseInt(id)) : [];
+  return await auctionRepo.updateSessionConfig(sessionId, config);
+};
+
+exports.startSession = async (sessionId, parentId) => {
+  const session = await auctionRepo.getSessionById(sessionId);
+  if (!session || session.parent_id !== parentId) {
+    throw new Error('拍卖场次不存在或无权限');
+  }
+  const lots = await auctionRepo.getLotDetails(sessionId);
+  if (!lots || lots.length === 0) {
+    throw new Error('该场次暂无拍品');
+  }
+  const config = parseSessionConfig(session.config);
+  config.current_lot_index = 0;
+  await auctionRepo.updateSessionConfig(sessionId, config);
+  if (session.status !== 'active') {
+    await auctionRepo.updateSessionStatus(sessionId, 'active');
+  }
+  return { success: true };
+};
+
+exports.advanceSessionLot = async (sessionId, parentId) => {
+  const session = await auctionRepo.getSessionById(sessionId);
+  if (!session || session.parent_id !== parentId) {
+    throw new Error('拍卖场次不存在或无权限');
+  }
+  const lots = await auctionRepo.getLotDetails(sessionId);
+  const sortedLots = [...lots].sort((a, b) => {
+    const aScore = getRarityOrderScore(a.rarity);
+    const bScore = getRarityOrderScore(b.rarity);
+    if (aScore !== bScore) return aScore - bScore;
+    return (a.sort_order || 0) - (b.sort_order || 0);
+  });
+  const config = parseSessionConfig(session.config);
+  const currentIndex = Number.isInteger(config.current_lot_index) ? config.current_lot_index : 0;
+  const nextIndex = currentIndex + 1;
+  if (nextIndex >= sortedLots.length) {
+    await auctionRepo.updateSessionStatus(sessionId, 'ended');
+    config.current_lot_index = sortedLots.length - 1;
+  } else {
+    config.current_lot_index = nextIndex;
+  }
+  await auctionRepo.updateSessionConfig(sessionId, config);
+  return { success: true, currentLotIndex: config.current_lot_index };
 };
 
 /**

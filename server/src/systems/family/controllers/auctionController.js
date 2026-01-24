@@ -123,7 +123,7 @@ exports.getSessionDetail = async (req, res) => {
 exports.generateLots = async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id);
-    const { common = 0, rare = 0, epic = 0, legendary = 0 } = req.body;
+    const { r = 0, sr = 0, ssr = 0, ur = 0 } = req.body;
     
     if (!sessionId) {
       return res.status(400).json({ code: 400, msg: '无效的场次ID' });
@@ -134,16 +134,16 @@ exports.generateLots = async (req, res) => {
       return res.status(403).json({ code: 403, msg: '演示模式：游客账号仅供查看，禁止修改数据' });
     }
     
-    const totalCount = common + rare + epic + legendary;
+    const totalCount = r + sr + ssr + ur;
     if (totalCount === 0) {
       return res.status(400).json({ code: 400, msg: '请至少指定一个稀有度的数量' });
     }
     
     const result = await auctionService.generateLots(sessionId, {
-      common: parseInt(common),
-      rare: parseInt(rare),
-      epic: parseInt(epic),
-      legendary: parseInt(legendary),
+      r: parseInt(r),
+      sr: parseInt(sr),
+      ssr: parseInt(ssr),
+      ur: parseInt(ur),
     });
     
     if (!result.success) {
@@ -158,6 +158,83 @@ exports.generateLots = async (req, res) => {
   } catch (err) {
     console.error('generateLots 错误:', err);
     res.status(500).json({ code: 500, msg: '生成拍卖品失败', error: err.message });
+  }
+};
+
+/**
+ * POST /api/v2/auction/sessions/:id/pool
+ * 设置拍卖品池子
+ */
+exports.setSessionPool = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const sessionId = parseInt(req.params.id);
+    const { sku_ids: skuIds } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({ code: 400, msg: '无效的场次ID' });
+    }
+
+    if (!Array.isArray(skuIds) || skuIds.length === 0) {
+      return res.status(400).json({ code: 400, msg: '请选择拍卖品池子' });
+    }
+
+    const session = await auctionService.setSessionPool(sessionId, userId, skuIds);
+    res.json({ code: 200, data: { session }, msg: '拍卖品池子已设置' });
+  } catch (err) {
+    console.error('setSessionPool 错误:', err);
+    if (err.message.includes('无权限')) {
+      return res.status(403).json({ code: 403, msg: err.message });
+    }
+    res.status(500).json({ code: 500, msg: '设置拍卖品池子失败', error: err.message });
+  }
+};
+
+/**
+ * POST /api/v2/auction/sessions/:id/start
+ * 开始拍卖
+ */
+exports.startSession = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const sessionId = parseInt(req.params.id);
+
+    if (!sessionId) {
+      return res.status(400).json({ code: 400, msg: '无效的场次ID' });
+    }
+
+    const result = await auctionService.startSession(sessionId, userId);
+    res.json({ code: 200, data: result, msg: '拍卖已开始' });
+  } catch (err) {
+    console.error('startSession 错误:', err);
+    if (err.message.includes('无权限') || err.message.includes('暂无拍品')) {
+      return res.status(400).json({ code: 400, msg: err.message });
+    }
+    res.status(500).json({ code: 500, msg: '开始拍卖失败', error: err.message });
+  }
+};
+
+/**
+ * POST /api/v2/auction/sessions/:id/next
+ * 进入下一拍品
+ */
+exports.advanceSessionLot = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const sessionId = parseInt(req.params.id);
+
+    if (!sessionId) {
+      return res.status(400).json({ code: 400, msg: '无效的场次ID' });
+    }
+
+    const result = await auctionService.advanceSessionLot(sessionId, userId);
+    res.json({ code: 200, data: result, msg: '已进入下一拍品' });
+  } catch (err) {
+    console.error('advanceSessionLot 错误:', err);
+    if (err.message.includes('无权限')) {
+      return res.status(403).json({ code: 403, msg: err.message });
+    }
+    res.status(500).json({ code: 500, msg: '切换拍品失败', error: err.message });
   }
 };
 

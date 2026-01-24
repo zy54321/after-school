@@ -8,11 +8,13 @@
     </nav>
 
     <header class="page-header">
-      <h1>
-        <span class="header-icon">🎰</span>
-        幸运抽奖
-      </h1>
-      <p>试试你的运气，赢取稀有奖励</p>
+      <div>
+        <h1>
+          <span class="header-icon">🎰</span>
+          幸运抽奖
+        </h1>
+        <p>试试你的运气，赢取稀有奖励</p>
+      </div>
     </header>
 
     <!-- 奖池列表 -->
@@ -52,7 +54,7 @@
           class="draw-btn"
           :class="{ disabled: pool.status !== 'active' }"
         >
-          {{ pool.status === 'active' ? '立即抽奖' : '已关闭' }}
+          {{ pool.status === 'active' ? '开始抽奖' : '已关闭' }}
         </router-link>
       </div>
     </div>
@@ -175,6 +177,7 @@ onMounted(() => {
   color: rgba(255, 255, 255, 0.6);
   margin: 0;
 }
+
 
 /* 奖池网格 */
 .pools-grid {

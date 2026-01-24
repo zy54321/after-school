@@ -8,11 +8,16 @@
     </nav>
 
     <header class="page-header">
-      <h1>
-        <span class="header-icon">🔔</span>
-        提醒系统
-      </h1>
-      <p>管理家庭提醒和待办事项</p>
+      <div class="header-left">
+        <h1>
+          <span class="header-icon">🔔</span>
+          提醒系统
+        </h1>
+        <p>管理家庭提醒和待办事项</p>
+      </div>
+      <button class="create-btn" @click="openCreateModal">
+        + 创建提醒
+      </button>
     </header>
 
     <!-- 统计卡片 -->
@@ -87,16 +92,76 @@
     <button class="scan-btn" @click="scanReminders" :disabled="scanning">
       {{ scanning ? '扫描中...' : '手动扫描' }}
     </button>
+
+    <!-- 创建提醒弹窗 -->
+    <div class="modal-overlay" v-if="showCreateModal" @click.self="closeCreateModal">
+      <div class="modal-content">
+        <h3>创建提醒</h3>
+        
+        <div class="form-group">
+          <label>提醒成员（可选）</label>
+          <button class="member-pick-btn" @click="showMemberSelector = true">
+            {{ createForm.memberName || '选择成员（可不选）' }}
+          </button>
+        </div>
+        
+        <div class="form-group">
+          <label>标题</label>
+          <input v-model="createForm.title" placeholder="例如：完成作业" />
+        </div>
+        
+        <div class="form-group">
+          <label>内容</label>
+          <textarea v-model="createForm.message" rows="3" placeholder="提醒详情（可选）"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label>触发时间</label>
+          <input v-model="createForm.fireAt" type="datetime-local" />
+        </div>
+        
+        <div class="form-group">
+          <label>渠道</label>
+          <select v-model="createForm.channel">
+            <option value="app">应用内</option>
+            <option value="email">邮件</option>
+            <option value="sms">短信</option>
+          </select>
+        </div>
+        
+        <div class="modal-actions">
+          <button class="cancel-btn" @click="closeCreateModal">取消</button>
+          <button class="confirm-btn" @click="submitReminder" :disabled="creating">
+            {{ creating ? '创建中...' : '创建' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 统一成员选择器 -->
+    <MemberSelector
+      v-model:visible="showMemberSelector"
+      title="选择提醒成员"
+      action-icon="🔔"
+      confirm-text="确认"
+      :loading="false"
+      @confirm="handleMemberConfirm"
+      @cancel="showMemberSelector = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
+import MemberSelector from '../../components/MemberSelector.vue';
 
 const loading = ref(false);
 const scanning = ref(false);
 const reminders = ref([]);
+const showCreateModal = ref(false);
+const showMemberSelector = ref(false);
+const creating = ref(false);
 const stats = ref({
   pending: 0,
   overdue: 0,
@@ -112,6 +177,15 @@ const statusTabs = [
   { label: '待处理', value: 'pending' },
   { label: '已发送', value: 'sent' },
 ];
+
+const createForm = ref({
+  memberId: null,
+  memberName: '',
+  title: '',
+  message: '',
+  fireAt: '',
+  channel: 'app',
+});
 
 // 加载提醒列表
 const loadReminders = async () => {
@@ -156,6 +230,61 @@ const scanReminders = async () => {
     alert(err.response?.data?.msg || '扫描失败');
   } finally {
     scanning.value = false;
+  }
+};
+
+const openCreateModal = () => {
+  showCreateModal.value = true;
+};
+
+const closeCreateModal = () => {
+  showCreateModal.value = false;
+  showMemberSelector.value = false;
+  createForm.value = {
+    memberId: null,
+    memberName: '',
+    title: '',
+    message: '',
+    fireAt: '',
+    channel: 'app',
+  };
+};
+
+const handleMemberConfirm = ({ memberId, memberName }) => {
+  createForm.value.memberId = memberId;
+  createForm.value.memberName = memberName;
+  showMemberSelector.value = false;
+};
+
+const submitReminder = async () => {
+  if (!createForm.value.title) {
+    alert('请输入标题');
+    return;
+  }
+  if (!createForm.value.fireAt) {
+    alert('请选择触发时间');
+    return;
+  }
+
+  creating.value = true;
+  try {
+    const res = await axios.post('/api/v2/reminders', {
+      memberId: createForm.value.memberId || undefined,
+      title: createForm.value.title,
+      message: createForm.value.message || undefined,
+      fireAt: createForm.value.fireAt,
+      channel: createForm.value.channel,
+    });
+    
+    if (res.data?.code === 200) {
+      alert('创建成功');
+      closeCreateModal();
+      loadReminders();
+    }
+  } catch (err) {
+    alert(err.response?.data?.msg || '创建失败');
+  } finally {
+    creating.value = false;
   }
 };
 
@@ -234,6 +363,15 @@ onMounted(() => {
 
 .page-header {
   margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-left p {
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
 }
 
 .page-header h1 {
@@ -249,9 +387,19 @@ onMounted(() => {
   font-size: 32px;
 }
 
-.page-header p {
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0;
+.create-btn {
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #6a11cb, #2575fc);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.create-btn:hover {
+  transform: scale(1.03);
 }
 
 /* 统计卡片 */
@@ -432,6 +580,87 @@ onMounted(() => {
 .scan-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* 弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #1a1a2e;
+  padding: 24px;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 420px;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.member-pick-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  text-align: left;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.cancel-btn,
+.confirm-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.cancel-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.confirm-btn {
+  background: linear-gradient(135deg, #6a11cb, #2575fc);
+  color: #fff;
+  font-weight: 600;
 }
 
 /* 空状态 & 加载 */

@@ -35,6 +35,140 @@ exports.getActiveSkus = async (parentId, client = pool) => {
   return result.rows;
 };
 
+/**
+ * 获取家庭自定义 SKU（管理后台）
+ */
+exports.getSkusByParentId = async (parentId, client = pool) => {
+  const result = await client.query(
+    `SELECT * FROM family_sku 
+     WHERE parent_id = $1 OR parent_id = 0
+     ORDER BY parent_id DESC, created_at DESC`,
+    [parentId]
+  );
+  return result.rows;
+};
+
+/**
+ * 获取 SKU（含停用）
+ */
+exports.getSkuByIdRaw = async (skuId, client = pool) => {
+  const result = await client.query(
+    'SELECT * FROM family_sku WHERE id = $1',
+    [skuId]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 创建 SKU
+ */
+exports.createSku = async ({
+  parentId,
+  name,
+  description,
+  icon,
+  type,
+  baseCost,
+  limitType,
+  limitMax,
+  targetMembers,
+  isActive,
+  sourceType,
+  sourceId,
+  sourceMeta
+}, client = pool) => {
+  const result = await client.query(
+    `INSERT INTO family_sku
+     (parent_id, name, description, icon, type, base_cost, limit_type, limit_max, target_members, is_active, source_type, source_id, source_meta)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     RETURNING *`,
+    [
+      parentId,
+      name,
+      description || null,
+      icon || null,
+      type || 'reward',
+      baseCost || 0,
+      limitType || 'unlimited',
+      limitMax || 0,
+      targetMembers && targetMembers.length > 0 ? targetMembers : null,
+      isActive !== false,
+      sourceType || 'custom',
+      sourceId || null,
+      sourceMeta ? JSON.stringify(sourceMeta) : JSON.stringify({})
+    ]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 更新 SKU
+ */
+exports.updateSku = async ({
+  skuId,
+  name,
+  description,
+  icon,
+  type,
+  baseCost,
+  limitType,
+  limitMax,
+  targetMembers,
+  isActive,
+  sourceType,
+  sourceId,
+  sourceMeta
+}, client = pool) => {
+  const result = await client.query(
+    `UPDATE family_sku
+     SET name = $1,
+         description = $2,
+         icon = $3,
+         type = $4,
+         base_cost = $5,
+         limit_type = $6,
+         limit_max = $7,
+         target_members = $8,
+         is_active = $9,
+         source_type = $10,
+         source_id = $11,
+         source_meta = $12,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $13
+     RETURNING *`,
+    [
+      name,
+      description || null,
+      icon || null,
+      type || 'reward',
+      baseCost || 0,
+      limitType || 'unlimited',
+      limitMax || 0,
+      targetMembers && targetMembers.length > 0 ? targetMembers : null,
+      isActive !== false,
+      sourceType || 'custom',
+      sourceId || null,
+      sourceMeta ? JSON.stringify(sourceMeta) : JSON.stringify({}),
+      skuId
+    ]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 停用 SKU
+ */
+exports.deactivateSku = async (skuId, client = pool) => {
+  const result = await client.query(
+    `UPDATE family_sku
+     SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+     RETURNING *`,
+    [skuId]
+  );
+  return result.rows[0];
+};
+
 // ========== Offer 相关 ==========
 
 /**
@@ -129,6 +263,108 @@ exports.getActiveOffers = async (parentId, options = {}, client = pool) => {
   
   const result = await client.query(query, params);
   return result.rows;
+};
+
+/**
+ * 获取家庭 Offer 列表（管理后台）
+ */
+exports.getOffersByParentId = async (parentId, client = pool) => {
+  const result = await client.query(
+    `SELECT o.*, s.name as sku_name, s.type as sku_type
+     FROM family_offer o
+     JOIN family_sku s ON o.sku_id = s.id
+     WHERE o.parent_id = $1
+     ORDER BY o.is_active DESC, o.created_at DESC`,
+    [parentId]
+  );
+  return result.rows;
+};
+
+/**
+ * 获取 Offer（含停用）
+ */
+exports.getOfferByIdRaw = async (offerId, client = pool) => {
+  const result = await client.query(
+    `SELECT * FROM family_offer WHERE id = $1`,
+    [offerId]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 创建 Offer
+ */
+exports.createOffer = async ({
+  parentId,
+  skuId,
+  cost,
+  quantity,
+  validFrom,
+  validUntil,
+  isActive
+}, client = pool) => {
+  const result = await client.query(
+    `INSERT INTO family_offer
+     (parent_id, sku_id, cost, quantity, valid_from, valid_until, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING *`,
+    [
+      parentId,
+      skuId,
+      cost,
+      quantity || 1,
+      validFrom || new Date(),
+      validUntil || null,
+      isActive !== false
+    ]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 更新 Offer
+ */
+exports.updateOffer = async ({
+  offerId,
+  cost,
+  quantity,
+  validFrom,
+  validUntil,
+  isActive
+}, client = pool) => {
+  const result = await client.query(
+    `UPDATE family_offer
+     SET cost = $1,
+         quantity = $2,
+         valid_from = $3,
+         valid_until = $4,
+         is_active = $5
+     WHERE id = $6
+     RETURNING *`,
+    [
+      cost,
+      quantity || 1,
+      validFrom || new Date(),
+      validUntil || null,
+      isActive !== false,
+      offerId
+    ]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 停用 Offer
+ */
+exports.deactivateOffer = async (offerId, client = pool) => {
+  const result = await client.query(
+    `UPDATE family_offer
+     SET is_active = FALSE
+     WHERE id = $1
+     RETURNING *`,
+    [offerId]
+  );
+  return result.rows[0];
 };
 
 // ========== Order 相关 ==========

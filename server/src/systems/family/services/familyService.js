@@ -71,7 +71,7 @@ exports.getMemberDashboard = async (memberId, month) => {
  * @param {string} params.customTitle - 自定义标题（可选）
  * @param {number} params.points - 积分变化值
  */
-exports.logAction = async ({ memberId, taskId, customTitle, points }) => {
+exports.logAction = async ({ memberId, taskId, customTitle, points, reasonCode }) => {
   // 确定描述文本
   let title = customTitle;
   
@@ -87,7 +87,8 @@ exports.logAction = async ({ memberId, taskId, customTitle, points }) => {
     memberId,
     taskId,
     title || '手动记录',
-    points
+    points,
+    reasonCode
   );
   
   return log;

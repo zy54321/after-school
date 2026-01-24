@@ -23,6 +23,19 @@ exports.getTicketTypeById = async (ticketTypeId, client = pool) => {
 };
 
 /**
+ * 绑定抽奖券类型的 SKU
+ */
+exports.updateTicketTypeSkuId = async (ticketTypeId, skuId, client = pool) => {
+  const result = await client.query(
+    `UPDATE ticket_type SET sku_id = $1, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2
+     RETURNING *`,
+    [skuId, ticketTypeId]
+  );
+  return result.rows[0];
+};
+
+/**
  * 获取用户的所有抽奖券类型
  */
 exports.getTicketTypesByParentId = async (parentId, client = pool) => {
@@ -66,6 +79,111 @@ exports.getPoolsByParentId = async (parentId, status = 'active', client = pool) 
   return result.rows;
 };
 
+/**
+ * 获取用户的所有抽奖池（含非 active）
+ */
+exports.getAllPoolsByParentId = async (parentId, client = pool) => {
+  const result = await client.query(
+    `SELECT dp.*, tt.name as ticket_type_name, tt.icon as ticket_type_icon
+     FROM draw_pool dp
+     LEFT JOIN ticket_type tt ON dp.entry_ticket_type_id = tt.id
+     WHERE dp.parent_id = $1
+     ORDER BY dp.id DESC`,
+    [parentId]
+  );
+  return result.rows;
+};
+
+/**
+ * 创建抽奖池
+ */
+exports.createPool = async ({
+  parentId,
+  name,
+  description,
+  icon,
+  entryTicketTypeId,
+  ticketsPerDraw,
+  status,
+  poolType,
+  config
+}, client = pool) => {
+  const result = await client.query(
+    `INSERT INTO draw_pool
+     (parent_id, name, description, icon, entry_ticket_type_id, tickets_per_draw, status, pool_type, config)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING *`,
+    [
+      parentId,
+      name,
+      description || null,
+      icon || null,
+      entryTicketTypeId || null,
+      ticketsPerDraw || 1,
+      status || 'active',
+      poolType || 'wheel',
+      JSON.stringify(config || {})
+    ]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 更新抽奖池
+ */
+exports.updatePool = async ({
+  poolId,
+  name,
+  description,
+  icon,
+  entryTicketTypeId,
+  ticketsPerDraw,
+  status,
+  poolType,
+  config
+}, client = pool) => {
+  const result = await client.query(
+    `UPDATE draw_pool
+     SET name = $1,
+         description = $2,
+         icon = $3,
+         entry_ticket_type_id = $4,
+         tickets_per_draw = $5,
+         status = $6,
+         pool_type = $7,
+         config = $8,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $9
+     RETURNING *`,
+    [
+      name,
+      description || null,
+      icon || null,
+      entryTicketTypeId || null,
+      ticketsPerDraw || 1,
+      status || 'active',
+      poolType || 'wheel',
+      JSON.stringify(config || {}),
+      poolId
+    ]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 停用抽奖池
+ */
+exports.deactivatePool = async (poolId, client = pool) => {
+  const result = await client.query(
+    `UPDATE draw_pool
+     SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+     RETURNING *`,
+    [poolId]
+  );
+  return result.rows[0];
+};
+
 // ========== Draw Pool Version 抽奖池版本 ==========
 
 /**
@@ -77,6 +195,61 @@ exports.getCurrentVersion = async (poolId, client = pool) => {
      WHERE pool_id = $1 AND is_current = TRUE
      LIMIT 1`,
     [poolId]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 获取最新版本号
+ */
+exports.getLatestVersionNumber = async (poolId, client = pool) => {
+  const result = await client.query(
+    `SELECT COALESCE(MAX(version), 0) as max_version
+     FROM draw_pool_version
+     WHERE pool_id = $1`,
+    [poolId]
+  );
+  return parseInt(result.rows[0].max_version);
+};
+
+/**
+ * 设置所有版本为非当前
+ */
+exports.clearCurrentVersion = async (poolId, client = pool) => {
+  await client.query(
+    `UPDATE draw_pool_version SET is_current = FALSE WHERE pool_id = $1`,
+    [poolId]
+  );
+};
+
+/**
+ * 创建抽奖池版本
+ */
+exports.createPoolVersion = async ({
+  poolId,
+  version,
+  prizes,
+  totalWeight,
+  minGuaranteeCount,
+  guaranteePrizeId,
+  config,
+  createdBy
+}, client = pool) => {
+  const result = await client.query(
+    `INSERT INTO draw_pool_version
+     (pool_id, version, is_current, prizes, total_weight, min_guarantee_count, guarantee_prize_id, config, created_by)
+     VALUES ($1, $2, TRUE, $3, $4, $5, $6, $7, $8)
+     RETURNING *`,
+    [
+      poolId,
+      version,
+      JSON.stringify(prizes || []),
+      totalWeight || 0,
+      minGuaranteeCount || null,
+      guaranteePrizeId || null,
+      JSON.stringify(config || {}),
+      createdBy || null
+    ]
   );
   return result.rows[0];
 };

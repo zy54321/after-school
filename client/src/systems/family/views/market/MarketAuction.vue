@@ -53,21 +53,24 @@
         :class="session.status"
       >
         <div class="session-header">
-          <h3>{{ session.name }}</h3>
+          <h3>{{ session.title }}</h3>
           <span class="session-status" :class="session.status">
             {{ getStatusLabel(session.status) }}
           </span>
         </div>
         
         <div class="session-time">
-          <span v-if="session.status === 'active'">
-            ⏰ 剩余 {{ formatTimeRemaining(session.end_time) }}
+          <span v-if="session.status === 'scheduled'">
+            🕐 开始于 {{ formatTime(session.scheduled_at) }}
           </span>
-          <span v-else-if="session.status === 'pending'">
-            🕐 开始于 {{ formatTime(session.start_time) }}
+          <span v-else-if="session.status === 'active'">
+            🔥 进行中
+          </span>
+          <span v-else-if="session.status === 'ended'">
+            ✓ 已结束
           </span>
           <span v-else>
-            ✓ 结束于 {{ formatTime(session.end_time) }}
+            草稿
           </span>
         </div>
 
@@ -113,9 +116,10 @@ const filter = ref({
 
 const statusTabs = [
   { label: '全部', value: '' },
+  { label: '草稿', value: 'draft' },
+  { label: '已排期', value: 'scheduled' },
   { label: '进行中', value: 'active' },
-  { label: '待开始', value: 'pending' },
-  { label: '已结束', value: 'settled' },
+  { label: '已结束', value: 'ended' },
 ];
 
 // 加载拍卖场次
@@ -165,26 +169,13 @@ const formatTime = (dateStr) => {
 };
 
 // 格式化剩余时间
-const formatTimeRemaining = (endTimeStr) => {
-  const end = new Date(endTimeStr);
-  const now = new Date();
-  const diff = end - now;
-  
-  if (diff <= 0) return '已结束';
-  
-  const hours = Math.floor(diff / 3600000);
-  const minutes = Math.floor((diff % 3600000) / 60000);
-  
-  if (hours > 0) return `${hours}小时${minutes}分钟`;
-  return `${minutes}分钟`;
-};
-
 // 获取状态标签
 const getStatusLabel = (status) => {
   const labels = {
-    pending: '待开始',
+    draft: '草稿',
+    scheduled: '已排期',
     active: '竞拍中',
-    settled: '已结束',
+    ended: '已结束',
     cancelled: '已取消',
   };
   return labels[status] || status;

@@ -93,6 +93,15 @@
           <span class="stat">{{ stats.pendingReminders }} 个待处理</span>
         </div>
       </router-link>
+
+      <!-- 管理入口 -->
+      <router-link to="/family/market/admin" class="market-card admin">
+        <div class="card-icon">🧩</div>
+        <div class="card-content">
+          <h3>市场管理</h3>
+          <p>配置 SKU 与 Offer</p>
+        </div>
+      </router-link>
     </div>
 
     <!-- 成员快捷入口 -->
