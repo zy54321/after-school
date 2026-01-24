@@ -63,25 +63,64 @@ exports.spin = async (req, res) => {
 /**
  * GET /api/v2/draw/pools
  * 获取所有抽奖池
+ * 
+ * Query params:
+ * - member_id: number (可选，提供时返回该成员的券数量)
+ * 
+ * 说明：
+ * - 不提供 member_id: 返回市场配置视角（Family-level），不含成员券数量
+ * - 提供 member_id: 返回成员消费视角（Member-level），含成员券数量
  */
 exports.getPools = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { member_id: memberId } = req.query;
 
-    if (!memberId) {
-      return res.status(400).json({ code: 400, msg: '缺少必填参数: member_id' });
+    let pools;
+    let viewMode;
+    
+    if (memberId) {
+      // Member-level 视角：含成员券数量
+      pools = await lotteryService.getPoolsForMember(userId, parseInt(memberId));
+      viewMode = 'member';
+    } else {
+      // Family-level 视角：市场配置
+      const overview = await lotteryService.getDrawOverview(userId);
+      pools = overview.pools;
+      viewMode = 'family';
     }
-
-    const pools = await lotteryService.getPoolsForMember(userId, parseInt(memberId));
 
     res.json({
       code: 200,
-      data: { pools, total: pools.length },
+      data: { 
+        pools, 
+        total: pools.length,
+        viewMode,  // 标记当前视角
+      },
     });
   } catch (err) {
     console.error('getPools 错误:', err);
     res.status(500).json({ code: 500, msg: '获取抽奖池失败', error: err.message });
+  }
+};
+
+/**
+ * GET /api/v2/draw/overview
+ * 获取抽奖概览（Family-level，不需要 member_id）
+ */
+exports.getOverview = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    
+    const overview = await lotteryService.getDrawOverview(userId);
+    
+    res.json({
+      code: 200,
+      data: overview,
+    });
+  } catch (err) {
+    console.error('getOverview 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取抽奖概览失败', error: err.message });
   }
 };
 

@@ -344,8 +344,26 @@ const handleCalendarMonthChange = (newDate) => {
       
       <el-tab-pane :label="$t('familyDashboard.auction')">
         <template #label><span class="tab-label"><el-icon><Trophy /></el-icon> {{ $t('familyDashboard.auction') }}</span></template>
+        <!-- 家庭市场入口 -->
+        <div class="auction-entry-card market-card" @click="router.push('/family/market')">
+          <div class="auction-entry-icon">🏪</div>
+          <div class="auction-entry-content">
+            <h3>家庭市场</h3>
+            <p>商城、拍卖、抽奖、任务一站式入口</p>
+          </div>
+          <div class="auction-entry-arrow">→</div>
+        </div>
+        <!-- 成员资产入口 -->
+        <div class="auction-entry-card member-card" @click="router.push(`/family/member/${currentMemberId}/wallet`)">
+          <div class="auction-entry-icon">👤</div>
+          <div class="auction-entry-content">
+            <h3>成员资产</h3>
+            <p>查看钱包、背包、订单和活动记录</p>
+          </div>
+          <div class="auction-entry-arrow">→</div>
+        </div>
         <!-- 新版拍卖入口 -->
-        <div class="auction-entry-card" @click="router.push('/family/auction')">
+        <div class="auction-entry-card" @click="router.push('/family/market/auction')">
           <div class="auction-entry-icon">🔨</div>
           <div class="auction-entry-content">
             <h3>拍卖大厅</h3>
@@ -354,7 +372,7 @@ const handleCalendarMonthChange = (newDate) => {
           <div class="auction-entry-arrow">→</div>
         </div>
         <!-- 悬赏任务入口 -->
-        <div class="auction-entry-card bounty-card" @click="router.push('/family/bounty')">
+        <div class="auction-entry-card bounty-card" @click="router.push('/family/market/tasks')">
           <div class="auction-entry-icon">📋</div>
           <div class="auction-entry-content">
             <h3>悬赏任务</h3>
@@ -363,7 +381,7 @@ const handleCalendarMonthChange = (newDate) => {
           <div class="auction-entry-arrow">→</div>
         </div>
         <!-- 幸运抽奖入口 -->
-        <div class="auction-entry-card lottery-card" @click="router.push('/family/lottery')">
+        <div class="auction-entry-card lottery-card" @click="router.push('/family/market/draw')">
           <div class="auction-entry-icon">🎰</div>
           <div class="auction-entry-content">
             <h3>幸运抽奖</h3>
@@ -372,8 +390,8 @@ const handleCalendarMonthChange = (newDate) => {
           <div class="auction-entry-arrow">→</div>
         </div>
         <!-- 问题关注入口 -->
-        <div class="auction-entry-card issue-card" @click="router.push('/family/issues')">
-          <div class="auction-entry-icon">📋</div>
+        <div class="auction-entry-card issue-card" @click="router.push('/family/market/issues')">
+          <div class="auction-entry-icon">⚠️</div>
           <div class="auction-entry-content">
             <h3>问题关注</h3>
             <p>追踪行为问题，设置干预措施</p>
@@ -381,7 +399,7 @@ const handleCalendarMonthChange = (newDate) => {
           <div class="auction-entry-arrow">→</div>
         </div>
         <!-- 提醒中心入口 -->
-        <div class="auction-entry-card reminder-card" @click="router.push('/family/reminders')">
+        <div class="auction-entry-card reminder-card" @click="router.push('/family/market/reminders')">
           <div class="auction-entry-icon">🔔</div>
           <div class="auction-entry-content">
             <h3>提醒中心</h3>
@@ -875,5 +893,49 @@ const handleCalendarMonthChange = (newDate) => {
 
 .auction-entry-card.reminder-card .auction-entry-arrow {
   color: #faad14;
+}
+
+/* 家庭市场入口卡片 */
+.auction-entry-card.market-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #9f7aea;
+}
+
+.auction-entry-card.market-card:hover {
+  box-shadow: 0 8px 24px rgba(118, 75, 162, 0.35);
+}
+
+.auction-entry-card.market-card .auction-entry-content h3 {
+  color: #fff;
+}
+
+.auction-entry-card.market-card .auction-entry-content p {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.auction-entry-card.market-card .auction-entry-arrow {
+  color: #fff;
+}
+
+/* 成员资产入口卡片 */
+.auction-entry-card.member-card {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  border-color: #38ef7d;
+}
+
+.auction-entry-card.member-card:hover {
+  box-shadow: 0 8px 24px rgba(56, 239, 125, 0.35);
+}
+
+.auction-entry-card.member-card .auction-entry-content h3 {
+  color: #fff;
+}
+
+.auction-entry-card.member-card .auction-entry-content p {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.auction-entry-card.member-card .auction-entry-arrow {
+  color: #fff;
 }
 </style>

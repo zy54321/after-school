@@ -1,6 +1,17 @@
 /**
  * Auction Service Layer
  * 负责拍卖业务逻辑处理
+ * 
+ * 核心概念：
+ * - 拍卖场次是 Family-level 配置，全家共享
+ * - 所有成员看到相同的场次和拍品
+ * - member 仅作为参与者（bidder_member_id）
+ * - 结算时使用 member 做扣款，但场次本身是家庭级
+ * 
+ * 查询口径：
+ * - 场次/拍品查询：全部 parentId 维度
+ * - 出价记录：memberId 维度（参与记录）
+ * - 订单/库存：memberId 维度（归属记录）
  */
 const auctionRepo = require('../repos/auctionRepo');
 const walletRepo = require('../repos/walletRepo');
@@ -177,8 +188,9 @@ exports.generateLots = async (sessionId, rarityCounts = {}) => {
     const createdLots = [];
     
     for (const lotData of lotsToCreate) {
-      // 创建专用 offer（offer_type 通过 cost 区分是拍卖专用）
+      // 创建专用 offer（供给侧配置必须包含 parent_id）
       const offer = await auctionRepo.createAuctionOffer({
+        parentId: session.parent_id,  // 供给侧配置
         skuId: lotData.skuId,
         cost: lotData.startPrice, // 起拍价作为 offer 成本
         quantity: lotData.quantity,
@@ -288,7 +300,45 @@ exports.getAuctionableSkus = async (parentId) => {
   return await auctionRepo.getAuctionableSkus(parentId);
 };
 
-// ========== 密封出价 ==========
+// ========== 市场配置入口（Family-level）==========
+
+/**
+ * 获取拍卖概览（Family-level 视角）
+ * 
+ * 用途：展示家庭拍卖系统的整体情况，不涉及具体成员
+ * 
+ * @param {number} parentId - 用户ID
+ * @param {object} options - 查询选项
+ * @param {string} options.status - 场次状态筛选
+ * @returns {object} 拍卖概览
+ */
+exports.getAuctionOverview = async (parentId, options = {}) => {
+  const { status } = options;
+  
+  // 获取场次列表
+  const sessions = await auctionRepo.getSessionsByParentId(parentId, status);
+  
+  // 统计各状态数量
+  const stats = {
+    draft: sessions.filter(s => s.status === 'draft').length,
+    scheduled: sessions.filter(s => s.status === 'scheduled').length,
+    active: sessions.filter(s => s.status === 'active').length,
+    ended: sessions.filter(s => s.status === 'ended').length,
+  };
+  
+  // 获取可拍卖的 SKU
+  const auctionableSkus = await auctionRepo.getAuctionableSkus(parentId);
+  
+  return {
+    parentId,
+    sessions,
+    totalSessions: sessions.length,
+    stats,
+    auctionableSkuCount: auctionableSkus.length,
+  };
+};
+
+// ========== 密封出价（Member-level）==========
 
 /**
  * 提交密封出价

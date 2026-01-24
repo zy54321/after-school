@@ -1,0 +1,265 @@
+<template>
+  <div class="family-layout">
+    <!-- 顶部导航栏 -->
+    <header class="family-header">
+      <div class="header-content">
+        <div class="logo-section">
+          <router-link to="/family/home" class="logo-link">
+            <span class="logo-icon">🏠</span>
+            <span class="logo-text">家庭成长银行</span>
+          </router-link>
+        </div>
+        
+        <nav class="main-nav">
+          <router-link to="/family/market" class="nav-item" active-class="active">
+            <span class="nav-icon">🛒</span>
+            <span class="nav-text">市场</span>
+          </router-link>
+          <router-link 
+            :to="currentMemberId ? `/family/member/${currentMemberId}/wallet` : '/family/dashboard'" 
+            class="nav-item" 
+            :class="{ active: $route.path.includes('/family/member/') }"
+          >
+            <span class="nav-icon">👤</span>
+            <span class="nav-text">成员</span>
+          </router-link>
+          <router-link to="/family/dashboard" class="nav-item" active-class="active">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">总览</span>
+          </router-link>
+        </nav>
+        
+        <div class="user-section">
+          <div v-if="currentMember" class="current-member">
+            <span class="member-avatar">{{ currentMember.name?.charAt(0) || '?' }}</span>
+            <span class="member-name">{{ currentMember.name }}</span>
+          </div>
+          <button @click="handleLogout" class="logout-btn">退出</button>
+        </div>
+      </div>
+    </header>
+    
+    <!-- 主内容区 -->
+    <main class="family-main">
+      <router-view />
+    </main>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import axios from 'axios';
+import { clearSessionCache } from '@/router';
+
+const route = useRoute();
+const router = useRouter();
+
+const members = ref([]);
+const currentMember = ref(null);
+
+// 从路由获取当前成员ID
+const currentMemberId = computed(() => {
+  return route.params.id || localStorage.getItem('currentMemberId');
+});
+
+// 加载成员列表
+const loadMembers = async () => {
+  try {
+    const res = await axios.get('/api/v2/family/members');
+    if (res.data?.code === 200) {
+      members.value = res.data.data?.members || [];
+      
+      // 设置当前成员
+      if (currentMemberId.value) {
+        currentMember.value = members.value.find(m => m.id === parseInt(currentMemberId.value));
+      } else if (members.value.length > 0) {
+        currentMember.value = members.value[0];
+        localStorage.setItem('currentMemberId', members.value[0].id);
+      }
+    }
+  } catch (err) {
+    console.error('加载成员列表失败:', err);
+  }
+};
+
+// 登出
+const handleLogout = async () => {
+  try {
+    await axios.post('/api/auth/logout');
+  } catch (err) {
+    console.error('登出失败:', err);
+  }
+  clearSessionCache();
+  localStorage.removeItem('currentMemberId');
+  router.push('/family/home');
+};
+
+onMounted(() => {
+  loadMembers();
+});
+</script>
+
+<style scoped>
+.family-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+}
+
+.family-header {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo-section .logo-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.logo-icon {
+  font-size: 28px;
+}
+
+.logo-text {
+  font-size: 20px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ffd700, #ffb700);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.main-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.nav-item.active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.nav-icon {
+  font-size: 18px;
+}
+
+.nav-text {
+  font-size: 14px;
+}
+
+.user-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.current-member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+}
+
+.member-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.member-name {
+  color: #fff;
+  font-size: 14px;
+}
+
+.logout-btn {
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.family-main {
+  flex: 1;
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .header-content {
+    padding: 0 16px;
+  }
+  
+  .logo-text {
+    display: none;
+  }
+  
+  .nav-text {
+    display: none;
+  }
+  
+  .nav-item {
+    padding: 10px 14px;
+  }
+  
+  .member-name {
+    display: none;
+  }
+}
+</style>

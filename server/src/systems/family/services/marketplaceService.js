@@ -237,3 +237,66 @@ exports.getInventoryByMemberId = async (memberId, status = null) => {
 exports.getActiveSkus = async (parentId) => {
   return await marketplaceRepo.getActiveSkus(parentId);
 };
+
+// ========== 市场配置入口（Family-level）==========
+// 这些方法不需要 memberId，用于展示市场目录
+
+/**
+ * 获取市场目录（Family-level 视角）
+ * 
+ * 用途：展示家庭市场的所有可用商品，不涉及具体成员
+ * 
+ * @param {number} parentId - 用户ID
+ * @param {object} options - 查询选项
+ * @param {string} options.type - SKU 类型筛选 (reward/auction/ticket)
+ * @param {boolean} options.includeOffers - 是否包含 Offer 详情
+ * @returns {object} 市场目录
+ */
+exports.getMarketCatalog = async (parentId, options = {}) => {
+  const { type, includeOffers = true } = options;
+  
+  // 获取 SKU 列表
+  const skus = await marketplaceRepo.getActiveSkus(parentId);
+  
+  // 按类型筛选
+  let filteredSkus = skus;
+  if (type) {
+    filteredSkus = skus.filter(s => s.type === type);
+  }
+  
+  // 获取 Offers（如果需要）
+  let offers = [];
+  if (includeOffers) {
+    offers = await marketplaceRepo.getActiveOffers(parentId, { offerType: type });
+  }
+  
+  // 组装目录
+  const catalog = filteredSkus.map(sku => {
+    const skuOffers = offers.filter(o => o.sku_id === sku.id);
+    return {
+      ...sku,
+      offers: skuOffers,
+      lowestPrice: skuOffers.length > 0 
+        ? Math.min(...skuOffers.map(o => o.cost))
+        : sku.base_cost,
+    };
+  });
+  
+  return {
+    parentId,
+    skus: catalog,
+    totalSkus: catalog.length,
+    totalOffers: offers.length,
+  };
+};
+
+/**
+ * 获取所有有效 Offers（Family-level 视角）
+ * 
+ * @param {number} parentId - 用户ID
+ * @param {object} options - 查询选项
+ * @returns {array} Offer 列表
+ */
+exports.getActiveOffers = async (parentId, options = {}) => {
+  return await marketplaceRepo.getActiveOffers(parentId, options);
+};

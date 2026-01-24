@@ -2,6 +2,15 @@
  * Bounty Service Layer
  * 悬赏任务业务逻辑层
  * 
+ * 核心概念：
+ * - 任务市场是 Family-level 配置，全家共享
+ * - 所有家庭成员看到相同的任务列表
+ * - member 只作为参与者：
+ *   - publisher_member_id（发布者）
+ *   - claimer_member_id（领取者）
+ *   - reviewer_member_id（审核者）
+ * - 不允许"按 memberId 生成专属市场"
+ * 
  * 状态机流程：
  * open -> claimed -> submitted -> approved/rejected
  * 
@@ -53,13 +62,22 @@ exports.publishTask = async (data) => {
       issueId,
     } = data;
 
-    // ========== 1. 校验发布者余额 ==========
+    // ========== 1. 校验发布者归属 ==========
+    const publisher = await walletRepo.getMemberById(publisherMemberId, client);
+    if (!publisher) {
+      throw new Error('发布者成员不存在');
+    }
+    if (publisher.parent_id !== parentId) {
+      throw new Error('发布者不属于此家庭');
+    }
+    
+    // ========== 2. 校验发布者余额 ==========
     const balance = await walletRepo.getBalance(publisherMemberId, client);
     if (balance < bountyPoints) {
       throw new Error(`积分不足，当前余额: ${balance}，需要: ${bountyPoints}`);
     }
 
-    // ========== 2. 创建任务记录 ==========
+    // ========== 3. 创建任务记录 ==========
     const task = await bountyRepo.createTask({
       parentId,
       publisherMemberId,
@@ -73,7 +91,7 @@ exports.publishTask = async (data) => {
       issueId,
     }, client);
 
-    // ========== 3. 创建托管订单 ==========
+    // ========== 4. 创建托管订单 ==========
     const idempotencyKey = `bounty_escrow_${task.id}`;
     
     const order = await marketplaceRepo.createOrder({
@@ -88,7 +106,7 @@ exports.publishTask = async (data) => {
       idempotencyKey,
     }, client);
 
-    // ========== 4. 创建积分流水 ==========
+    // ========== 5. 创建积分流水 ==========
     await walletRepo.createPointsLog({
       memberId: publisherMemberId,
       parentId,
@@ -546,6 +564,52 @@ exports.cancelTask = async (taskId, publisherMemberId) => {
   }
 };
 
+// ========== 市场配置入口（Family-level）==========
+
+/**
+ * 获取任务市场概览（Family-level 视角）
+ * 
+ * 用途：展示家庭任务市场的整体情况，不涉及具体成员
+ * 不需要 memberId，返回全家庭共享的任务列表
+ * 
+ * @param {number} parentId - 用户ID
+ * @param {object} options - 查询选项
+ * @param {string} options.status - 任务状态筛选
+ * @returns {object} 任务市场概览
+ */
+exports.getTaskMarket = async (parentId, options = {}) => {
+  const { status } = options;
+  
+  // 获取所有任务
+  const tasks = await bountyRepo.getTasksByParentId(parentId, status);
+  
+  // 获取待审核的提交
+  const pendingSubmissions = await bountyRepo.getPendingSubmissions(parentId);
+  
+  // 统计各状态数量
+  const stats = {
+    open: tasks.filter(t => t.status === 'open').length,
+    claimed: tasks.filter(t => t.status === 'claimed').length,
+    submitted: tasks.filter(t => t.status === 'submitted').length,
+    approved: tasks.filter(t => t.status === 'approved').length,
+    rejected: tasks.filter(t => t.status === 'rejected').length,
+    cancelled: tasks.filter(t => t.status === 'cancelled').length,
+    expired: tasks.filter(t => t.status === 'expired').length,
+  };
+  
+  // 计算总托管积分
+  const totalEscrow = tasks.reduce((sum, t) => sum + (t.escrow_points || 0), 0);
+  
+  return {
+    parentId,
+    tasks,
+    totalTasks: tasks.length,
+    stats,
+    totalEscrow,
+    pendingSubmissionCount: pendingSubmissions.length,
+  };
+};
+
 // ========== 查询接口 ==========
 
 /**
@@ -556,7 +620,9 @@ exports.getTaskDetail = async (taskId) => {
 };
 
 /**
- * 获取用户的任务列表
+ * 获取用户的任务列表（Family-level）
+ * 
+ * 返回家庭任务市场的所有任务，不按成员过滤
  */
 exports.getTasksByParentId = async (parentId, status = null) => {
   return await bountyRepo.getTasksByParentId(parentId, status);

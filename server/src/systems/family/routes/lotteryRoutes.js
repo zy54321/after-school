@@ -8,12 +8,17 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/lotteryController');
 
-// ========== 抽奖操作 ==========
+// ========== 概览（Family-level，不需要 member_id） ==========
+
+// GET /api/v2/draw/overview - 获取抽奖概览
+router.get('/overview', controller.getOverview);
+
+// ========== 抽奖操作（Member-level，需要 member_id） ==========
 
 // POST /api/v2/draw/spin - 执行抽奖
 router.post('/spin', controller.spin);
 
-// ========== 抽奖池 ==========
+// ========== 抽奖池（member_id 可选） ==========
 
 // GET /api/v2/draw/pools - 获取所有抽奖池
 router.get('/pools', controller.getPools);

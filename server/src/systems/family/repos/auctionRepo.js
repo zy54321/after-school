@@ -391,17 +391,23 @@ exports.getAuctionableSkus = async (parentId, client = pool) => {
 
 /**
  * 创建拍卖专用的 Offer
+ * @param {object} params - Offer 参数
+ * @param {number} params.parentId - 所属用户ID（供给侧配置必填）
+ * @param {number} params.skuId - SKU ID
+ * @param {number} params.cost - 起拍价
+ * @param {number} params.quantity - 数量
  */
 exports.createAuctionOffer = async ({
+  parentId,
   skuId,
   cost,
   quantity = 1
 }, client = pool) => {
   const result = await client.query(
-    `INSERT INTO family_offer (sku_id, cost, quantity, is_active)
-     VALUES ($1, $2, $3, TRUE)
+    `INSERT INTO family_offer (parent_id, sku_id, cost, quantity, is_active, offer_type)
+     VALUES ($1, $2, $3, $4, TRUE, 'auction')
      RETURNING *`,
-    [skuId, cost, quantity]
+    [parentId, skuId, cost, quantity]
   );
   return result.rows[0];
 };

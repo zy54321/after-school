@@ -72,8 +72,41 @@ exports.publishTask = async (req, res) => {
 };
 
 /**
+ * GET /api/v2/tasks/market
+ * 获取任务市场概览（Family-level，不需要 member_id）
+ * 
+ * 说明：
+ * - 任务市场是家庭共享的，所有成员看到相同的任务列表
+ * - 返回完整的市场状态：任务列表、统计信息、待审核数量
+ */
+exports.getTaskMarket = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { status } = req.query;
+
+    const market = await bountyService.getTaskMarket(userId, { status });
+
+    res.json({
+      code: 200,
+      data: market,
+    });
+  } catch (err) {
+    console.error('getTaskMarket 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取任务市场失败', error: err.message });
+  }
+};
+
+/**
  * GET /api/v2/tasks
- * 获取任务列表
+ * 获取任务列表（Family-level，不需要 member_id）
+ * 
+ * Query params:
+ * - status: 任务状态筛选 (open/claimed/submitted/approved/rejected)
+ * - member_id: 可选，提供时返回该成员可领取的任务（排除自己发布的）
+ * 
+ * 说明：
+ * - 不提供 member_id: 返回家庭任务市场的所有任务
+ * - 提供 member_id: 返回该成员可领取的任务（用于个人视角）
  */
 exports.getTasks = async (req, res) => {
   try {
@@ -81,17 +114,21 @@ exports.getTasks = async (req, res) => {
     const { status, member_id: memberId } = req.query;
 
     let tasks;
+    let viewMode;
+    
     if (memberId) {
-      // 获取成员可领取的任务
+      // 获取成员可领取的任务（Member 视角）
       tasks = await bountyService.getOpenTasksForMember(userId, parseInt(memberId));
+      viewMode = 'member';
     } else {
-      // 获取所有任务
+      // 获取所有任务（Family 视角）
       tasks = await bountyService.getTasksByParentId(userId, status || null);
+      viewMode = 'family';
     }
 
     res.json({
       code: 200,
-      data: { tasks, total: tasks.length },
+      data: { tasks, total: tasks.length, viewMode },
     });
   } catch (err) {
     console.error('getTasks 错误:', err);

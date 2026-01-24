@@ -258,47 +258,125 @@ const routes = [
     ],
   },
 
-  // 5. 家庭积分系统 (Family System) - 需鉴权 (新增)
+  // 5. 家庭积分系统 (Family System) - 需鉴权
   {
     path: '/family',
-    // 这里暂时复用 PortalLayout，或者您可以新建一个 Layout
-    component: () => import('../portal/layout/PortalLayout.vue'),
+    component: () => import('../systems/family/layout/FamilyLayout.vue'),
+    meta: { requiresAuth: true },
     children: [
+      // ========== 总览 ==========
       {
         path: 'dashboard',
         name: 'FamilyDashboard',
+        component: () => import('../systems/family/views/FamilyDashboard.vue'),
+      },
+      // 旧版仪表盘（兼容）
+      {
+        path: 'legacy-dashboard',
+        name: 'FamilyLegacyDashboard',
         component: () => import('../systems/family/views/Dashboard.vue'),
-        meta: { requiresAuth: true }, // 保护路由
+      },
+
+      // ========== 市场层（不依赖 member）==========
+      {
+        path: 'market',
+        name: 'FamilyMarket',
+        component: () => import('../systems/family/views/market/MarketHome.vue'),
       },
       {
+        path: 'market/shop',
+        name: 'FamilyMarketShop',
+        component: () => import('../systems/family/views/market/MarketShop.vue'),
+      },
+      {
+        path: 'market/mystery',
+        name: 'FamilyMarketMystery',
+        component: () => import('../systems/family/views/market/MarketMystery.vue'),
+      },
+      {
+        path: 'market/auction',
+        name: 'FamilyMarketAuction',
+        component: () => import('../systems/family/views/market/MarketAuction.vue'),
+      },
+      {
+        path: 'auction/:id',
+        name: 'FamilyAuctionDetail',
+        component: () => import('../systems/family/views/market/AuctionDetail.vue'),
+      },
+      {
+        path: 'market/draw',
+        name: 'FamilyMarketDraw',
+        component: () => import('../systems/family/views/market/MarketDraw.vue'),
+      },
+      {
+        path: 'market/tasks',
+        name: 'FamilyMarketTasks',
+        component: () => import('../systems/family/views/market/MarketTasks.vue'),
+      },
+      {
+        path: 'tasks/:id',
+        name: 'FamilyTaskDetail',
+        component: () => import('../systems/family/views/market/TaskDetail.vue'),
+      },
+      {
+        path: 'market/issues',
+        name: 'FamilyMarketIssues',
+        component: () => import('../systems/family/views/market/MarketIssues.vue'),
+      },
+      {
+        path: 'market/reminders',
+        name: 'FamilyMarketReminders',
+        component: () => import('../systems/family/views/market/MarketReminders.vue'),
+      },
+
+      // ========== 成员资产层（必须 member）==========
+      {
+        path: 'member/:id/wallet',
+        name: 'FamilyMemberWallet',
+        component: () => import('../systems/family/views/member/MemberWallet.vue'),
+      },
+      {
+        path: 'member/:id/inventory',
+        name: 'FamilyMemberInventory',
+        component: () => import('../systems/family/views/member/MemberInventory.vue'),
+      },
+      {
+        path: 'member/:id/orders',
+        name: 'FamilyMemberOrders',
+        component: () => import('../systems/family/views/member/MemberOrders.vue'),
+      },
+      {
+        path: 'member/:id/activity',
+        name: 'FamilyMemberActivity',
+        component: () => import('../systems/family/views/member/MemberActivity.vue'),
+      },
+
+      // ========== 旧版兼容路由（重定向或保留）==========
+      {
         path: 'auction',
-        name: 'FamilyAuction',
-        component: () => import('../systems/family/views/AuctionPage.vue'),
-        meta: { requiresAuth: true },
+        redirect: '/family/market/auction',
       },
       {
         path: 'bounty',
-        name: 'FamilyBounty',
-        component: () => import('../systems/family/views/BountyPage.vue'),
-        meta: { requiresAuth: true },
+        redirect: '/family/market/tasks',
       },
       {
         path: 'lottery',
         name: 'FamilyLottery',
         component: () => import('../systems/family/views/LotteryPage.vue'),
-        meta: { requiresAuth: true },
+      },
+      {
+        path: 'lottery/:poolId',
+        name: 'FamilyLotteryPool',
+        component: () => import('../systems/family/views/LotteryPage.vue'),
       },
       {
         path: 'issues',
-        name: 'FamilyIssues',
-        component: () => import('../systems/family/views/IssuePage.vue'),
-        meta: { requiresAuth: true },
+        redirect: '/family/market/issues',
       },
       {
         path: 'reminders',
-        name: 'FamilyReminders',
-        component: () => import('../systems/family/views/ReminderPage.vue'),
-        meta: { requiresAuth: true },
+        redirect: '/family/market/reminders',
       },
     ],
   },

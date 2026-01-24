@@ -44,7 +44,10 @@ exports.createSession = async (req, res) => {
 
 /**
  * GET /api/v2/auction/sessions
- * 获取拍卖场次列表
+ * 获取拍卖场次列表（Family-level，不需要 member_id）
+ * 
+ * Query params:
+ * - status: string (可选，筛选状态: draft/scheduled/active/ended)
  */
 exports.getSessions = async (req, res) => {
   try {
@@ -60,6 +63,27 @@ exports.getSessions = async (req, res) => {
   } catch (err) {
     console.error('getSessions 错误:', err);
     res.status(500).json({ code: 500, msg: '获取场次列表失败', error: err.message });
+  }
+};
+
+/**
+ * GET /api/v2/auction/overview
+ * 获取拍卖概览（Family-level，不需要 member_id）
+ */
+exports.getOverview = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { status } = req.query;
+    
+    const overview = await auctionService.getAuctionOverview(userId, { status });
+    
+    res.json({
+      code: 200,
+      data: overview,
+    });
+  } catch (err) {
+    console.error('getOverview 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取拍卖概览失败', error: err.message });
   }
 };
 

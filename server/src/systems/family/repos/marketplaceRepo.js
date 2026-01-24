@@ -82,6 +82,7 @@ exports.getActiveOfferBySkuId = async (skuId, client = pool) => {
 exports.getActiveOffers = async (parentId, options = {}, client = pool) => {
   const { offerType, skuId } = options;
   
+  // 直接使用 offer.parent_id 查询，不再需要通过 sku 反查
   let query = `
     SELECT 
       o.id,
@@ -92,6 +93,7 @@ exports.getActiveOffers = async (parentId, options = {}, client = pool) => {
       o.valid_until,
       o.is_active,
       o.created_at,
+      o.parent_id,
       s.name as sku_name,
       s.description as sku_description,
       s.icon as sku_icon,
@@ -106,7 +108,7 @@ exports.getActiveOffers = async (parentId, options = {}, client = pool) => {
       AND s.is_active = TRUE
       AND o.valid_from <= CURRENT_TIMESTAMP
       AND (o.valid_until IS NULL OR o.valid_until >= CURRENT_TIMESTAMP)
-      AND (s.parent_id = 0 OR s.parent_id = $1)
+      AND o.parent_id = $1
   `;
   const params = [parentId];
   let paramIndex = 2;
@@ -297,8 +299,21 @@ exports.getOrderCountSince = async (memberId, skuId, sinceDate, client = pool) =
 
 /**
  * 创建 Offer
+ * @param {object} params - Offer 参数
+ * @param {number} params.parentId - 所属用户ID（必填，用于家庭级查询）
+ * @param {number} params.skuId - SKU ID
+ * @param {number} params.cost - 价格
+ * @param {number} params.quantity - 数量
+ * @param {Date} params.validFrom - 生效开始时间
+ * @param {Date} params.validUntil - 生效结束时间
+ * @param {boolean} params.isActive - 是否启用
+ * @param {string} params.offerType - Offer 类型
+ * @param {number} params.discountRate - 折扣率
+ * @param {number} params.limitPerMember - 每成员限购
+ * @param {object} params.metadata - 元数据
  */
 exports.createOffer = async ({
+  parentId,
   skuId,
   cost,
   quantity = 1,
@@ -312,10 +327,10 @@ exports.createOffer = async ({
 }, client = pool) => {
   const result = await client.query(
     `INSERT INTO family_offer 
-     (sku_id, cost, quantity, valid_from, valid_until, is_active, offer_type, discount_rate, limit_per_member, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     (parent_id, sku_id, cost, quantity, valid_from, valid_until, is_active, offer_type, discount_rate, limit_per_member, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING *`,
-    [skuId, cost, quantity, validFrom, validUntil, isActive, offerType, discountRate, limitPerMember, metadata]
+    [parentId, skuId, cost, quantity, validFrom, validUntil, isActive, offerType, discountRate, limitPerMember, metadata]
   );
   return result.rows[0];
 };

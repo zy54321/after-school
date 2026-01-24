@@ -8,12 +8,22 @@ const walletService = require('../services/walletService');
 
 /**
  * GET /api/v2/skus
- * 获取可用的 SKU 列表
+ * 获取可用的 SKU 列表（Family-level，不需要 member_id）
+ * 
+ * Query params:
+ * - type: string (可选，筛选 SKU 类型: reward/auction/ticket)
  */
 exports.getSkus = async (req, res) => {
   try {
     const userId = req.session.user.id;
-    const skus = await marketplaceService.getActiveSkus(userId);
+    const { type } = req.query;
+    
+    let skus = await marketplaceService.getActiveSkus(userId);
+    
+    // 按类型筛选
+    if (type) {
+      skus = skus.filter(s => s.type === type);
+    }
     
     res.json({
       code: 200,
@@ -27,6 +37,38 @@ exports.getSkus = async (req, res) => {
     res.status(500).json({ 
       code: 500, 
       msg: '获取商品列表失败',
+      error: err.message,
+    });
+  }
+};
+
+/**
+ * GET /api/v2/catalog
+ * 获取市场目录（Family-level，不需要 member_id）
+ * 
+ * Query params:
+ * - type: string (可选，筛选 SKU 类型: reward/auction/ticket)
+ * - include_offers: boolean (可选，是否包含 Offer，默认 true)
+ */
+exports.getCatalog = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { type, include_offers: includeOffers = 'true' } = req.query;
+    
+    const catalog = await marketplaceService.getMarketCatalog(userId, {
+      type,
+      includeOffers: includeOffers !== 'false',
+    });
+    
+    res.json({
+      code: 200,
+      data: catalog,
+    });
+  } catch (err) {
+    console.error('getCatalog 错误:', err);
+    res.status(500).json({ 
+      code: 500, 
+      msg: '获取市场目录失败',
       error: err.message,
     });
   }
@@ -424,12 +466,27 @@ const mysteryShopService = require('../services/mysteryShopService');
 
 /**
  * POST /api/v2/mystery-shop/refresh
- * 刷新神秘商店
+ * 刷新神秘商店（Family-level，全家共享）
+ * 
+ * Body:
+ * - payer_member_id: number (可选，付费刷新时的付款成员)
+ * - is_free: boolean (可选，是否免费刷新，默认 true)
+ * 
+ * 说明：
+ * - 刷新是家庭级的，所有成员看到相同的商品
+ * - 付费刷新时，payer_member_id 是付款人，商品仍对全家开放
  */
 exports.refreshMysteryShop = async (req, res) => {
   try {
     const userId = req.session.user.id;
-    const { member_id: memberId, is_free: isFree = true } = req.body;
+    const { 
+      member_id: memberId,  // 兼容旧字段
+      payer_member_id: payerMemberId,  // 新字段
+      is_free: isFree = true 
+    } = req.body;
+    
+    // 优先使用新字段
+    const actualPayerId = payerMemberId || memberId;
 
     // 演示模式检查
     if (req.session.user.username === 'visitor') {
@@ -437,8 +494,8 @@ exports.refreshMysteryShop = async (req, res) => {
     }
 
     // 如果需要付费刷新，需要验证成员归属
-    if (!isFree && memberId) {
-      const member = await walletService.getMemberById(parseInt(memberId));
+    if (!isFree && actualPayerId) {
+      const member = await walletService.getMemberById(parseInt(actualPayerId));
       if (!member || member.parent_id !== userId) {
         return res.status(403).json({ code: 403, msg: '无权操作该成员' });
       }
@@ -446,7 +503,7 @@ exports.refreshMysteryShop = async (req, res) => {
 
     const result = await mysteryShopService.refresh(
       userId,
-      memberId ? parseInt(memberId) : null,
+      actualPayerId ? parseInt(actualPayerId) : null,
       isFree !== false
     );
 
@@ -454,6 +511,7 @@ exports.refreshMysteryShop = async (req, res) => {
       code: 200,
       data: {
         offers: result.offers,
+        rotation: result.rotation,  // 新增：返回 rotation 信息
         validUntil: result.validUntil,
       },
       msg: result.msg,
@@ -461,7 +519,7 @@ exports.refreshMysteryShop = async (req, res) => {
   } catch (err) {
     console.error('refreshMysteryShop 错误:', err);
     
-    if (err.message.includes('积分不足')) {
+    if (err.message.includes('积分不足') || err.message.includes('免费刷新次数')) {
       return res.status(400).json({ code: 400, msg: err.message });
     }
     
@@ -475,7 +533,11 @@ exports.refreshMysteryShop = async (req, res) => {
 
 /**
  * GET /api/v2/mystery-shop
- * 获取神秘商店商品
+ * 获取神秘商店商品（Family-level，不需要 member_id）
+ * 
+ * 说明：
+ * - 神秘商店是家庭共享的，所有成员看到相同的商品
+ * - 返回当前活跃的 rotation 及其商品
  */
 exports.getMysteryShop = async (req, res) => {
   try {
@@ -483,17 +545,25 @@ exports.getMysteryShop = async (req, res) => {
     
     const offers = await mysteryShopService.getShopOffers(userId);
     const config = await mysteryShopService.getShopConfig(userId);
+    const rotation = await mysteryShopService.getCurrentRotation(userId);
 
     res.json({
       code: 200,
       data: {
         offers,
         total: offers.length,
+        rotation: rotation ? {
+          id: rotation.id,
+          expiresAt: rotation.expires_at,
+          generatedAt: rotation.generated_at,
+          refreshType: rotation.refresh_type,
+        } : null,
         config: {
           lastRefreshAt: config.last_refresh_at,
           refreshCount: config.refresh_count,
           refreshCost: config.refresh_cost,
           freeRefreshCount: config.free_refresh_count,
+          canFreeRefresh: (config.refresh_count || 0) < config.free_refresh_count,
         },
       },
     });
@@ -502,6 +572,32 @@ exports.getMysteryShop = async (req, res) => {
     res.status(500).json({
       code: 500,
       msg: '获取神秘商店失败',
+      error: err.message,
+    });
+  }
+};
+
+/**
+ * GET /api/v2/mystery-shop/overview
+ * 获取神秘商店概览（Family-level，不需要 member_id）
+ * 
+ * 包含完整的商店状态：rotation、offers、config
+ */
+exports.getMysteryShopOverview = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    
+    const overview = await mysteryShopService.getShopOverview(userId);
+
+    res.json({
+      code: 200,
+      data: overview,
+    });
+  } catch (err) {
+    console.error('getMysteryShopOverview 错误:', err);
+    res.status(500).json({
+      code: 500,
+      msg: '获取神秘商店概览失败',
       error: err.message,
     });
   }

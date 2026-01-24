@@ -8,16 +8,21 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/bountyController');
 
-// ========== 任务管理 ==========
+// ========== 任务市场（Family-level，不需要 member_id） ==========
 
-// POST /api/v2/tasks - 发布悬赏任务
-router.post('/', controller.publishTask);
+// GET /api/v2/tasks/market - 获取任务市场概览
+router.get('/market', controller.getTaskMarket);
 
-// GET /api/v2/tasks - 获取任务列表
+// GET /api/v2/tasks - 获取任务列表（member_id 可选）
 router.get('/', controller.getTasks);
 
 // GET /api/v2/tasks/pending - 获取待审核的提交
 router.get('/pending', controller.getPendingSubmissions);
+
+// ========== 任务发布（需要 publisher_member_id） ==========
+
+// POST /api/v2/tasks - 发布悬赏任务
+router.post('/', controller.publishTask);
 
 // GET /api/v2/tasks/my-claims - 获取我的领取记录
 router.get('/my-claims', controller.getMyClaims);

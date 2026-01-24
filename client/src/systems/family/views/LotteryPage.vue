@@ -1,12 +1,14 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import dayjs from 'dayjs';
 import { ArrowLeft, Refresh, Coin } from '@element-plus/icons-vue';
+import MemberSelector from '../components/MemberSelector.vue';
 
 const router = useRouter();
+const route = useRoute();
 
 // ========== 状态 ==========
 const loading = ref(false);
@@ -31,6 +33,9 @@ const showHistory = ref(false);
 const wheelRotation = ref(0);
 const isWheelSpinning = ref(false);
 
+// 成员选择器状态
+const showMemberSelector = ref(false);
+
 // ========== 计算属性 ==========
 const currentMember = computed(() => {
   return members.value.find((m) => m.id === currentMemberId.value);
@@ -42,9 +47,7 @@ const memberBalance = computed(() => {
 
 const canSpin = computed(() => {
   if (!selectedPool.value) return false;
-  if (selectedPool.value.entry_ticket_type_id && selectedPool.value.memberTicketCount < selectedPool.value.tickets_per_draw) {
-    return false;
-  }
+  // 不再在这里检查成员是否有券，因为成员可能还没选择
   return true;
 });
 
@@ -116,8 +119,50 @@ const selectPool = async (pool) => {
   }
 };
 
-const doSpin = async () => {
-  if (!canSpin.value || spinning.value) return;
+// 点击抽奖按钮
+const handleSpinClick = () => {
+  if (!selectedPool.value || spinning.value) return;
+  
+  // 如果已选择成员且有足够的券，直接抽奖
+  if (currentMemberId.value) {
+    const pool = selectedPool.value;
+    if (pool.entry_ticket_type_id && (pool.memberTicketCount || 0) < (pool.tickets_per_draw || 1)) {
+      ElMessage.warning('抽奖券不足，请先获取抽奖券');
+      return;
+    }
+    doSpin(currentMemberId.value);
+  } else {
+    // 否则弹出成员选择器
+    showMemberSelector.value = true;
+  }
+};
+
+// 成员确认后执行抽奖
+const handleMemberConfirm = async ({ memberId }) => {
+  currentMemberId.value = memberId;
+  showMemberSelector.value = false;
+  
+  // 刷新该成员的券数量
+  await loadPools();
+  
+  // 检查是否有足够的券
+  const pool = selectedPool.value;
+  if (pool?.entry_ticket_type_id && (pool.memberTicketCount || 0) < (pool.tickets_per_draw || 1)) {
+    ElMessage.warning('该成员抽奖券不足');
+    return;
+  }
+  
+  doSpin(memberId);
+};
+
+// 关闭成员选择器
+const closeMemberSelector = () => {
+  showMemberSelector.value = false;
+};
+
+// 执行抽奖
+const doSpin = async (memberId) => {
+  if (!selectedPool.value || spinning.value) return;
 
   spinning.value = true;
   isWheelSpinning.value = true;
@@ -130,7 +175,7 @@ const doSpin = async () => {
   try {
     const res = await axios.post('/api/v2/draw/spin', {
       pool_id: selectedPool.value.id,
-      member_id: currentMemberId.value,
+      member_id: memberId,
     });
 
     // 等待动画完成
@@ -291,7 +336,7 @@ watch(currentMemberId, async () => {
             class="spin-btn"
             :class="{ disabled: !canSpin, spinning }"
             :disabled="!canSpin || spinning"
-            @click="doSpin"
+            @click="handleSpinClick"
           >
             <span v-if="spinning">抽奖中...</span>
             <span v-else-if="!canSpin">券不足</span>
@@ -355,6 +400,18 @@ watch(currentMemberId, async () => {
         <el-button type="primary" @click="showResult = false">确定</el-button>
       </div>
     </div>
+
+    <!-- 统一成员选择器 -->
+    <MemberSelector
+      v-model:visible="showMemberSelector"
+      title="选择抽奖成员"
+      :action-description="selectedPool ? `在「${selectedPool.name}」抽奖` : '选择进行抽奖的成员'"
+      action-icon="🎰"
+      confirm-text="开始抽奖"
+      :loading="spinning"
+      @confirm="handleMemberConfirm"
+      @cancel="closeMemberSelector"
+    />
   </div>
 </template>
 

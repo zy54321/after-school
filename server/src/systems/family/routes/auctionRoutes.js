@@ -8,12 +8,17 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/auctionController');
 
+// ========== 概览（Family-level，不需要 member_id） ==========
+
+// GET /api/v2/auction/overview - 获取拍卖概览
+router.get('/overview', controller.getOverview);
+
 // ========== SKU 相关 ==========
 
 // GET /api/v2/auction/skus - 获取可拍卖的 SKU 列表
 router.get('/skus', controller.getAuctionableSkus);
 
-// ========== 场次相关 ==========
+// ========== 场次相关（Family-level，不需要 member_id） ==========
 
 // POST /api/v2/auction/sessions - 创建拍卖场次
 router.post('/sessions', controller.createSession);

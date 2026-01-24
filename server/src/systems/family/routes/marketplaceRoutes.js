@@ -8,7 +8,10 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/marketplaceController');
 
-// ========== 商品相关 ==========
+// ========== 市场配置（Family-level，不需要 member_id） ==========
+
+// GET /api/v2/catalog - 获取市场目录（含 SKU 和 Offer）
+router.get('/catalog', controller.getCatalog);
 
 // GET /api/v2/skus - 获取 SKU 列表
 router.get('/skus', controller.getSkus);
@@ -37,12 +40,15 @@ router.get('/wallet', controller.getWallet);
 // GET /api/v2/wallet/logs - 获取积分流水
 router.get('/wallet/logs', controller.getWalletLogs);
 
-// ========== 神秘商店 ==========
+// ========== 神秘商店（Family-level，不需要 member_id） ==========
 
-// POST /api/v2/mystery-shop/refresh - 刷新神秘商店
-router.post('/mystery-shop/refresh', controller.refreshMysteryShop);
+// GET /api/v2/mystery-shop/overview - 获取神秘商店概览
+router.get('/mystery-shop/overview', controller.getMysteryShopOverview);
 
 // GET /api/v2/mystery-shop - 获取神秘商店商品
 router.get('/mystery-shop', controller.getMysteryShop);
+
+// POST /api/v2/mystery-shop/refresh - 刷新神秘商店（付费时需要 payer_member_id）
+router.post('/mystery-shop/refresh', controller.refreshMysteryShop);
 
 module.exports = router;

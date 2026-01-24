@@ -15,8 +15,13 @@ const walletRepo = require('../repos/walletRepo');
 /**
  * 执行抽奖 (事务)
  * 
+ * 核心规则：
+ * - draw_pool 是 Family-level 配置，全家共享
+ * - member 只是参与者，必须验证 member.parent_id == pool.parent_id
+ * - 券/记录/奖励归成员所有
+ * 
  * 流程：
- * 1. 验证抽奖池和版本
+ * 1. 验证抽奖池和成员归属
  * 2. 检查并扣减抽奖券
  * 3. 按权重抽取奖品（含保底检查）
  * 4. 发放奖励（积分/抽奖券/SKU）
@@ -34,42 +39,7 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
   try {
     await client.query('BEGIN');
     
-    // ========== 0. 幂等性检查 ==========
-    // 如果提供了 idempotencyKey，先检查是否已处理过该请求
-    if (idempotencyKey) {
-      // 需要先获取 parent_id，从抽奖池中获取
-      const poolForCheck = await lotteryRepo.getPoolById(poolId, client);
-      if (poolForCheck) {
-        const existingLog = await lotteryRepo.findDrawLogByIdempotencyKey(
-          poolForCheck.parent_id, 
-          idempotencyKey, 
-          client
-        );
-        
-        if (existingLog) {
-          // 已处理过，直接返回历史结果
-          await client.query('COMMIT');
-          return {
-            success: true,
-            msg: `【重复请求】${existingLog.result_name}`,
-            prize: {
-              id: existingLog.result_prize_id,
-              name: existingLog.result_name,
-              type: existingLog.result_type,
-              value: existingLog.result_value,
-              icon: null, // 历史记录中未保存 icon
-            },
-            isGuarantee: existingLog.is_guarantee,
-            consecutiveCount: existingLog.consecutive_count,
-            poolVersionId: existingLog.pool_version_id,
-            drawLogId: existingLog.id,
-            isDuplicate: true, // 标记为重复请求
-          };
-        }
-      }
-    }
-    
-    // ========== 1. 验证抽奖池 ==========
+    // ========== 0. 验证抽奖池 ==========
     const drawPool = await lotteryRepo.getPoolById(poolId, client);
     if (!drawPool) {
       throw new Error('抽奖池不存在');
@@ -78,7 +48,48 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
       throw new Error('抽奖池已关闭');
     }
     
-    // ========== 2. 获取当前版本 ==========
+    // ========== 1. 验证成员归属（关键！）==========
+    // member.parent_id 必须等于 pool.parent_id
+    const member = await walletRepo.getMemberById(memberId, client);
+    if (!member) {
+      throw new Error('成员不存在');
+    }
+    if (member.parent_id !== drawPool.parent_id) {
+      throw new Error('成员无权参与此抽奖池');
+    }
+    
+    // ========== 2. 幂等性检查 ==========
+    // 如果提供了 idempotencyKey，先检查是否已处理过该请求
+    if (idempotencyKey) {
+      const existingLog = await lotteryRepo.findDrawLogByIdempotencyKey(
+        drawPool.parent_id, 
+        idempotencyKey, 
+        client
+      );
+      
+      if (existingLog) {
+        // 已处理过，直接返回历史结果
+        await client.query('COMMIT');
+        return {
+          success: true,
+          msg: `【重复请求】${existingLog.result_name}`,
+          prize: {
+            id: existingLog.result_prize_id,
+            name: existingLog.result_name,
+            type: existingLog.result_type,
+            value: existingLog.result_value,
+            icon: null, // 历史记录中未保存 icon
+          },
+          isGuarantee: existingLog.is_guarantee,
+          consecutiveCount: existingLog.consecutive_count,
+          poolVersionId: existingLog.pool_version_id,
+          drawLogId: existingLog.id,
+          isDuplicate: true, // 标记为重复请求
+        };
+      }
+    }
+    
+    // ========== 3. 获取当前版本 ==========
     const version = await lotteryRepo.getCurrentVersion(poolId, client);
     if (!version) {
       throw new Error('抽奖池未配置奖品');
@@ -89,7 +100,7 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
       throw new Error('奖池为空');
     }
     
-    // ========== 3. 检查并扣减抽奖券 ==========
+    // ========== 4. 检查并扣减抽奖券 ==========
     let ticketInventory = null;
     let ticketType = null;
     
@@ -131,7 +142,7 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
       await lotteryRepo.decrementInventory(ticketInventory.id, drawPool.tickets_per_draw, client);
     }
     
-    // ========== 4. 计算连续抽奖次数（保底检查） ==========
+    // ========== 5. 计算连续抽奖次数（保底检查） ==========
     let consecutiveCount = 1;
     let isGuarantee = false;
     
@@ -145,7 +156,7 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
       }
     }
     
-    // ========== 5. 抽取奖品 ==========
+    // ========== 6. 抽取奖品 ==========
     let selectedPrize;
     
     if (isGuarantee) {
@@ -161,7 +172,7 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
       selectedPrize = weightedRandom(prizes, version.total_weight);
     }
     
-    // ========== 6. 发放奖励 ==========
+    // ========== 7. 发放奖励 ==========
     let orderId = null;
     let inventoryId = null;
     let pointsLogId = null;
@@ -254,7 +265,7 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
         break;
     }
     
-    // ========== 7. 记录抽奖日志 ==========
+    // ========== 8. 记录抽奖日志 ==========
     const drawLog = await lotteryRepo.createDrawLog({
       parentId: drawPool.parent_id,
       memberId,
@@ -326,8 +337,49 @@ exports.getPoolDetail = async (poolId) => {
   };
 };
 
+// ========== 市场配置入口（Family-level）==========
+
 /**
- * 获取用户的所有抽奖池
+ * 获取抽奖概览（Family-level 视角）
+ * 
+ * 用途：展示家庭抽奖系统的整体情况，不涉及具体成员
+ * 
+ * @param {number} parentId - 用户ID
+ * @returns {object} 抽奖概览
+ */
+exports.getDrawOverview = async (parentId) => {
+  // 获取所有抽奖池
+  const pools = await lotteryRepo.getPoolsByParentId(parentId);
+  
+  // 获取抽奖券类型
+  const ticketTypes = await lotteryRepo.getTicketTypesByParentId(parentId);
+  
+  // 为每个池获取奖品配置
+  const poolsWithPrizes = await Promise.all(
+    pools.map(async (pool) => {
+      const version = await lotteryRepo.getCurrentVersion(pool.id);
+      return {
+        ...pool,
+        prizeCount: version ? (version.prizes || []).length : 0,
+        hasGuarantee: version ? !!version.min_guarantee_count : false,
+      };
+    })
+  );
+  
+  return {
+    parentId,
+    pools: poolsWithPrizes,
+    totalPools: pools.length,
+    activePools: pools.filter(p => p.status === 'active').length,
+    ticketTypes,
+    totalTicketTypes: ticketTypes.length,
+  };
+};
+
+// ========== 成员消费入口（Member-level）==========
+
+/**
+ * 获取用户的所有抽奖池（含成员券数量统计）
  */
 exports.getPoolsForMember = async (parentId, memberId) => {
   const pools = await lotteryRepo.getPoolsByParentId(parentId);
