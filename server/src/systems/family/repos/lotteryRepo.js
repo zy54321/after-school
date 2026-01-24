@@ -95,6 +95,24 @@ exports.getVersionById = async (versionId, client = pool) => {
 // ========== Draw Log 抽奖记录 ==========
 
 /**
+ * 根据幂等键查找抽奖记录
+ * 用于检查是否已处理过该请求
+ */
+exports.findDrawLogByIdempotencyKey = async (parentId, idempotencyKey, client = pool) => {
+  if (!idempotencyKey) return null;
+  
+  const result = await client.query(
+    `SELECT dl.*, dp.name as pool_name, dp.icon as pool_icon
+     FROM draw_log dl
+     JOIN draw_pool dp ON dl.pool_id = dp.id
+     WHERE dl.parent_id = $1 AND dl.idempotency_key = $2
+     LIMIT 1`,
+    [parentId, idempotencyKey]
+  );
+  return result.rows[0];
+};
+
+/**
  * 创建抽奖记录
  */
 exports.createDrawLog = async ({
@@ -115,6 +133,7 @@ exports.createDrawLog = async ({
   pointsLogId,
   isGuarantee,
   consecutiveCount,
+  idempotencyKey,
 }, client = pool) => {
   const result = await client.query(
     `INSERT INTO draw_log (
@@ -122,15 +141,15 @@ exports.createDrawLog = async ({
       ticket_type_id, ticket_point_value, tickets_used,
       result_prize_id, result_type, result_name, result_value, result_sku_id,
       order_id, inventory_id, points_log_id,
-      is_guarantee, consecutive_count
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      is_guarantee, consecutive_count, idempotency_key
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
     RETURNING *`,
     [
       parentId, memberId, poolId, poolVersionId,
       ticketTypeId, ticketPointValue, ticketsUsed,
       resultPrizeId, resultType, resultName, resultValue, resultSkuId,
       orderId, inventoryId, pointsLogId,
-      isGuarantee, consecutiveCount,
+      isGuarantee, consecutiveCount, idempotencyKey,
     ]
   );
   return result.rows[0];
@@ -273,9 +292,50 @@ exports.decrementInventory = async (inventoryId, quantity = 1, client = pool) =>
 
 /**
  * 查找可用的抽奖券库存（优先使用最早的）
+ * @param {number} memberId - 成员ID
+ * @param {number} skuId - SKU ID（显式关联，不再使用名称匹配）
+ * @param {object} client - 数据库连接
+ */
+exports.findAvailableTicketInventoryBySkuId = async (memberId, skuId, client = pool) => {
+  const result = await client.query(
+    `SELECT inv.*, sku.name as sku_name
+     FROM family_inventory inv
+     JOIN family_sku sku ON inv.sku_id = sku.id
+     WHERE inv.member_id = $1 
+       AND inv.sku_id = $2
+       AND inv.quantity > 0
+     ORDER BY inv.obtained_at
+     LIMIT 1`,
+    [memberId, skuId]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 兼容旧版：通过名称查找库存（已废弃，建议使用 findAvailableTicketInventoryBySkuId）
+ * @deprecated 使用 findAvailableTicketInventoryBySkuId 替代
  */
 exports.findAvailableTicketInventory = async (memberId, ticketTypeName, client = pool) => {
-  const result = await client.query(
+  // 先尝试精确匹配
+  let result = await client.query(
+    `SELECT inv.*, sku.name as sku_name
+     FROM family_inventory inv
+     JOIN family_sku sku ON inv.sku_id = sku.id
+     WHERE inv.member_id = $1 
+       AND sku.type = 'ticket'
+       AND sku.name = $2
+       AND inv.quantity > 0
+     ORDER BY inv.obtained_at
+     LIMIT 1`,
+    [memberId, ticketTypeName]
+  );
+  
+  if (result.rows.length > 0) {
+    return result.rows[0];
+  }
+  
+  // 精确匹配失败，回退到模糊匹配（兼容旧数据）
+  result = await client.query(
     `SELECT inv.*, sku.name as sku_name
      FROM family_inventory inv
      JOIN family_sku sku ON inv.sku_id = sku.id
@@ -292,6 +352,7 @@ exports.findAvailableTicketInventory = async (memberId, ticketTypeName, client =
 
 /**
  * 获取成员的所有抽奖券统计
+ * 使用 ticket_type.sku_id 显式关联，不再依赖名称匹配
  */
 exports.getMemberTicketStats = async (memberId, parentId, client = pool) => {
   const result = await client.query(
@@ -302,12 +363,12 @@ exports.getMemberTicketStats = async (memberId, parentId, client = pool) => {
       tt.point_value,
       tt.daily_limit,
       tt.weekly_limit,
+      tt.sku_id,
       COALESCE(SUM(inv.quantity), 0) as quantity
      FROM ticket_type tt
-     LEFT JOIN family_sku sku ON sku.type = 'ticket' AND sku.name ILIKE '%' || REPLACE(tt.name, '抽奖券', '') || '%'
-     LEFT JOIN family_inventory inv ON inv.sku_id = sku.id AND inv.member_id = $1 AND inv.quantity > 0
+     LEFT JOIN family_inventory inv ON inv.sku_id = tt.sku_id AND inv.member_id = $1 AND inv.quantity > 0
      WHERE tt.parent_id = $2 AND tt.status = 'active'
-     GROUP BY tt.id, tt.name, tt.icon, tt.point_value, tt.daily_limit, tt.weekly_limit
+     GROUP BY tt.id, tt.name, tt.icon, tt.point_value, tt.daily_limit, tt.weekly_limit, tt.sku_id
      ORDER BY tt.sort_order, tt.id`,
     [memberId, parentId]
   );

@@ -34,6 +34,41 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
   try {
     await client.query('BEGIN');
     
+    // ========== 0. 幂等性检查 ==========
+    // 如果提供了 idempotencyKey，先检查是否已处理过该请求
+    if (idempotencyKey) {
+      // 需要先获取 parent_id，从抽奖池中获取
+      const poolForCheck = await lotteryRepo.getPoolById(poolId, client);
+      if (poolForCheck) {
+        const existingLog = await lotteryRepo.findDrawLogByIdempotencyKey(
+          poolForCheck.parent_id, 
+          idempotencyKey, 
+          client
+        );
+        
+        if (existingLog) {
+          // 已处理过，直接返回历史结果
+          await client.query('COMMIT');
+          return {
+            success: true,
+            msg: `【重复请求】${existingLog.result_name}`,
+            prize: {
+              id: existingLog.result_prize_id,
+              name: existingLog.result_name,
+              type: existingLog.result_type,
+              value: existingLog.result_value,
+              icon: null, // 历史记录中未保存 icon
+            },
+            isGuarantee: existingLog.is_guarantee,
+            consecutiveCount: existingLog.consecutive_count,
+            poolVersionId: existingLog.pool_version_id,
+            drawLogId: existingLog.id,
+            isDuplicate: true, // 标记为重复请求
+          };
+        }
+      }
+    }
+    
     // ========== 1. 验证抽奖池 ==========
     const drawPool = await lotteryRepo.getPoolById(poolId, client);
     if (!drawPool) {
@@ -79,8 +114,15 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
         }
       }
       
-      // 查找可用的抽奖券库存
-      ticketInventory = await lotteryRepo.findAvailableTicketInventory(memberId, ticketType.name, client);
+      // 查找可用的抽奖券库存（优先使用 sku_id 显式关联）
+      if (ticketType.sku_id) {
+        // 使用显式 sku_id 关联（推荐）
+        ticketInventory = await lotteryRepo.findAvailableTicketInventoryBySkuId(memberId, ticketType.sku_id, client);
+      } else {
+        // 兼容旧数据：回退到名称匹配
+        ticketInventory = await lotteryRepo.findAvailableTicketInventory(memberId, ticketType.name, client);
+      }
+      
       if (!ticketInventory || ticketInventory.quantity < drawPool.tickets_per_draw) {
         throw new Error(`抽奖券不足，需要 ${drawPool.tickets_per_draw} 张 ${ticketType.name}`);
       }
@@ -144,20 +186,30 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
         
       case 'ticket':
         // 抽奖券奖励（再来一次）
-        // 需要找到对应的 SKU 并添加到库存
+        // 使用 ticket_type.sku_id 显式关联发放抽奖券
         if (selectedPrize.ticket_type_id && selectedPrize.value > 0) {
           const rewardTicketType = await lotteryRepo.getTicketTypeById(selectedPrize.ticket_type_id, client);
           if (rewardTicketType) {
-            // 查找对应的 SKU
-            const skuResult = await client.query(
-              `SELECT id FROM family_sku 
-               WHERE type = 'ticket' AND name ILIKE $1 AND is_active = TRUE
-               LIMIT 1`,
-              [`%${rewardTicketType.name}%`]
-            );
+            let skuId = null;
             
-            if (skuResult.rows.length > 0) {
-              const skuId = skuResult.rows[0].id;
+            // 优先使用显式 sku_id 关联（推荐）
+            if (rewardTicketType.sku_id) {
+              skuId = rewardTicketType.sku_id;
+            } else {
+              // 兼容旧数据：回退到名称匹配
+              const skuResult = await client.query(
+                `SELECT id FROM family_sku 
+                 WHERE type = 'ticket' AND name = $1 AND is_active = TRUE
+                 LIMIT 1`,
+                [rewardTicketType.name]
+              );
+              
+              if (skuResult.rows.length > 0) {
+                skuId = skuResult.rows[0].id;
+              }
+            }
+            
+            if (skuId) {
               const invResult = await client.query(
                 `INSERT INTO family_inventory (member_id, sku_id, quantity, status)
                  VALUES ($1, $2, $3, 'unused')
@@ -221,6 +273,7 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
       pointsLogId,
       isGuarantee,
       consecutiveCount,
+      idempotencyKey,  // 记录幂等键
     }, client);
     
     await client.query('COMMIT');
@@ -287,7 +340,14 @@ exports.getPoolsForMember = async (parentId, memberId) => {
     if (pool.entry_ticket_type_id) {
       const ticketType = await lotteryRepo.getTicketTypeById(pool.entry_ticket_type_id);
       if (ticketType) {
-        const inventory = await lotteryRepo.findAvailableTicketInventory(memberId, ticketType.name);
+        let inventory;
+        // 优先使用显式 sku_id 关联
+        if (ticketType.sku_id) {
+          inventory = await lotteryRepo.findAvailableTicketInventoryBySkuId(memberId, ticketType.sku_id);
+        } else {
+          // 兼容旧数据
+          inventory = await lotteryRepo.findAvailableTicketInventory(memberId, ticketType.name);
+        }
         ticketCount = inventory ? inventory.quantity : 0;
       }
     }

@@ -208,6 +208,18 @@ exports.findUnusedInventoryItem = async (memberId, skuId, client = pool) => {
 };
 
 /**
+ * 根据订单ID查询库存记录
+ * 用于幂等性检查，避免重复创建库存
+ */
+exports.getInventoryByOrderId = async (orderId, client = pool) => {
+  const result = await client.query(
+    `SELECT * FROM family_inventory WHERE order_id = $1`,
+    [orderId]
+  );
+  return result.rows[0];
+};
+
+/**
  * 增加库存数量
  */
 exports.incrementInventoryQuantity = async (inventoryId, quantity = 1, client = pool) => {

@@ -155,19 +155,30 @@ COMMENT ON COLUMN reminder_event.status IS '状态：pending=待发送, sent=已
 -- 3. 触发器：更新时间戳
 -- ============================================
 
+-- 创建独立的时间戳更新函数（不依赖 issue 模块）
+CREATE OR REPLACE FUNCTION update_reminder_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION update_reminder_timestamp() IS '提醒系统时间戳更新触发器函数';
+
 -- 更新 reminder_policy 时间戳
 DROP TRIGGER IF EXISTS trigger_reminder_policy_updated_at ON reminder_policy;
 CREATE TRIGGER trigger_reminder_policy_updated_at
   BEFORE UPDATE ON reminder_policy
   FOR EACH ROW
-  EXECUTE FUNCTION update_issue_timestamp();
+  EXECUTE FUNCTION update_reminder_timestamp();
 
 -- 更新 reminder_event 时间戳
 DROP TRIGGER IF EXISTS trigger_reminder_event_updated_at ON reminder_event;
 CREATE TRIGGER trigger_reminder_event_updated_at
   BEFORE UPDATE ON reminder_event
   FOR EACH ROW
-  EXECUTE FUNCTION update_issue_timestamp();
+  EXECUTE FUNCTION update_reminder_timestamp();
 
 -- ============================================
 -- 4. 视图：待发送提醒

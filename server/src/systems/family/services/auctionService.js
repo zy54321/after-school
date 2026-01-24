@@ -487,54 +487,83 @@ exports.settleSession = async (sessionId) => {
         continue;
       }
       
-      // ========== 5. 创建订单 ==========
+      // ========== 5. 创建订单（幂等性检查） ==========
       const idempotencyKey = `auction_${sessionId}_lot_${lot.id}`;
       
-      const order = await marketplaceRepo.createOrder({
-        parentId: session.parent_id,
-        memberId: winner.bidder_member_id,
-        offerId: lot.offer_id,
-        skuId: lot.sku_id,
-        skuName: lot.sku_name,
-        cost: payPoints,
-        quantity: lot.quantity || 1,
-        status: 'paid',
+      // 幂等性检查：查询是否已存在该订单
+      let order = await marketplaceRepo.getOrderByIdempotencyKey(
+        session.parent_id,
         idempotencyKey,
-      }, client);
-      
-      // ========== 6. 创建积分流水 ==========
-      await walletRepo.createPointsLog({
-        memberId: winner.bidder_member_id,
-        parentId: session.parent_id,
-        orderId: order.id,
-        description: `竞拍得标：${lot.sku_name}`,
-        pointsChange: -payPoints,
-        reasonCode: 'auction',
-        idempotencyKey: `points_${idempotencyKey}`,
-      }, client);
-      
-      // ========== 7. 创建库存 ==========
-      const existingInventory = await marketplaceRepo.findUnusedInventoryItem(
-        winner.bidder_member_id,
-        lot.sku_id,
         client
       );
       
-      if (existingInventory) {
-        await marketplaceRepo.incrementInventoryQuantity(
-          existingInventory.id,
-          lot.quantity || 1,
-          client
-        );
-      } else {
-        await marketplaceRepo.createInventoryItem({
+      if (!order) {
+        // 不存在，创建新订单
+        order = await marketplaceRepo.createOrder({
+          parentId: session.parent_id,
           memberId: winner.bidder_member_id,
+          offerId: lot.offer_id,
           skuId: lot.sku_id,
-          orderId: order.id,
+          skuName: lot.sku_name,
+          cost: payPoints,
           quantity: lot.quantity || 1,
-          status: 'unused',
+          status: 'paid',
+          idempotencyKey,
         }, client);
       }
+      // 如果订单已存在，直接复用，不重复创建
+      
+      // ========== 6. 创建积分流水（幂等性检查） ==========
+      const pointsIdempotencyKey = `points_${idempotencyKey}`;
+      const existingPointsLog = await walletRepo.getPointsLogByIdempotencyKey(
+        session.parent_id,
+        pointsIdempotencyKey,
+        client
+      );
+      
+      if (!existingPointsLog) {
+        // 不存在，创建新流水
+        await walletRepo.createPointsLog({
+          memberId: winner.bidder_member_id,
+          parentId: session.parent_id,
+          orderId: order.id,
+          description: `竞拍得标：${lot.sku_name}`,
+          pointsChange: -payPoints,
+          reasonCode: 'auction',
+          idempotencyKey: pointsIdempotencyKey,
+        }, client);
+      }
+      // 如果流水已存在，跳过创建
+      
+      // ========== 7. 创建库存（幂等性检查） ==========
+      // 先检查是否已有此订单关联的库存
+      const inventoryByOrder = await marketplaceRepo.getInventoryByOrderId(order.id, client);
+      
+      if (!inventoryByOrder) {
+        // 没有订单关联的库存，检查是否有可合并的未使用库存
+        const existingInventory = await marketplaceRepo.findUnusedInventoryItem(
+          winner.bidder_member_id,
+          lot.sku_id,
+          client
+        );
+        
+        if (existingInventory) {
+          await marketplaceRepo.incrementInventoryQuantity(
+            existingInventory.id,
+            lot.quantity || 1,
+            client
+          );
+        } else {
+          await marketplaceRepo.createInventoryItem({
+            memberId: winner.bidder_member_id,
+            skuId: lot.sku_id,
+            orderId: order.id,
+            quantity: lot.quantity || 1,
+            status: 'unused',
+          }, client);
+        }
+      }
+      // 如果订单关联的库存已存在，跳过创建
       
       // ========== 8. 创建拍卖结果 ==========
       const result = await auctionRepo.createResult({
