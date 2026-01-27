@@ -44,6 +44,12 @@ const showUsageHistoryModal = ref(false);
 const usageHistory = ref([]);
 const loadingHistory = ref(false);
 
+const showUseModal = ref(false);
+const useForm = ref({
+  item: null,
+  quantity: 1
+});
+
 // 过滤后的物品列表
 const filteredItems = computed(() => {
   if (filterStatus.value === 'all') {
@@ -85,45 +91,42 @@ const loadBackpack = async () => {
 };
 
 // 使用物品
-const handleUse = async (item) => {
+const handleUse = (item) => {
   if (item.status !== 'unused') {
     ElMessage.warning(t('familyDashboard.itemUsed'));
     return;
   }
 
-  try {
-    const confirmMsg = item.quantity > 1 
-      ? t('familyDashboard.useConfirmWithQuantity').replace('{name}', item.reward_name).replace('{quantity}', item.quantity)
-      : t('familyDashboard.useConfirm').replace('{name}', item.reward_name);
-    
-    await ElMessageBox.confirm(
-      confirmMsg,
-      t('common.confirm'),
-      {
-        confirmButtonText: t('familyDashboard.use'),
-        cancelButtonText: t('familyDashboard.cancel'),
-        type: 'info'
-      }
-    );
+  // 打开弹窗而不是直接 confirm
+  useForm.value = {
+    item: item,
+    quantity: 1
+  };
+  showUseModal.value = true;
+};
 
+const confirmUse = async () => {
+  const { item, quantity } = useForm.value;
+  if (!item) return;
+
+  try {
     const res = await axios.post('/api/family/backpack/use', {
       backpackId: item.id,
       memberId: props.memberId,
-      quantity: 1
+      quantity: quantity
     });
 
     if (res.data.code === 200) {
       ElMessage.success(t('familyDashboard.useSuccess'));
+      showUseModal.value = false;
       await loadBackpack();
       emit('refresh'); // 通知父组件刷新
     } else {
       ElMessage.warning(res.data.msg || t('familyDashboard.useFailed'));
     }
   } catch (err) {
-    if (err !== 'cancel') {
-      console.error('使用物品失败:', err);
-      ElMessage.error(err.response?.data?.msg || t('familyDashboard.useFailed'));
-    }
+    console.error('使用物品失败:', err);
+    ElMessage.error(err.response?.data?.msg || t('familyDashboard.useFailed'));
   }
 };
 
@@ -245,29 +248,18 @@ watch(() => filterStatus.value, () => {
           <span class="value">{{ stats.used_count }}</span>
         </div>
       </div>
-      
+
       <div class="filter-tabs">
-        <div 
-          class="filter-tab" 
-          :class="{ active: filterStatus === 'all' }"
-          @click="filterStatus = 'all'">
+        <div class="filter-tab" :class="{ active: filterStatus === 'all' }" @click="filterStatus = 'all'">
           {{ $t('familyDashboard.all') }}
         </div>
-        <div 
-          class="filter-tab" 
-          :class="{ active: filterStatus === 'unused' }"
-          @click="filterStatus = 'unused'">
+        <div class="filter-tab" :class="{ active: filterStatus === 'unused' }" @click="filterStatus = 'unused'">
           {{ $t('familyDashboard.unused') }}
         </div>
-        <div 
-          class="filter-tab" 
-          :class="{ active: filterStatus === 'used' }"
-          @click="filterStatus = 'used'">
+        <div class="filter-tab" :class="{ active: filterStatus === 'used' }" @click="filterStatus = 'used'">
           {{ $t('familyDashboard.used') }}
         </div>
-        <div 
-          class="filter-tab history-tab"
-          @click="openUsageHistory">
+        <div class="filter-tab history-tab" @click="openUsageHistory">
           {{ $t('familyDashboard.usageHistory') }}
         </div>
       </div>
@@ -280,10 +272,7 @@ watch(() => filterStatus.value, () => {
       <div class="empty-text">{{ $t('familyDashboard.emptyBackpack') }}</div>
     </div>
     <div v-else class="backpack-grid">
-      <div
-        v-for="item in filteredItems"
-        :key="item.id"
-        class="backpack-item"
+      <div v-for="item in filteredItems" :key="item.id" class="backpack-item"
         :class="{ 'is-used': item.status === 'used' }">
         <div class="item-icon">{{ item.reward_icon || '🎁' }}</div>
         <div class="item-info">
@@ -298,20 +287,10 @@ watch(() => filterStatus.value, () => {
         <div class="item-actions">
           <div v-if="item.quantity > 1" class="quantity-badge">{{ item.quantity }}</div>
           <div class="action-buttons">
-            <el-button
-              v-if="item.status === 'unused'"
-              type="primary"
-              size="small"
-              round
-              @click="handleUse(item)">
+            <el-button v-if="item.status === 'unused'" type="primary" size="small" round @click="handleUse(item)">
               {{ $t('familyDashboard.use') }}
             </el-button>
-            <el-button
-              v-if="item.status === 'unused'"
-              type="success"
-              size="small"
-              round
-              @click="openTransfer(item)">
+            <el-button v-if="item.status === 'unused'" type="success" size="small" round @click="openTransfer(item)">
               {{ $t('familyDashboard.transfer') }}
             </el-button>
             <el-tag v-if="item.status === 'used'" type="info" size="small">{{ $t('familyDashboard.used') }}</el-tag>
@@ -324,11 +303,9 @@ watch(() => filterStatus.value, () => {
     <el-dialog v-model="showTransferModal" :title="$t('familyDashboard.transfer')" width="90%">
       <el-form label-position="top">
         <el-form-item :label="$t('familyDashboard.transferTo')">
-          <el-select v-model="transferForm.toMemberId" :placeholder="$t('common.placeholderSelect')" style="width: 100%">
-            <el-option
-              v-for="member in members.filter(m => m.id !== memberId)"
-              :key="member.id"
-              :label="member.name"
+          <el-select v-model="transferForm.toMemberId" :placeholder="$t('common.placeholderSelect')"
+            style="width: 100%">
+            <el-option v-for="member in members.filter(m => m.id !== memberId)" :key="member.id" :label="member.name"
               :value="member.id">
             </el-option>
           </el-select>
@@ -354,21 +331,39 @@ watch(() => filterStatus.value, () => {
         <div class="empty-text">{{ $t('familyDashboard.noHistory') }}</div>
       </div>
       <div v-else class="usage-history-list">
-        <div
-          v-for="record in usageHistory"
-          :key="record.id"
-          class="usage-record-item">
+        <div v-for="record in usageHistory" :key="record.id" class="usage-record-item">
           <div class="record-icon">{{ record.reward_icon || '🎁' }}</div>
           <div class="record-info">
             <div class="record-name">{{ record.reward_name }}</div>
             <div class="record-meta">
               <span class="record-time">{{ $t('familyDashboard.usedAt') }}：{{ formatTime(record.used_at) }}</span>
-              <span v-if="record.quantity > 1" class="record-quantity">{{ $t('familyDashboard.usedQuantity') }}：{{ record.quantity }}</span>
+              <span v-if="record.quantity > 1" class="record-quantity">{{ $t('familyDashboard.usedQuantity') }}：{{
+                record.quantity }}</span>
             </div>
           </div>
         </div>
       </div>
     </el-dialog>
+
+    <el-dialog v-model="showUseModal" :title="$t('familyDashboard.use')" width="320px">
+      <div v-if="useForm.item" style="text-align: center; padding: 10px;">
+        <div style="font-size: 3rem; margin-bottom: 10px;">{{ useForm.item.reward_icon || '🎁' }}</div>
+        <h3 style="margin: 0 0 5px 0;">{{ useForm.item.reward_name }}</h3>
+        <p style="color: #666; font-size: 12px; margin-bottom: 20px;">
+          当前拥有: {{ useForm.item.quantity }}
+        </p>
+
+        <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+          <span>使用数量:</span>
+          <el-input-number v-model="useForm.quantity" :min="1" :max="useForm.item.quantity" size="default" />
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showUseModal = false">{{ $t('familyDashboard.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmUse">{{ $t('familyDashboard.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -633,4 +628,3 @@ watch(() => filterStatus.value, () => {
   }
 }
 </style>
-

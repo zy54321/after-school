@@ -13,24 +13,24 @@ exports.createSession = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { title, scheduled_at: scheduledAt, config } = req.body;
-    
+
     // 参数校验
     if (!title) {
       return res.status(400).json({ code: 400, msg: '缺少必填参数: title' });
     }
-    
+
     // 演示模式检查
     if (req.session.user.username === 'visitor') {
       return res.status(403).json({ code: 403, msg: '演示模式：游客账号仅供查看，禁止修改数据' });
     }
-    
+
     const session = await auctionService.createSession({
       parentId: userId,
       title,
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       config: config || {},
     });
-    
+
     res.json({
       code: 200,
       data: { session },
@@ -53,9 +53,9 @@ exports.getSessions = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { status } = req.query;
-    
+
     const sessions = await auctionService.getSessionsByParentId(userId, status);
-    
+
     res.json({
       code: 200,
       data: { sessions, total: sessions.length },
@@ -74,9 +74,9 @@ exports.getOverview = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { status } = req.query;
-    
+
     const overview = await auctionService.getAuctionOverview(userId, { status });
-    
+
     res.json({
       code: 200,
       data: overview,
@@ -94,24 +94,24 @@ exports.getOverview = async (req, res) => {
 exports.getSessionDetail = async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id);
-    
+
     if (!sessionId) {
       return res.status(400).json({ code: 400, msg: '无效的场次ID' });
     }
-    
+
     const data = await auctionService.getSessionWithLots(sessionId);
-    
+
     res.json({
       code: 200,
       data,
     });
   } catch (err) {
     console.error('getSessionDetail 错误:', err);
-    
+
     if (err.message.includes('不存在')) {
       return res.status(404).json({ code: 404, msg: err.message });
     }
-    
+
     res.status(500).json({ code: 500, msg: '获取场次详情失败', error: err.message });
   }
 };
@@ -124,32 +124,32 @@ exports.generateLots = async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id);
     const { r = 0, sr = 0, ssr = 0, ur = 0 } = req.body;
-    
+
     if (!sessionId) {
       return res.status(400).json({ code: 400, msg: '无效的场次ID' });
     }
-    
+
     // 演示模式检查
     if (req.session.user.username === 'visitor') {
       return res.status(403).json({ code: 403, msg: '演示模式：游客账号仅供查看，禁止修改数据' });
     }
-    
+
     const totalCount = r + sr + ssr + ur;
     if (totalCount === 0) {
       return res.status(400).json({ code: 400, msg: '请至少指定一个稀有度的数量' });
     }
-    
+
     const result = await auctionService.generateLots(sessionId, {
       r: parseInt(r),
       sr: parseInt(sr),
       ssr: parseInt(ssr),
       ur: parseInt(ur),
     });
-    
+
     if (!result.success) {
       return res.status(400).json({ code: 400, msg: result.msg, existingCount: result.existingCount });
     }
-    
+
     res.json({
       code: 200,
       data: result,
@@ -246,37 +246,37 @@ exports.submitBid = async (req, res) => {
   try {
     const lotId = parseInt(req.params.id);
     const { member_id: memberId, bid_points: bidPoints } = req.body;
-    
-    if (!lotId) {
-      return res.status(400).json({ code: 400, msg: '无效的拍品ID' });
-    }
-    
-    if (!memberId) {
-      return res.status(400).json({ code: 400, msg: '缺少必填参数: member_id' });
-    }
-    
-    if (!bidPoints || bidPoints <= 0) {
-      return res.status(400).json({ code: 400, msg: '出价必须大于0' });
-    }
-    
+    const userId = req.session.user.id;
+
+    if (!lotId) return res.status(400).json({ code: 400, msg: '无效的拍品ID' });
+    if (!memberId) return res.status(400).json({ code: 400, msg: '缺少必填参数: member_id' });
+    if (!bidPoints || bidPoints <= 0) return res.status(400).json({ code: 400, msg: '出价必须大于0' });
+
     // 演示模式检查
     if (req.session.user.username === 'visitor') {
       return res.status(403).json({ code: 403, msg: '演示模式：游客账号仅供查看，禁止修改数据' });
     }
-    
-    // 校验成员归属
-    const userId = req.session.user.id;
+
+    // 1. 获取要操作的成员信息
     const member = await walletService.getMemberById(parseInt(memberId));
-    if (!member || member.parent_id !== userId) {
-      return res.status(403).json({ code: 403, msg: '无权操作该成员' });
+
+    if (!member) {
+      return res.status(404).json({ code: 404, msg: `未找到ID为 ${memberId} 的成员` });
     }
-    
+
+    // 2. 权限校验：确保当前登录用户(家长)有权操作该成员
+    // 注意：这里假设 req.session.user.id 是 parent_id
+    if (member.parent_id !== userId) {
+      console.warn(`[Audit] 非法操作: User ${userId} 尝试操作 Member ${memberId} (Parent: ${member.parent_id})`);
+      return res.status(403).json({ code: 403, msg: '您无权使用该成员身份进行出价' });
+    }
+
     const result = await auctionService.submitBid(
       lotId,
       parseInt(memberId),
       parseInt(bidPoints)
     );
-    
+
     res.json({
       code: 200,
       data: { bid: result.bid },
@@ -284,16 +284,11 @@ exports.submitBid = async (req, res) => {
     });
   } catch (err) {
     console.error('submitBid 错误:', err);
-    
-    if (err.message.includes('不能低于') || err.message.includes('积分不足') || 
-        err.message.includes('已有更高')) {
+
+    if (err.message.includes('不能低于') || err.message.includes('积分不足') || err.message.includes('已有更高')) {
       return res.status(400).json({ code: 400, msg: err.message });
     }
-    
-    if (err.message.includes('不存在') || err.message.includes('不允许')) {
-      return res.status(404).json({ code: 404, msg: err.message });
-    }
-    
+
     res.status(500).json({ code: 500, msg: '出价失败', error: err.message });
   }
 };
@@ -306,13 +301,13 @@ exports.getBids = async (req, res) => {
   try {
     const lotId = parseInt(req.params.id);
     const { limit = 50 } = req.query;
-    
+
     if (!lotId) {
       return res.status(400).json({ code: 400, msg: '无效的拍品ID' });
     }
-    
+
     const bids = await auctionService.getBidsByLotId(lotId, parseInt(limit));
-    
+
     res.json({
       code: 200,
       data: { bids, total: bids.length },
@@ -330,18 +325,18 @@ exports.getBids = async (req, res) => {
 exports.settleSession = async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id);
-    
+
     if (!sessionId) {
       return res.status(400).json({ code: 400, msg: '无效的场次ID' });
     }
-    
+
     // 演示模式检查
     if (req.session.user.username === 'visitor') {
       return res.status(403).json({ code: 403, msg: '演示模式：游客账号仅供查看，禁止修改数据' });
     }
-    
+
     const result = await auctionService.settleSession(sessionId);
-    
+
     res.json({
       code: 200,
       data: result,
@@ -349,11 +344,11 @@ exports.settleSession = async (req, res) => {
     });
   } catch (err) {
     console.error('settleSession 错误:', err);
-    
+
     if (err.message.includes('不存在') || err.message.includes('不允许')) {
       return res.status(400).json({ code: 400, msg: err.message });
     }
-    
+
     res.status(500).json({ code: 500, msg: '结算失败', error: err.message });
   }
 };
@@ -366,7 +361,7 @@ exports.getAuctionableSkus = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const skus = await auctionService.getAuctionableSkus(userId);
-    
+
     res.json({
       code: 200,
       data: { skus, total: skus.length },

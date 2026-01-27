@@ -28,21 +28,21 @@ exports.createMember = async (req, res) => {
   const { name } = req.body;
   const userId = req.session.user.id;
   const avatar = req.file ? `/uploads/${req.file.filename}` : '';
-  
+
   try {
     await familyService.createMember(userId, name, avatar);
     res.json({ code: 200, msg: '添加成员成功' });
   } catch (err) {
     console.error('createMember 错误:', err);
-    
+
     // 处理主键冲突错误（序列未同步）
     if (err.code === '23505' && err.constraint === 'family_members_pkey') {
       try {
         const fixed = await fixSequenceAsync('family_members');
         if (fixed) {
-          return res.status(500).json({ 
-            code: 500, 
-            msg: '序列已自动修复，请重试操作', 
+          return res.status(500).json({
+            code: 500,
+            msg: '序列已自动修复，请重试操作',
             error: '序列已修复，请重试',
             autoFixed: true
           });
@@ -50,14 +50,14 @@ exports.createMember = async (req, res) => {
       } catch (fixError) {
         console.error('自动修复序列失败:', fixError);
       }
-      
-      return res.status(500).json({ 
-        code: 500, 
-        msg: '数据库序列未同步，请联系管理员执行修复序列脚本', 
+
+      return res.status(500).json({
+        code: 500,
+        msg: '数据库序列未同步，请联系管理员执行修复序列脚本',
         error: '主键冲突：序列值需要修复'
       });
     }
-    
+
     res.status(500).json({ code: 500, msg: '添加失败', error: err.message });
   }
 };
@@ -65,7 +65,7 @@ exports.createMember = async (req, res) => {
 exports.updateMember = async (req, res) => {
   const { id, name } = req.body;
   const avatar = req.file ? `/uploads/${req.file.filename}` : null;
-  
+
   try {
     await familyService.updateMember(id, name, avatar);
     res.json({ code: 200, msg: '更新成功' });
@@ -77,11 +77,11 @@ exports.updateMember = async (req, res) => {
 
 exports.deleteMember = async (req, res) => {
   const { id } = req.body;
-  
+
   if (!id) {
     return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
   }
-  
+
   try {
     await familyService.deleteMember(id);
     res.json({ code: 200, msg: '已删除成员' });
@@ -106,11 +106,11 @@ exports.getInitData = async (req, res) => {
 
 exports.getMemberDashboard = async (req, res) => {
   const { memberId, month } = req.query;
-  
+
   if (!memberId) {
     return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
   }
-  
+
   try {
     const data = await familyService.getMemberDashboard(memberId, month);
     res.json({ code: 200, data });
@@ -122,7 +122,7 @@ exports.getMemberDashboard = async (req, res) => {
 
 exports.logAction = async (req, res) => {
   const { memberId, taskId, customTitle, points, reasonCode } = req.body;
-  
+
   if (!memberId) {
     return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
   }
@@ -135,14 +135,14 @@ exports.logAction = async (req, res) => {
     res.json({ code: 200, msg: '记录成功' });
   } catch (err) {
     console.error('logAction 错误:', err);
-    
+
     if (err.code === '23505' && err.constraint === 'family_points_log_pkey') {
       try {
         const fixed = await fixSequenceAsync('family_points_log');
         if (fixed) {
-          return res.status(500).json({ 
-            code: 500, 
-            msg: '序列已自动修复，请重试操作', 
+          return res.status(500).json({
+            code: 500,
+            msg: '序列已自动修复，请重试操作',
             error: '序列已修复，请重试',
             autoFixed: true
           });
@@ -150,25 +150,25 @@ exports.logAction = async (req, res) => {
       } catch (fixError) {
         console.error('自动修复序列失败:', fixError);
       }
-      
-      return res.status(500).json({ 
-        code: 500, 
-        msg: '数据库序列未同步，请联系管理员执行修复序列脚本', 
+
+      return res.status(500).json({
+        code: 500,
+        msg: '数据库序列未同步，请联系管理员执行修复序列脚本',
         error: '主键冲突：序列值需要修复'
       });
     }
-    
+
     res.status(500).json({ code: 500, msg: '操作失败', error: err.message });
   }
 };
 
 exports.redeemReward = async (req, res) => {
   const { memberId, rewardId } = req.body;
-  
+
   if (!memberId || !rewardId) {
     return res.status(400).json({ code: 400, msg: '参数不完整' });
   }
-  
+
   try {
     const result = await familyService.redeemReward(memberId, rewardId);
     res.json({ code: 200, msg: result.msg });
@@ -181,11 +181,11 @@ exports.redeemReward = async (req, res) => {
 // 🟢 竞拍结算接口
 exports.settleAuction = async (req, res) => {
   const { auctionId, memberId, bidPoints } = req.body;
-  
+
   if (!auctionId || !memberId || bidPoints === undefined) {
     return res.status(400).json({ code: 400, msg: '参数不完整' });
   }
-  
+
   try {
     const result = await familyService.settleAuction(memberId, auctionId, bidPoints);
     res.json({ code: 200, msg: result.msg });
@@ -200,21 +200,21 @@ exports.settleAuction = async (req, res) => {
 exports.createItem = async (req, res) => {
   const { type, name, points, category, limitType, limitMax, targetMembers, description } = req.body;
   const userId = req.session.user.id;
-  
+
   try {
     await familyService.createItem(userId, { type, name, points, category, limitType, limitMax, targetMembers, description });
     res.json({ code: 200, msg: '创建成功' });
   } catch (err) {
     console.error('createItem 错误:', err);
-    
+
     if (err.code === '23505') {
       const tableName = type === 'task' ? 'family_tasks' : 'family_rewards';
       try {
         const fixed = await fixSequenceAsync(tableName);
         if (fixed) {
-          return res.status(500).json({ 
-            code: 500, 
-            msg: '序列已自动修复，请重试操作', 
+          return res.status(500).json({
+            code: 500,
+            msg: '序列已自动修复，请重试操作',
             error: '序列已修复，请重试',
             autoFixed: true
           });
@@ -222,21 +222,21 @@ exports.createItem = async (req, res) => {
       } catch (fixError) {
         console.error('自动修复序列失败:', fixError);
       }
-      
-      return res.status(500).json({ 
-        code: 500, 
-        msg: `数据库序列未同步（${tableName}），请联系管理员执行修复序列脚本`, 
+
+      return res.status(500).json({
+        code: 500,
+        msg: `数据库序列未同步（${tableName}），请联系管理员执行修复序列脚本`,
         error: '主键冲突：序列值需要修复'
       });
     }
-    
+
     res.status(500).json({ code: 500, msg: '创建失败', error: err.message });
   }
 };
 
 exports.updateItem = async (req, res) => {
   const { id, type, name, points, category, limitType, limitMax, targetMembers, description } = req.body;
-  
+
   try {
     await familyService.updateItem({ id, type, name, points, category, limitType, limitMax, targetMembers, description });
     res.json({ code: 200, msg: '更新成功' });
@@ -248,7 +248,7 @@ exports.updateItem = async (req, res) => {
 
 exports.deleteItem = async (req, res) => {
   const { id, type } = req.body;
-  
+
   try {
     await familyService.deleteItem(id, type);
     res.json({ code: 200, msg: '删除成功' });
@@ -263,28 +263,28 @@ exports.deleteItem = async (req, res) => {
 exports.createCategory = async (req, res) => {
   const { name } = req.body;
   const userId = req.session.user.id;
-  
+
   try {
     await familyService.createCategory(userId, name);
     res.json({ code: 200, msg: '添加成功' });
   } catch (err) {
     console.error('createCategory 错误:', err);
-    
+
     if (err.code === '23505' && err.constraint === 'family_categories_pkey') {
-      return res.status(500).json({ 
-        code: 500, 
-        msg: '数据库序列未同步，请联系管理员执行修复序列脚本', 
+      return res.status(500).json({
+        code: 500,
+        msg: '数据库序列未同步，请联系管理员执行修复序列脚本',
         error: '主键冲突：序列值需要修复'
       });
     }
-    
+
     res.status(500).json({ code: 500, msg: '添加失败', error: err.message });
   }
 };
 
 exports.deleteCategory = async (req, res) => {
   const { id } = req.body;
-  
+
   try {
     await familyService.deleteCategory(id);
     res.json({ code: 200, msg: '删除成功' });
@@ -298,7 +298,7 @@ exports.deleteCategory = async (req, res) => {
 
 exports.revokeLog = async (req, res) => {
   const { logId, logIds } = req.body;
-  
+
   // 确定要删除的流水记录ID列表
   let targetLogIds = [];
   if (logIds && Array.isArray(logIds) && logIds.length > 0) {
@@ -308,7 +308,7 @@ exports.revokeLog = async (req, res) => {
   } else {
     return res.status(400).json({ code: 400, msg: '参数不完整' });
   }
-  
+
   try {
     await familyService.revokeLog(targetLogIds);
     res.json({ code: 200, msg: '已撤销' });
@@ -322,11 +322,11 @@ exports.revokeLog = async (req, res) => {
 
 exports.getBackpack = async (req, res) => {
   const { memberId, status } = req.query;
-  
+
   if (!memberId) {
     return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
   }
-  
+
   try {
     const data = await familyService.getBackpack(memberId, status);
     res.json({ code: 200, data });
@@ -338,11 +338,11 @@ exports.getBackpack = async (req, res) => {
 
 exports.useBackpackItem = async (req, res) => {
   const { backpackId, memberId, quantity } = req.body;
-  
+
   if (!backpackId || !memberId) {
     return res.status(400).json({ code: 400, msg: '参数不完整' });
   }
-  
+
   try {
     const result = await familyService.useBackpackItem(memberId, backpackId, quantity || 1);
     res.json({ code: 200, msg: result.msg });
@@ -354,15 +354,15 @@ exports.useBackpackItem = async (req, res) => {
 
 exports.transferBackpackItem = async (req, res) => {
   const { backpackId, fromMemberId, toMemberId, quantity } = req.body;
-  
+
   if (!backpackId || !fromMemberId || !toMemberId) {
     return res.status(400).json({ code: 400, msg: '参数不完整' });
   }
-  
+
   if (fromMemberId === toMemberId) {
     return res.status(400).json({ code: 400, msg: '不能转赠给自己' });
   }
-  
+
   try {
     const result = await familyService.transferBackpackItem(backpackId, fromMemberId, toMemberId, quantity || 1);
     res.json({ code: 200, msg: result.msg });
@@ -374,16 +374,74 @@ exports.transferBackpackItem = async (req, res) => {
 
 exports.getUsageHistory = async (req, res) => {
   const { memberId, rewardId, limit } = req.query;
-  
+
   if (!memberId) {
     return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
   }
-  
+
   try {
     const data = await familyService.getUsageHistory(memberId, rewardId, limit);
     res.json({ code: 200, data });
   } catch (err) {
     console.error('getUsageHistory 错误:', err);
     res.status(500).json({ code: 500, msg: '获取使用记录失败', error: err.message });
+  }
+};
+
+// 获取预设列表
+exports.getPresets = async (req, res, next) => {
+  try {
+    const presets = await familyService.getPresets();
+    res.json({ code: 200, data: presets });
+  } catch (err) { next(err); }
+};
+
+// 创建预设
+exports.createPreset = async (req, res, next) => {
+  try {
+    const preset = await familyService.createPreset(req.body);
+    res.json({ code: 200, data: preset });
+  } catch (err) { next(err); }
+};
+
+// 更新预设
+exports.updatePreset = async (req, res, next) => {
+  try {
+    const preset = await familyService.updatePreset(req.params.id, req.body);
+    res.json({ code: 200, data: preset });
+  } catch (err) { next(err); }
+};
+
+// 删除预设
+exports.deletePreset = async (req, res, next) => {
+  try {
+    await familyService.deletePreset(req.params.id);
+    res.json({ code: 200, msg: 'Deleted' });
+  } catch (err) { next(err); }
+};
+
+exports.updatePresetCategory = async (req, res) => {
+  const { oldCategory, newCategory } = req.body;
+  if (!oldCategory || !newCategory) return res.status(400).json({ msg: '参数不完整' });
+  
+  try {
+    await familyService.updatePresetCategory(oldCategory, newCategory);
+    res.json({ code: 200, msg: '分类已更新' });
+  } catch (err) {
+    console.error('updatePresetCategory 错误:', err);
+    res.status(500).json({ code: 500, msg: '更新失败' });
+  }
+};
+
+exports.deletePresetCategory = async (req, res) => {
+  const { category } = req.body;
+  if (!category) return res.status(400).json({ msg: '参数不完整' });
+
+  try {
+    await familyService.deletePresetCategory(category);
+    res.json({ code: 200, msg: '分类已删除，相关项已移至常规' });
+  } catch (err) {
+    console.error('deletePresetCategory 错误:', err);
+    res.status(500).json({ code: 500, msg: '删除失败' });
   }
 };

@@ -1,131 +1,336 @@
 <template>
-  <div class="member-wallet">
-    <!-- 成员选择器 -->
-    <div class="member-selector">
-      <div class="selector-tabs">
-        <router-link 
-          v-for="m in members" 
-          :key="m.id"
-          :to="`/family/member/${m.id}/wallet`"
-          class="selector-tab"
-          :class="{ active: m.id === currentMemberId }"
-        >
-          <span class="tab-avatar">{{ m.name?.charAt(0) || '?' }}</span>
-          <span class="tab-name">{{ m.name }}</span>
-        </router-link>
-      </div>
+  <div class="member-wallet-view h-full flex flex-col p-6 pt-4 box-border">
+
+    <div class="flex justify-end gap-3 mb-4 flex-none">
+      <button class="action-btn add" @click="openAdjustModal('add')">
+        <span class="text-lg mr-1">+</span> 奖励加分
+      </button>
+      <button class="action-btn deduct" @click="openAdjustModal('deduct')">
+        <span class="text-lg mr-1">-</span> 惩罚扣分
+      </button>
     </div>
 
-    <!-- 钱包概览 -->
-    <div class="wallet-overview" v-if="member">
-      <div class="member-header">
-        <div class="member-info">
-          <div class="member-avatar-large">{{ member.name?.charAt(0) || '?' }}</div>
-          <div class="member-details">
-            <h1>{{ member.name }} 的钱包</h1>
-            <p class="member-role">{{ member.role || '家庭成员' }}</p>
-          </div>
-        </div>
-        <div class="balance-card">
-          <div class="balance-label">当前积分</div>
-          <div class="balance-value">{{ balance }}</div>
-        </div>
-      </div>
+    <section
+      class="wallet-section flex-1 flex flex-col min-h-0 bg-[#151520] rounded-2xl border border-white/5 overflow-hidden">
 
-      <div class="wallet-actions">
-        <button class="action-btn add" @click="openAdjustModal('add')">+ 加分</button>
-        <button class="action-btn deduct" @click="openAdjustModal('deduct')">- 扣分</button>
-      </div>
-
-      <!-- 资产导航 -->
-      <nav class="asset-nav">
-        <router-link :to="`/family/member/${currentMemberId}/wallet`" class="asset-nav-item" exact-active-class="active">
-          <span class="nav-icon">💰</span>
-          <span>积分流水</span>
-        </router-link>
-        <router-link :to="`/family/member/${currentMemberId}/inventory`" class="asset-nav-item" active-class="active">
-          <span class="nav-icon">🎒</span>
-          <span>我的背包</span>
-        </router-link>
-        <router-link :to="`/family/member/${currentMemberId}/orders`" class="asset-nav-item" active-class="active">
-          <span class="nav-icon">📦</span>
-          <span>订单记录</span>
-        </router-link>
-        <router-link :to="`/family/member/${currentMemberId}/activity`" class="asset-nav-item" active-class="active">
-          <span class="nav-icon">📊</span>
-          <span>活动记录</span>
-        </router-link>
-      </nav>
-
-      <!-- 积分流水 -->
-      <section class="wallet-section">
-        <h2>
-          <span>📜</span>
-          积分流水
+      <div class="flex justify-between items-center p-3 border-b border-white/5 bg-[#1a1a2e] flex-none">
+        <h2 class="text-base font-bold flex items-center gap-2 text-white">
+          <span>📜</span> 积分流水
         </h2>
-        
-        <div class="filter-bar">
-          <select v-model="filter.reasonCode" @change="loadLogs" class="filter-select">
+        <div class="relative">
+          <select v-model="filter.reasonCode" @change="loadLogs"
+            class="filter-select appearance-none pl-3 pr-8 py-1 bg-[#252538] border border-white/10 rounded-lg text-xs text-gray-300 focus:border-blue-500 focus:outline-none transition-colors cursor-pointer hover:bg-[#2a2a40]">
             <option value="">全部类型</option>
-            <option value="reward">兑换</option>
-            <option value="bounty">悬赏</option>
-            <option value="auction">拍卖</option>
-            <option value="lottery">抽奖</option>
-            <option value="grant">发放</option>
-            <option value="refund">退款</option>
+            <option value="reward">🎁 兑换</option>
+            <option value="bounty">📜 悬赏</option>
+            <option value="auction">🔨 拍卖</option>
+            <option value="lottery">🎰 抽奖</option>
+            <option value="grant">🤲 发放</option>
+            <option value="refund">↩️ 退款</option>
+            <option value="manual">✍️ 手动</option>
           </select>
+          <div class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 text-xs">▼</div>
         </div>
+      </div>
 
-        <div class="logs-list" v-if="logs.length > 0">
-          <div v-for="log in logs" :key="log.id" class="log-item">
-            <div class="log-icon" :class="log.points_change > 0 ? 'income' : 'expense'">
-              {{ log.points_change > 0 ? '↗️' : '↘️' }}
+      <div class="logs-list flex-1 overflow-y-auto custom-scroll p-3">
+        <div v-if="logs.length > 0">
+          <div v-for="log in logs" :key="log.id"
+            class="log-item mb-1.5 flex items-center gap-3 px-3 py-2.5 bg-[#252538] rounded-xl border border-white/5 group relative overflow-hidden transition-all hover:bg-[#2a2a40] hover:border-white/10 hover:shadow-md">
+
+            <div class="log-icon w-8 h-8 rounded-full flex-none flex items-center justify-center text-sm shadow-inner"
+              :class="log.points_change > 0 ? 'bg-gradient-to-br from-green-400/20 to-emerald-600/20 text-green-400' : 'bg-gradient-to-br from-red-400/20 to-rose-600/20 text-red-400'">
+              {{ log.points_change > 0 ? '↗' : '↘' }}
             </div>
-            <div class="log-content">
-              <div class="log-desc">{{ log.description }}</div>
-              <div class="log-meta">
-                <span class="log-time">{{ formatTime(log.created_at) }}</span>
-                <span class="log-reason">{{ getReasonLabel(log.reason_code) }}</span>
+
+            <div class="log-content flex-1 min-w-0 flex flex-col justify-center">
+              <div class="text-[14px] font-bold text-gray-100 truncate pr-2 leading-tight">{{ log.description }}</div>
+              <div class="flex gap-2 mt-0.5 items-center">
+                <span class="text-[10px] text-gray-500 font-mono">{{ formatTime(log.created_at) }}</span>
+                <span class="text-[9px] px-1.5 py-0 rounded-full bg-white/5 text-gray-400 border border-white/5">{{
+                  getReasonLabel(log.reason_code) }}</span>
               </div>
             </div>
-            <div class="log-amount" :class="log.points_change > 0 ? 'income' : 'expense'">
-              {{ log.points_change > 0 ? '+' : '' }}{{ log.points_change }}
+
+            <div class="flex flex-col items-end gap-1 flex-none justify-center">
+              <div class="font-bold text-base tabular-nums tracking-tight leading-none"
+                :class="log.points_change > 0 ? 'text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-500' : 'text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-rose-500'">
+                {{ log.points_change > 0 ? '+' : '' }}{{ log.points_change }}
+              </div>
+
+              <button
+                class="modern-btn danger-soft opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0"
+                @click="handleRevoke(log)" title="撤销此记录">
+                撤销
+              </button>
+            </div>
+          </div>
+
+          <button v-if="hasMore" @click="loadMore"
+            class="w-full mt-3 py-2 bg-white/5 border border-white/5 rounded-lg text-xs text-gray-400 hover:bg-white/10 hover:text-white transition-all"
+            :disabled="loading">
+            {{ loading ? '加载中...' : '加载更多' }}
+          </button>
+        </div>
+
+        <div class="h-full flex flex-col items-center justify-center text-gray-500 pb-10" v-else>
+          <div class="text-4xl mb-3 opacity-30">📜</div>
+          <div class="text-sm">暂无积分流水记录</div>
+        </div>
+      </div>
+    </section>
+
+    <div
+      class="modal-overlay fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity"
+      v-if="showAdjustModal" @click.self="closeAdjustModal">
+      <div
+        class="modal-content bg-[#1e1e2d] border border-white/10 shadow-2xl p-0 rounded-3xl w-[90%] max-w-[440px] overflow-hidden transform transition-all scale-100">
+
+        <div class="px-6 py-5 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <span class="text-2xl">{{ adjustForm.type === 'add' ? '✨' : '⚠️' }}</span>
+            {{ adjustForm.type === 'add' ? '奖励加分' : '惩罚扣分' }}
+          </h3>
+          <div class="flex items-center gap-2">
+            <button @click="openManageModal" class="modern-btn small neutral">
+              <span>⚙️ 预设</span>
+            </button>
+            <button @click="closeAdjustModal"
+              class="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
+              <span class="text-lg leading-none">&times;</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="p-6">
+          <div class="presets-area mb-6">
+            <div class="flex justify-between items-center mb-3">
+              <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">快捷选择</span>
+              <div class="flex gap-2 overflow-x-auto no-scrollbar max-w-[70%] justify-end">
+                <button v-for="cat in presetCategories" :key="cat" @click="activeCategory = cat"
+                  class="text-[10px] px-2 py-0.5 rounded-full border transition-all whitespace-nowrap"
+                  :class="activeCategory === cat ? 'bg-white text-[#1e1e2d] border-white font-bold' : 'text-gray-500 border-white/10 hover:border-white/30'">
+                  {{ cat }}
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2.5 max-h-[190px] overflow-y-auto overflow-x-hidden custom-scroll pr-1">
+              <div v-for="preset in filteredPresets" :key="preset.id" @click="applyPreset(preset)"
+                class="cursor-pointer relative group p-3 rounded-xl border transition-all duration-200 flex flex-col items-center justify-center gap-1.5 text-center min-h-[80px]"
+                :class="adjustForm.reason === preset.label
+                  ? (adjustForm.type === 'add' ? 'bg-blue-500/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'bg-red-500/20 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)]')
+                  : 'bg-[#252538] border-transparent hover:bg-[#2a2a40] hover:border-white/10'">
+                <div class="text-2xl transform group-hover:scale-110 transition-transform">{{ preset.icon }}</div>
+                <div class="text-xs text-gray-300 font-medium truncate w-full px-1">{{ preset.label }}</div>
+                <div class="text-[9px] text-gray-500 absolute top-1 left-1.5 opacity-50">{{ preset.category || '常规' }}
+                </div>
+
+                <div class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-black/20 mt-1"
+                  :class="adjustForm.type === 'add' ? 'text-blue-400' : 'text-red-400'">
+                  {{ adjustForm.type === 'add' ? '+' : '-' }}{{ preset.points }}
+                </div>
+
+                <div v-if="adjustForm.reason === preset.label" class="absolute top-1 right-1 w-2 h-2 rounded-full"
+                  :class="adjustForm.type === 'add' ? 'bg-blue-400' : 'bg-red-400'"></div>
+              </div>
+
+              <div v-if="filteredPresets.length === 0"
+                class="col-span-3 py-8 flex flex-col items-center justify-center text-gray-500 border-2 border-dashed border-white/5 rounded-xl bg-white/[0.02]">
+                <span class="text-2xl mb-2">📭</span>
+                <span class="text-xs">该分类下暂无预设</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="relative flex items-center justify-center my-6">
+            <div class="absolute inset-0 flex items-center">
+              <div class="w-full border-t border-white/10"></div>
+            </div>
+            <span class="relative bg-[#1e1e2d] px-3 text-xs text-gray-500 uppercase tracking-widest font-medium">或
+              手动输入</span>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5 ml-1">积分数额</label>
+              <div class="relative">
+                <input type="number" v-model.number="adjustForm.points" min="1"
+                  class="w-[392px] max-w-full bg-[#252538] text-white text-base font-bold border border-white/10 rounded-xl px-3 py-2.5 pl-10 focus:ring-2 focus:border-transparent transition-all outline-none"
+                  :class="adjustForm.type === 'add' ? 'focus:ring-blue-500/50' : 'focus:ring-red-500/50'" />
+                <div class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-base">
+                  {{ adjustForm.type === 'add' ? '+' : '-' }}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5 ml-1">变动原因</label>
+              <input v-model="adjustForm.reason" placeholder="请输入原因..."
+                class="w-[392px] max-w-full bg-[#252538] text-white border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:border-transparent transition-all outline-none placeholder-gray-600"
+                :class="adjustForm.type === 'add' ? 'focus:ring-blue-500/50' : 'focus:ring-red-500/50'" />
+            </div>
+          </div>
+
+          <div class="flex gap-3 mt-8">
+            <button class="modern-btn neutral flex-1" @click="closeAdjustModal">
+              取消
+            </button>
+            <button class="modern-btn flex-[2]" :class="adjustForm.type === 'add' ? 'primary-blue' : 'primary-red'"
+              @click="submitAdjust" :disabled="adjusting">
+              <span v-if="adjusting"
+                class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></span>
+              {{ adjusting ? '提交中...' : '确认提交' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="modal-overlay fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] transition-opacity"
+      v-if="showManageModal" @click.self="closeManageModal">
+      <div
+        class="modal-content bg-[#1e1e2d] border border-white/10 shadow-2xl rounded-3xl w-[90%] max-w-[500px] h-[85vh] flex flex-col overflow-hidden">
+
+        <div class="px-6 py-4 border-b border-white/5 bg-white/[0.02] flex justify-between items-center flex-none">
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <span>⚙️</span> 管理快捷预设
+          </h3>
+          <button @click="closeManageModal"
+            class="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
+            <span class="text-lg leading-none">&times;</span>
+          </button>
+        </div>
+
+        <div class="px-6 pt-4 pb-2 flex-none flex flex-col gap-2">
+          <div class="flex gap-2 overflow-x-auto no-scrollbar">
+            <button v-for="cat in manageCategories" :key="cat" @click="activeManageCategory = cat"
+              class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap border" :class="activeManageCategory === cat
+                ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
+                : 'bg-[#252538] border-white/5 text-gray-400 hover:bg-[#32324a] hover:text-white'">
+              {{ cat }}
+            </button>
+          </div>
+
+          <div v-if="activeManageCategory !== '全部' && activeManageCategory !== '常规'"
+            class="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 px-3 py-2 rounded-lg">
+            <div class="text-xs text-blue-300">
+              当前分类：<span class="font-bold text-white">{{ activeManageCategory }}</span>
+            </div>
+            <div class="flex gap-2">
+              <button @click="renameCategory(activeManageCategory)"
+                class="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition-colors">
+                ✏️ 重命名
+              </button>
+              <button @click="deleteCategory(activeManageCategory)"
+                class="text-[10px] bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded transition-colors">
+                🗑️ 删除分类
+              </button>
             </div>
           </div>
         </div>
 
-        <div class="empty-state" v-else>
-          <p>暂无积分流水</p>
+        <div class="flex-1 overflow-y-auto custom-scroll px-4 pb-4 space-y-2.5 pt-2">
+          <div v-for="preset in filteredManagePresets" :key="preset.id"
+            class="flex items-center justify-between p-3.5 bg-[#252538] rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
+            <div class="flex items-center gap-4">
+              <span class="text-3xl bg-black/20 w-12 h-12 flex items-center justify-center rounded-lg">{{ preset.icon
+                }}</span>
+              <div>
+                <div class="font-bold text-sm text-gray-100">{{ preset.label }}</div>
+                <div class="text-xs mt-1 inline-flex items-center gap-1.5"
+                  :class="preset.type === 'add' ? 'text-blue-400' : 'text-red-400'">
+                  <span class="w-1.5 h-1.5 rounded-full"
+                    :class="preset.type === 'add' ? 'bg-blue-500' : 'bg-red-500'"></span>
+                  {{ preset.type === 'add' ? '加分' : '扣分' }} <span class="font-bold">{{ preset.points }}</span>
+                  <template v-if="activeManageCategory === '全部'">
+                    <span class="text-gray-600 mx-1">|</span>
+                    <span class="text-gray-500">{{ preset.category || '常规' }}</span>
+                  </template>
+                </div>
+              </div>
+            </div>
+            <div
+              class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
+              <button @click="editPreset(preset)"
+                class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 flex items-center justify-center transition-colors">✏️</button>
+              <button @click="deletePreset(preset.id)"
+                class="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 flex items-center justify-center transition-colors">🗑️</button>
+            </div>
+          </div>
+
+          <div v-if="filteredManagePresets.length === 0"
+            class="h-full flex flex-col items-center justify-center text-gray-500 opacity-50 py-10">
+            <span class="text-4xl mb-2">📝</span>
+            <span class="text-sm">此分类下暂无预设</span>
+          </div>
         </div>
 
-        <button v-if="hasMore" @click="loadMore" class="load-more-btn" :disabled="loading">
-          {{ loading ? '加载中...' : '加载更多' }}
-        </button>
-      </section>
-    </div>
+        <div class="bg-[#151520] p-5 flex-none border-t border-white/10">
+          <div class="flex items-center justify-between mb-4">
+            <div class="text-sm font-bold text-gray-200 flex items-center gap-2">
+              <span class="w-1 h-4 rounded-full bg-blue-500"></span>
+              {{ editingPreset ? '编辑预设' : '新增预设' }}
+            </div>
+            <button v-if="editingPreset" @click="resetPresetForm"
+              class="text-xs text-gray-500 hover:text-white underline">取消编辑</button>
+          </div>
 
-    <div class="loading-state" v-else-if="loading">
-      加载中...
-    </div>
+          <div class="grid grid-cols-4 gap-3 mb-3">
+            <div class="col-span-3">
+              <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1.5 ml-1">名称</label>
+              <input v-model="presetForm.label"
+                class="w-[calc(100%-20px)] p-2 bg-[#252538] border border-white/10 rounded-lg text-sm text-white focus:border-blue-500 outline-none transition-colors"
+                placeholder="如: 做家务" />
+            </div>
+            <div>
+              <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1.5 ml-1">图标</label>
+              <input v-model="presetForm.icon"
+                class="w-[calc(100%-20px)] p-2 bg-[#252538] border border-white/10 rounded-lg text-sm text-center text-white focus:border-blue-500 outline-none transition-colors"
+                placeholder="🧹" />
+            </div>
+          </div>
 
-    <!-- 加扣分弹窗 -->
-    <div class="modal-overlay" v-if="showAdjustModal" @click.self="closeAdjustModal">
-      <div class="modal-content">
-        <h3>{{ adjustForm.type === 'add' ? '加分' : '扣分' }}</h3>
-        <div class="form-group">
-          <label>积分值</label>
-          <input type="number" v-model.number="adjustForm.points" min="1" />
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1.5 ml-1">类型</label>
+              <select v-model="presetForm.type"
+                class="w-[calc(100%-20px)] p-2 bg-[#252538] border border-white/10 rounded-lg text-sm text-white focus:border-blue-500 outline-none transition-colors appearance-none">
+                <option value="add">➕ 奖励加分</option>
+                <option value="deduct">➖ 惩罚扣分</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1.5 ml-1">分值</label>
+              <input type="number" v-model.number="presetForm.points"
+                class="w-[calc(100%-20px)] p-2 bg-[#252538] border border-white/10 rounded-lg text-sm text-white focus:border-blue-500 outline-none transition-colors" />
+            </div>
+          </div>
+
+          <div class="mb-5">
+            <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1.5 ml-1">分类 (点击快速选择)</label>
+            <div class="flex gap-2 mb-2 overflow-x-auto no-scrollbar pb-1">
+              <button v-for="tag in ['学习', '生活', '习惯', '行为']" :key="tag" @click="presetForm.category = tag"
+                class="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-xs text-gray-400 border border-white/5 transition-colors whitespace-nowrap">
+                {{ tag }}
+              </button>
+            </div>
+            <input v-model="presetForm.category"
+              class="w-[calc(100%-20px)] p-2 bg-[#252538] border border-white/10 rounded-lg text-sm text-white focus:border-blue-500 outline-none transition-colors"
+              placeholder="输入自定义分类" />
+          </div>
+
+          <div class="flex gap-3">
+            <button v-if="editingPreset" @click="resetPresetForm" class="modern-btn neutral flex-1">
+              放弃
+            </button>
+            <button @click="savePreset" class="modern-btn primary-blue flex-[2]">
+              {{ editingPreset ? '保存修改' : '立即添加' }}
+            </button>
+          </div>
         </div>
-        <div class="form-group">
-          <label>原因（可选）</label>
-          <input v-model="adjustForm.reason" placeholder="例如：表现优秀" />
-        </div>
-        <div class="modal-actions">
-          <button class="cancel-btn" @click="closeAdjustModal">取消</button>
-          <button class="confirm-btn" @click="submitAdjust" :disabled="adjusting">
-            {{ adjusting ? '提交中...' : '确认' }}
-          </button>
-        </div>
+
       </div>
     </div>
   </div>
@@ -135,78 +340,229 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 const route = useRoute();
+const emit = defineEmits(['refresh-balance']);
 
-const members = ref([]);
-const member = ref(null);
-const balance = ref(0);
+// 基础状态
 const logs = ref([]);
 const loading = ref(false);
-const showAdjustModal = ref(false);
-const adjusting = ref(false);
-
-const adjustForm = ref({
-  type: 'add',
-  points: 1,
-  reason: '',
-});
 const hasMore = ref(true);
-
-const filter = ref({
-  reasonCode: '',
-});
-
-const pagination = ref({
-  offset: 0,
-  limit: 20,
-});
-
+const filter = ref({ reasonCode: '' });
+const pagination = ref({ offset: 0, limit: 20 });
 const currentMemberId = computed(() => parseInt(route.params.id));
 
-// 加载成员列表
-const loadMembers = async () => {
+// 操作弹窗状态
+const showAdjustModal = ref(false);
+const adjusting = ref(false);
+const adjustForm = ref({ type: 'add', points: 10, reason: '' });
+
+// 预设管理状态
+const allPresets = ref([]);
+const presetsLoading = ref(false);
+const showManageModal = ref(false);
+const editingPreset = ref(null);
+const presetForm = ref({ label: '', points: 10, type: 'add', icon: '🌟', category: '常规' });
+
+// 主窗口分类 Tabs
+const activeCategory = ref('全部');
+const presetCategories = computed(() => {
+  const cats = new Set(allPresets.value.filter(p => p.type === adjustForm.value.type).map(p => p.category || '常规'));
+  return ['全部', ...Array.from(cats)];
+});
+
+// 管理窗口分类 Tabs
+const activeManageCategory = ref('全部');
+const manageCategories = computed(() => {
+  const relevantPresets = allPresets.value.filter(p => p.type === adjustForm.value.type);
+  const cats = new Set(relevantPresets.map(p => p.category || '常规'));
+  return ['全部', ...Array.from(cats)];
+});
+
+// 主窗口筛选
+const filteredPresets = computed(() => {
+  return allPresets.value.filter(p => {
+    const typeMatch = p.type === adjustForm.value.type;
+    const catMatch = activeCategory.value === '全部' || (p.category || '常规') === activeCategory.value;
+    return typeMatch && catMatch;
+  });
+});
+
+// 管理窗口筛选
+const filteredManagePresets = computed(() => {
+  return allPresets.value.filter(p => {
+    if (p.type !== adjustForm.value.type) return false;
+    if (activeManageCategory.value === '全部') return true;
+    return (p.category || '常规') === activeManageCategory.value;
+  });
+});
+
+// ====== 撤销功能 ======
+const handleRevoke = async (log) => {
   try {
-    const res = await axios.get('/api/v2/family/members');
+    await ElMessageBox.confirm(
+      '确定要撤销这条积分记录吗？\n\n撤销后：\n1. 积分将自动回滚（加分变回扣分，扣分变回加分）\n2. 如果是兑换商品，关联的背包物品也会被收回',
+      '撤销确认',
+      {
+        confirmButtonText: '确定撤销',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger',
+        lockScroll: false
+      }
+    );
+
+    const res = await axios.post('/api/family/revoke', { logId: log.id });
+
     if (res.data?.code === 200) {
-      members.value = res.data.data?.members || [];
+      ElMessage.success('撤销成功，积分已回滚');
+      emit('refresh-balance');
+      await loadLogs(true);
     }
   } catch (err) {
-    console.error('加载成员列表失败:', err);
+    if (err !== 'cancel') {
+      console.error(err);
+      ElMessage.error(err.response?.data?.msg || '撤销失败');
+    }
   }
 };
 
-// 加载钱包信息
-const loadWallet = async () => {
-  if (!currentMemberId.value) return;
-  
-  loading.value = true;
+// ====== 预设管理逻辑 ======
+
+const loadPresets = async () => {
+  presetsLoading.value = true;
   try {
-    const res = await axios.get('/api/v2/wallet', {
-      params: { member_id: currentMemberId.value }
-    });
-    
+    const res = await axios.get('/api/family/presets');
     if (res.data?.code === 200) {
-      member.value = res.data.data?.member || {};
-      balance.value = res.data.data?.balance || 0;
+      allPresets.value = res.data.data || [];
     }
   } catch (err) {
-    console.error('加载钱包失败:', err);
+    console.error('加载预设失败', err);
   } finally {
-    loading.value = false;
+    presetsLoading.value = false;
   }
 };
 
-// 加载积分流水
+const openManageModal = () => {
+  resetPresetForm();
+  activeManageCategory.value = '全部';
+  showManageModal.value = true;
+};
+const closeManageModal = () => {
+  showManageModal.value = false;
+  loadPresets();
+};
+
+const resetPresetForm = () => {
+  editingPreset.value = null;
+  const defaultCat = activeManageCategory.value !== '全部' ? activeManageCategory.value : '常规';
+  presetForm.value = {
+    label: '',
+    points: 10,
+    type: adjustForm.value.type,
+    icon: '🌟',
+    category: defaultCat
+  };
+};
+
+const editPreset = (preset) => {
+  editingPreset.value = preset;
+  presetForm.value = { ...preset };
+};
+
+const savePreset = async () => {
+  if (!presetForm.value.label) return ElMessage.warning('请输入名称');
+
+  try {
+    if (editingPreset.value) {
+      await axios.put(`/api/family/presets/${editingPreset.value.id}`, presetForm.value);
+      ElMessage.success('修改成功');
+    } else {
+      await axios.post('/api/family/presets', presetForm.value);
+      ElMessage.success('添加成功');
+    }
+    await loadPresets();
+    resetPresetForm();
+  } catch (err) {
+    ElMessage.error(err.response?.data?.msg || '保存失败');
+  }
+};
+
+const deletePreset = async (id) => {
+  try {
+    await ElMessageBox.confirm('确定要删除这个预设吗？', '提示', {
+      type: 'warning',
+      lockScroll: false,
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      confirmButtonClass: 'el-button--danger'
+    });
+    await axios.delete(`/api/family/presets/${id}`);
+    ElMessage.success('已删除');
+    loadPresets();
+  } catch (e) {
+    // 取消
+  }
+};
+
+const renameCategory = async (oldName) => {
+  try {
+    const { value: newName } = await ElMessageBox.prompt('请输入新的分类名称', '重命名分类', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      inputValue: oldName,
+      lockScroll: false,
+    });
+
+    if (newName && newName !== oldName) {
+      await axios.put('/api/family/presets/category/update', { oldCategory: oldName, newCategory: newName });
+      ElMessage.success('重命名成功');
+      activeManageCategory.value = newName;
+      loadPresets();
+    }
+  } catch (e) {
+    // 取消
+  }
+};
+
+const deleteCategory = async (catName) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除分类【${catName}】吗？\n\n注意：该分类下的所有预设项将被移动到「常规」分类，不会被删除。`,
+      '删除分类',
+      {
+        type: 'warning',
+        lockScroll: false,
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger'
+      }
+    );
+
+    await axios.post('/api/family/presets/category/delete', { category: catName });
+    ElMessage.success('分类已删除');
+    activeManageCategory.value = '全部';
+    loadPresets();
+  } catch (e) {
+    // 取消
+  }
+};
+
+const applyPreset = (preset) => {
+  adjustForm.value.points = preset.points;
+  adjustForm.value.reason = preset.label;
+};
+
+// ====== 业务逻辑 ======
+
 const loadLogs = async (reset = true) => {
   if (!currentMemberId.value) return;
-  
   if (reset) {
     pagination.value.offset = 0;
     logs.value = [];
     hasMore.value = true;
   }
-  
   loading.value = true;
   try {
     const res = await axios.get('/api/v2/wallet/logs', {
@@ -217,7 +573,6 @@ const loadLogs = async (reset = true) => {
         reason_code: filter.value.reasonCode || undefined,
       }
     });
-    
     if (res.data?.code === 200) {
       const newLogs = res.data.data?.logs || [];
       logs.value = reset ? newLogs : [...logs.value, ...newLogs];
@@ -225,492 +580,208 @@ const loadLogs = async (reset = true) => {
       pagination.value.offset += newLogs.length;
     }
   } catch (err) {
-    console.error('加载流水失败:', err);
+    console.error(err);
   } finally {
     loading.value = false;
   }
 };
 
-// 加载更多
-const loadMore = () => {
-  loadLogs(false);
-};
-
-// 格式化时间
-const formatTime = (dateStr) => {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diff = now - date;
-  
-  if (diff < 60000) return '刚刚';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
-  
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-};
-
-// 获取原因标签
-const getReasonLabel = (code) => {
-  const labels = {
-    reward: '兑换',
-    bounty: '悬赏',
-    auction: '拍卖',
-    lottery: '抽奖',
-    grant: '发放',
-    refund: '退款',
-    escrow: '托管',
-    mystery_shop: '神秘商店',
-    mystery_shop_refresh: '商店刷新',
-    manual: '手动调整',
-  };
-  return labels[code] || code;
-};
-
-const openAdjustModal = (type) => {
-  adjustForm.value = {
-    type,
-    points: 1,
-    reason: '',
-  };
-  showAdjustModal.value = true;
-};
-
-const closeAdjustModal = () => {
-  showAdjustModal.value = false;
-  adjusting.value = false;
-};
+const loadMore = () => loadLogs(false);
 
 const submitAdjust = async () => {
   if (!currentMemberId.value) return;
-  if (!adjustForm.value.points || adjustForm.value.points <= 0) {
-    alert('请输入有效积分值');
-    return;
-  }
+  if (!adjustForm.value.points || adjustForm.value.points <= 0) return ElMessage.warning('积分必须大于0');
 
   adjusting.value = true;
   try {
-    const delta = adjustForm.value.type === 'add'
-      ? adjustForm.value.points
-      : -adjustForm.value.points;
+    const delta = adjustForm.value.type === 'add' ? adjustForm.value.points : -adjustForm.value.points;
     const title = adjustForm.value.reason || (delta > 0 ? '手动加分' : '手动扣分');
+
     const res = await axios.post('/api/family/action', {
       memberId: currentMemberId.value,
       points: delta,
       customTitle: title,
       reasonCode: 'manual',
     });
+
     if (res.data?.code === 200) {
       closeAdjustModal();
-      await loadWallet();
+      emit('refresh-balance');
       await loadLogs();
+      ElMessage.success('操作成功');
     }
   } catch (err) {
-    alert(err.response?.data?.msg || '操作失败');
+    ElMessage.error(err.response?.data?.msg || '操作失败');
   } finally {
     adjusting.value = false;
   }
 };
 
-// 监听路由变化
-watch(() => route.params.id, () => {
-  if (route.params.id) {
-    loadWallet();
-    loadLogs();
+const openAdjustModal = (type) => {
+  adjustForm.value = { type, points: 10, reason: '' };
+  activeCategory.value = '全部';
+  showAdjustModal.value = true;
+  if (allPresets.value.length === 0) {
+    loadPresets();
   }
-}, { immediate: true });
+};
 
-onMounted(() => {
-  loadMembers();
-});
+const closeAdjustModal = () => { showAdjustModal.value = false; adjusting.value = false; };
+
+const formatTime = (dateStr) => {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+const getReasonLabel = (code) => {
+  const map = { reward: '兑换', bounty: '悬赏', auction: '拍卖', lottery: '抽奖', manual: '手动', refund: '退款' };
+  return map[code] || code;
+};
+
+watch(() => route.params.id, (newId) => {
+  if (newId) loadLogs();
+}, { immediate: true });
 </script>
 
 <style scoped>
-.member-wallet {
-  color: #fff;
-}
-
-/* 成员选择器 */
-.member-selector {
-  margin-bottom: 24px;
-}
-
-.selector-tabs {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.selector-tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 24px;
-  text-decoration: none;
-  color: rgba(255, 255, 255, 0.7);
-  transition: all 0.3s ease;
-}
-
-.selector-tab:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.selector-tab.active {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: #fff;
-  border-color: transparent;
-}
-
-.tab-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-}
-
-.selector-tab.active .tab-avatar {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.tab-name {
-  font-size: 14px;
-}
-
-/* 钱包概览 */
-.wallet-overview {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 20px;
-  padding: 24px;
-}
-
-.member-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.member-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.member-avatar-large {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.member-details h1 {
-  font-size: 24px;
-  font-weight: 600;
-  margin: 0 0 4px;
-}
-
-.member-role {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.5);
-  margin: 0;
-}
-
-.balance-card {
-  background: linear-gradient(135deg, #ffd700, #ff9500);
-  padding: 16px 32px;
-  border-radius: 16px;
-  text-align: center;
-}
-
-.wallet-actions {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
+/* 原有的 action-btn 样式 */
 .action-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+  filter: brightness(1.1);
+}
+
+.action-btn:active {
+  transform: translateY(0);
 }
 
 .action-btn.add {
-  background: linear-gradient(135deg, #38ef7d, #11998e);
-  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border: 1px solid rgba(59, 130, 246, 0.5);
 }
 
 .action-btn.deduct {
-  background: linear-gradient(135deg, #ff6b6b, #ee5253);
-  color: #fff;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: 1px solid rgba(239, 68, 68, 0.5);
 }
 
-.balance-label {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 4px;
-}
-
-.balance-value {
-  font-size: 32px;
-  font-weight: 700;
-  color: #000;
-}
-
-/* 资产导航 */
-.asset-nav {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-}
-
-.asset-nav-item {
+/* 新增：通用现代按钮样式 (Modern Button) */
+.modern-btn {
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  text-decoration: none;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 14px;
-  transition: all 0.3s ease;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  border: 1px solid transparent;
 }
 
-.asset-nav-item:hover {
+.modern-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.modern-btn:active {
+  transform: translateY(0);
+}
+
+.modern-btn.primary-blue {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+}
+
+.modern-btn.primary-red {
+  color: #fff;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
+}
+
+.modern-btn.neutral {
+  color: #9ca3af;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.modern-btn.neutral:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-.asset-nav-item.active {
-  background: rgba(102, 126, 234, 0.2);
-  border-color: rgba(102, 126, 234, 0.5);
-  color: #fff;
+.modern-btn.small {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
 }
 
-.nav-icon {
-  font-size: 16px;
+/* 🟢 新增：撤销按钮专用样式 (Soft Danger) */
+.modern-btn.danger-soft {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 6px;
+  height: auto;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.1);
 }
 
-/* 流水列表 */
-.wallet-section {
-  margin-top: 24px;
-}
-
-.wallet-section h2 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 16px;
-}
-
-.filter-bar {
-  margin-bottom: 16px;
+.modern-btn.danger-soft:hover {
+  background: #ef4444;
+  color: white;
+  border-color: #ef4444;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
 .filter-select {
-  padding: 8px 16px;
+  outline: none;
+}
+
+/* 自定义滚动条 */
+.custom-scroll {
+  overflow-x: hidden;
+}
+
+.custom-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
+  border-radius: 2px;
 }
 
-.filter-select option {
-  background: #1a1a2e;
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
-.logs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* 隐藏横向滚动条但保留滚动功能 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
-.log-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 12px;
-  transition: background 0.3s ease;
-}
-
-.log-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.log-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-}
-
-.log-icon.income {
-  background: rgba(56, 239, 125, 0.2);
-}
-
-.log-icon.expense {
-  background: rgba(255, 77, 77, 0.2);
-}
-
-.log-content {
-  flex: 1;
-}
-
-.log-desc {
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.log-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.log-reason {
-  padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-
-.log-amount {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.log-amount.income {
-  color: #38ef7d;
-}
-
-.log-amount.expense {
-  color: #ff4d4d;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.load-more-btn {
-  width: 100%;
-  padding: 12px;
-  margin-top: 16px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.load-more-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.load-more-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.loading-state {
-  text-align: center;
-  padding: 40px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #1a1a2e;
-  padding: 24px;
-  border-radius: 16px;
-  width: 90%;
-  max-width: 420px;
-}
-
-.form-group {
-  margin-bottom: 12px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 6px;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-}
-
-.form-group input {
-  width: 100%;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.cancel-btn,
-.confirm-btn {
-  flex: 1;
-  padding: 10px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-}
-
-.cancel-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.confirm-btn {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: #fff;
-  font-weight: 600;
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 </style>

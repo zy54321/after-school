@@ -63,38 +63,23 @@
     </div>
 
     <!-- 统一成员选择器 - 购买 -->
-    <MemberSelector
-      v-model:visible="showMemberSelector"
-      title="选择购买成员"
+    <MemberSelector v-model:visible="showMemberSelector" title="选择购买成员"
       :action-description="selectedOffer ? `限时特惠：${selectedOffer.sku_name}（${selectedOffer.cost} 积分）` : ''"
-      action-icon="✨"
-      confirm-text="确认购买"
-      :required-balance="selectedOffer?.cost || 0"
-      :require-balance="true"
-      :loading="purchasing"
-      @confirm="handleMemberConfirm"
-      @cancel="closeMemberSelector"
-    />
+      action-icon="✨" confirm-text="确认购买" :required-balance="selectedOffer?.cost || 0" :require-balance="true"
+      :loading="purchasing" @confirm="handleMemberConfirm" @cancel="closeMemberSelector" />
 
     <!-- 统一成员选择器 - 付费刷新 -->
-    <MemberSelector
-      v-model:visible="showRefreshSelector"
-      title="选择付款成员"
-      :action-description="`刷新神秘商店（${shopConfig.refreshCost} 积分）`"
-      action-icon="🔄"
-      confirm-text="确认刷新"
-      :required-balance="shopConfig.refreshCost"
-      :require-balance="true"
-      :loading="refreshing"
-      @confirm="handleRefreshConfirm"
-      @cancel="closeRefreshSelector"
-    />
+    <MemberSelector v-model:visible="showRefreshSelector" title="选择付款成员"
+      :action-description="`刷新神秘商店（${shopConfig.refreshCost} 积分）`" action-icon="🔄" confirm-text="确认刷新"
+      :required-balance="shopConfig.refreshCost" :require-balance="true" :loading="refreshing"
+      @confirm="handleRefreshConfirm" @cancel="closeRefreshSelector" />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
+import { ElMessageBox } from 'element-plus';
 import MemberSelector from '../../components/MemberSelector.vue';
 
 const loading = ref(false);
@@ -123,21 +108,21 @@ const updateCountdown = () => {
     countdown.value = '--:--:--';
     return;
   }
-  
+
   const now = new Date();
   const expires = new Date(rotation.value.expires_at);
   const diff = expires - now;
-  
+
   if (diff <= 0) {
     countdown.value = '已过期';
     loadShop();
     return;
   }
-  
+
   const hours = Math.floor(diff / 3600000);
   const minutes = Math.floor((diff % 3600000) / 60000);
   const seconds = Math.floor((diff % 60000) / 1000);
-  
+
   countdown.value = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
@@ -146,7 +131,7 @@ const loadShop = async () => {
   loading.value = true;
   try {
     const res = await axios.get('/api/v2/mystery-shop');
-    
+
     if (res.data?.code === 200) {
       const data = res.data.data;
       rotation.value = data.rotation;
@@ -165,13 +150,43 @@ const loadShop = async () => {
 
 // 刷新商店
 const refreshShop = async () => {
+  // 1. 安全检查：是否有未购买的低价好物
+  const hasGoodDeal = offers.value.some(o => {
+    // 逻辑：尚未购买满限额 且 (折扣率低于0.8)
+    // 注意：后端返回的字段如果是 camelCase 需要调整，这里假设与 API 一致
+    const purchaseCount = o.purchase_count || 0;
+    const limit = o.limit_per_member || 1;
+    const isUnbought = purchaseCount < limit;
+
+    // 如果有 discount_rate 字段，且小于 0.8 (8折)
+    const isCheap = o.discount_rate && o.discount_rate < 0.8;
+    return isUnbought && isCheap;
+  });
+
+  if (hasGoodDeal) {
+    try {
+      await ElMessageBox.confirm(
+        '当前货架还有低折扣商品未购买，刷新后将无法找回，确定要刷新吗？',
+        '高能预警',
+        {
+          confirmButtonText: '狠心刷新',
+          cancelButtonText: '再看看',
+          type: 'warning',
+          center: true
+        }
+      );
+    } catch (e) {
+      return; // 用户点击取消，终止刷新
+    }
+  }
+
+  // 2. 检查付费逻辑 (保持原有逻辑)
   if (!shopConfig.value.canFreeRefresh) {
-    // 付费刷新需要选择成员
     showRefreshSelector.value = true;
     return;
   }
-  
-  // 免费刷新直接执行
+
+  // 3. 免费刷新直接执行
   await doRefresh(null, true);
 };
 
@@ -183,7 +198,7 @@ const doRefresh = async (memberId, isFree) => {
       member_id: memberId || undefined,
       is_free: isFree,
     });
-    
+
     if (res.data?.code === 200) {
       await loadShop();
       showRefreshSelector.value = false;
@@ -220,7 +235,7 @@ const closeMemberSelector = () => {
 // 成员确认后执行购买
 const handleMemberConfirm = async ({ memberId }) => {
   if (!selectedOffer.value) return;
-  
+
   purchasing.value = true;
   try {
     const res = await axios.post('/api/v2/orders', {
@@ -229,7 +244,7 @@ const handleMemberConfirm = async ({ memberId }) => {
       quantity: 1,
       idempotency_key: `mystery_${selectedOffer.value.id}_${memberId}_${Date.now()}`,
     });
-    
+
     if (res.data?.code === 200) {
       alert('购买成功！');
       showMemberSelector.value = false;
@@ -347,8 +362,13 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 倒计时 */
@@ -483,7 +503,8 @@ onUnmounted(() => {
 }
 
 /* 空状态 & 加载 */
-.empty-state, .loading-state {
+.empty-state,
+.loading-state {
   text-align: center;
   padding: 60px 20px;
   color: rgba(255, 255, 255, 0.5);

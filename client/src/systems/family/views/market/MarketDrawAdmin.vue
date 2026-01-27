@@ -272,15 +272,60 @@ const submitPool = async () => {
   }
 };
 
-const openVersionModal = (pool) => {
+const openVersionModal = async (pool) => {
   currentPoolId.value = pool.id;
+  
+  // 1. 先重置表单
   versionForm.value = {
     prizesText: '',
     prizeRows: [],
     min_guarantee_count: null,
     guarantee_prize_id: null,
   };
-  showVersionModal.value = true;
+
+  // 2. 尝试获取该 Pool 的最新版本详情（如果列表接口没返回详情，可能需要单独 fetch）
+  // 这里假设我们需要单独获取详情来确保拿到 prizes
+  loading.value = true;
+  try {
+    // 假设后端有 GET /api/v2/draw/pools/:id 接口返回详情
+    const res = await axios.get(`/api/v2/draw/pools/${pool.id}`);
+    if (res.data?.code === 200 && res.data.data?.version) {
+      const version = res.data.data.version;
+      const prizes = version.prizes || [];
+      
+      // 回填保底设置
+      versionForm.value.min_guarantee_count = version.min_guarantee_count;
+      versionForm.value.guarantee_prize_id = version.guarantee_prize_id;
+
+      // 回填奖品列表 (优先转为 Rows 用于 UI 编辑)
+      const rows = [];
+      const leftoverPrizes = [];
+
+      prizes.forEach(p => {
+        if (p.type === 'sku' && p.sku_id) {
+          rows.push({
+            sku_id: p.sku_id,
+            quantity: p.value || 1,
+            weight: p.weight || 10
+          });
+        } else {
+          leftoverPrizes.push(p);
+        }
+      });
+
+      versionForm.value.prizeRows = rows;
+      
+      // 如果有非 SKU 的奖品，或者是手动填写的 JSON，回填到 Text 区域
+      if (leftoverPrizes.length > 0) {
+        versionForm.value.prizesText = JSON.stringify(leftoverPrizes, null, 2);
+      }
+    }
+  } catch (e) {
+    console.error('获取奖池详情失败', e);
+  } finally {
+    loading.value = false;
+    showVersionModal.value = true;
+  }
 };
 
 const closeVersionModal = () => {

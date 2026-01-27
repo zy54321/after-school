@@ -48,46 +48,69 @@ const canSpin = computed(() => {
 const wheelSectors = computed(() => {
   const prizes = poolDetail.value?.version?.prizes || [];
   if (prizes.length === 0) return [];
-  const sectorAngle = 360 / prizes.length;
-  const gapAngle = sectorAngle >= 15 ? 2 : sectorAngle >= 8 ? 1 : 0;
-  const span = sectorAngle - gapAngle;
-  let current = 0;
-  return prizes.map((prize, index) => {
-    const angleMid = current + span / 2;
+
+  // 1. 计算总权重
+  const totalWeight = prizes.reduce((sum, p) => sum + (p.weight || 1), 0);
+  
+  // 2. 计算每个奖品的角度
+  const MIN_ANGLE = 15; // 最小扇区角度，防止看不见
+  let availableAngle = 360;
+  let rawSlices = prizes.map((p, index) => {
+    const weight = p.weight || 1;
+    // 理论角度
+    const rawAngle = totalWeight > 0 ? (weight / totalWeight) * 360 : (360 / prizes.length);
+    return { ...p, rawAngle, index, isSmall: rawAngle < MIN_ANGLE };
+  });
+
+  // 3. 调整角度 (简单的保底逻辑：如果小于MIN_ANGLE，强制设为MIN_ANGLE，然后压缩其他扇区)
+  // 为了简化，这里使用一种“加权+保底”的混合算法
+  const smallCount = rawSlices.filter(s => s.isSmall).length;
+  const largeSlices = rawSlices.filter(s => !s.isSmall);
+  
+  // 给小扇区分配固定角度
+  const reservedAngle = smallCount * MIN_ANGLE;
+  
+  // 剩余角度按权重分配给大扇区
+  const remainingAngle = 360 - reservedAngle;
+  const largeTotalWeight = largeSlices.reduce((sum, p) => sum + (p.weight || 1), 0);
+
+  let currentStart = 0;
+  const sectors = rawSlices.map((item) => {
+    let finalAngle;
+    if (item.isSmall) {
+      finalAngle = MIN_ANGLE;
+    } else {
+      finalAngle = (item.weight / largeTotalWeight) * remainingAngle;
+    }
+
+    const angleMid = currentStart + finalAngle / 2;
     const sector = {
-      key: `${prize.id || index}-${index}`,
-      prize,
-      angleStart: current,
-      angleSpan: span,
-      angleMid,
+      key: `${item.id || item.index}-${item.index}`,
+      prize: item,
+      angleStart: currentStart,
+      angleSpan: finalAngle,
+      angleMid: angleMid, 
     };
-    current += span + gapAngle;
+    currentStart += finalAngle;
     return sector;
   });
+
+  return sectors;
 });
 
 const wheelBackground = computed(() => {
-  const prizes = poolDetail.value?.version?.prizes || [];
-  if (prizes.length === 0) {
+  const sectors = wheelSectors.value;
+  if (sectors.length === 0) {
     return 'conic-gradient(#2f2f3a 0deg 360deg)';
   }
-  const sectorAngle = 360 / prizes.length;
-  const gapAngle = sectorAngle >= 15 ? 2 : sectorAngle >= 8 ? 1 : 0;
-  const span = sectorAngle - gapAngle;
-  let current = 0;
+
   const parts = [];
-  prizes.forEach((_, index) => {
-    const color = getPrizeColor(index, prizes.length);
-    const start = current;
-    const end = current + span;
-    parts.push(`${color} ${start}deg ${end}deg`);
-    current = end;
-    if (gapAngle > 0) {
-      parts.push(`rgba(0,0,0,0.2) ${current}deg ${current + gapAngle}deg`);
-      current += gapAngle;
-    }
+  sectors.forEach((sector, index) => {
+    const color = getPrizeColor(index, sectors.length);
+    parts.push(`${color} ${sector.angleStart}deg ${sector.angleStart + sector.angleSpan}deg`);
   });
-  return `conic-gradient(from -90deg, ${parts.join(', ')})`;
+  
+  return `conic-gradient(from 0deg, ${parts.join(', ')})`;
 });
 
 // ========== API 调用 ==========

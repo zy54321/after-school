@@ -101,17 +101,17 @@ exports.getMemberTotalPoints = async (memberId) => {
  */
 exports.getMemberPointsHistory = async (memberId, options = {}) => {
   const { startDate, endDate, limit = 50 } = options;
-  
+
   let query = 'SELECT * FROM family_points_log WHERE member_id = $1';
   const params = [memberId];
-  
+
   if (startDate && endDate) {
     query += ' AND created_at >= $2 AND created_at <= $3 ORDER BY created_at DESC';
     params.push(startDate, endDate);
   } else {
     query += ` ORDER BY created_at DESC LIMIT ${limit}`;
   }
-  
+
   const result = await pool.query(query, params);
   return result.rows;
 };
@@ -566,4 +566,65 @@ exports.getUsageHistory = async (memberId, rewardId = null, limit = 50) => {
 
   const result = await pool.query(query, params);
   return result.rows;
+};
+
+// ========== ✅ 新增：预设管理 (Presets) ==========
+
+/**
+ * 获取所有预设
+ */
+exports.getPresets = async () => {
+  // 按分类和ID排序，让同类聚在一起
+  const result = await pool.query('SELECT * FROM family_point_presets ORDER BY category, id ASC');
+  return result.rows;
+};
+
+/**
+ * 创建预设
+ */
+exports.createPreset = async (label, points, type, icon, category) => {
+  const result = await pool.query(
+    'INSERT INTO family_point_presets (label, points, type, icon, category) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+    [label, points, type, icon, category || '常规']
+  );
+  return result.rows[0];
+};
+
+/**
+ * 更新预设
+ */
+exports.updatePreset = async (id, label, points, type, icon, category) => {
+  const result = await pool.query(
+    'UPDATE family_point_presets SET label=$1, points=$2, type=$3, icon=$4, category=$5 WHERE id=$6 RETURNING *',
+    [label, points, type, icon, category || '常规', id]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 删除预设
+ */
+exports.deletePreset = async (id) => {
+  await pool.query('DELETE FROM family_point_presets WHERE id=$1', [id]);
+  return true;
+};
+
+/**
+ * 批量更新预设分类 (重命名)
+ */
+exports.updatePresetCategory = async (oldCategory, newCategory) => {
+  await pool.query(
+    'UPDATE family_point_presets SET category = $1 WHERE category = $2',
+    [newCategory, oldCategory]
+  );
+};
+
+/**
+ * 删除预设分类 (实际上是将该分类下的所有项移动到 '常规')
+ */
+exports.deletePresetCategory = async (category) => {
+  await pool.query(
+    "UPDATE family_point_presets SET category = '常规' WHERE category = $1",
+    [category]
+  );
 };

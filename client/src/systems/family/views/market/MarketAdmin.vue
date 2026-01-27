@@ -1,93 +1,84 @@
 <template>
-  <div class="market-admin">
-    <!-- 面包屑 -->
-    <nav class="breadcrumb">
+  <div class="market-admin h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+    <nav class="breadcrumb flex-none p-4 bg-[#1a1a2e]">
       <router-link to="/family/market">市场</router-link>
       <span class="separator">/</span>
       <span class="current">市场管理</span>
     </nav>
 
-    <header class="page-header">
+    <header
+      class="page-header flex-none px-4 pb-4 bg-[#1a1a2e] border-b border-white/10 flex justify-between items-center">
       <div class="header-left">
-        <h1>
-          <span class="header-icon">🧩</span>
-          市场管理
+        <h1 class="text-xl font-bold flex items-center gap-2">
+          <span class="header-icon">🧩</span> 市场管理
         </h1>
-        <p>管理 SKU 与 Offer（家庭级配置）</p>
+        <p class="text-sm text-gray-400 m-0">管理 SKU 与 Offer</p>
+      </div>
+      <div class="flex gap-2">
+        <router-link to="/family/market/admin/draw" class="quick-btn">🎰 抽奖管理</router-link>
+        <router-link to="/family/market/admin/auction" class="quick-btn">🔨 拍卖管理</router-link>
       </div>
     </header>
 
-    <div class="section">
-      <div class="section-header">
-        <h2>SKU 列表</h2>
-        <button class="primary-btn" @click="openSkuModal()">+ 新建 SKU</button>
-      </div>
-      <div class="table" v-if="skus.length > 0">
-        <div class="table-row header offer-row">
-          <div>名称</div>
-          <div>类型</div>
-          <div>来源</div>
-          <div>基础价格</div>
-          <div>状态</div>
-          <div>操作</div>
+    <div class="flex flex-1 overflow-hidden p-4 gap-4">
+
+      <div class="flex flex-col w-2/5 bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+        <div class="p-3 border-b border-white/10 flex justify-between items-center bg-white/5">
+          <h2 class="text-lg font-bold m-0">📦 SKU 库</h2>
+          <button class="primary-btn text-xs px-2 py-1" @click="openSkuModal()">+ 新建</button>
         </div>
-        <div class="table-row" v-for="sku in skus" :key="sku.id">
-          <div>{{ sku.name }}</div>
-          <div>{{ sku.type }}</div>
-          <div>{{ formatSourceLabel(sku) }}</div>
-          <div>{{ sku.base_cost }}</div>
-          <div>{{ sku.is_active ? '启用' : '停用' }}</div>
-          <div class="actions">
-            <button class="link-btn" :disabled="sku.parent_id === 0" @click="openSkuModal(sku)">编辑</button>
-            <button class="link-btn danger" :disabled="sku.parent_id === 0" @click="deactivateSku(sku)">停用</button>
+
+        <div class="flex-1 overflow-y-auto p-2 space-y-2">
+          <div v-if="skus.length === 0" class="text-center text-gray-500 py-4">暂无 SKU</div>
+          <div v-for="sku in skus" :key="sku.id"
+            class="p-3 rounded bg-white/5 hover:bg-white/10 border border-transparent hover:border-blue-500/50 transition-all cursor-pointer group"
+            @click="openSkuModal(sku)">
+            <div class="flex justify-between items-start mb-1">
+              <span class="font-bold text-sm">{{ sku.name }}</span>
+              <span class="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">{{ sku.type }}</span>
+            </div>
+            <div class="text-xs text-gray-400 flex justify-between items-center">
+              <span>💰 基价: {{ sku.base_cost }}</span>
+              <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="text-blue-300 hover:text-blue-200" @click.stop="openSkuModal(sku)">编辑</button>
+                <button class="text-red-300 hover:text-red-200" @click.stop="deactivateSku(sku)">停用</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-      <div class="empty" v-else-if="!loading">暂无 SKU</div>
-    </div>
 
-    <div class="section">
-      <div class="section-header">
-        <h2>Offer 列表</h2>
-        <button class="primary-btn" @click="openOfferModal()">+ 新建 Offer</button>
-      </div>
-      <div class="table" v-if="offers.length > 0">
-        <div class="table-row header">
-          <div>SKU</div>
-          <div>来源</div>
-          <div>价格</div>
-          <div>数量</div>
-          <div>有效期</div>
-          <div>状态</div>
-          <div>操作</div>
+      <div class="flex flex-col w-3/5 bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+        <div class="p-3 border-b border-white/10 flex justify-between items-center bg-white/5">
+          <h2 class="text-lg font-bold m-0">🏷️ 上架商品 (Offers)</h2>
+          <button class="primary-btn text-xs px-2 py-1" @click="openOfferModal()">+ 新建</button>
         </div>
-        <div class="table-row offer-row" v-for="offer in offers" :key="offer.id">
-          <div>{{ offer.sku_name }}</div>
-          <div>{{ formatOfferSource(offer) }}</div>
-          <div>{{ offer.cost }}</div>
-          <div>{{ offer.quantity }}</div>
-          <div>{{ formatDateRange(offer.valid_from, offer.valid_until) }}</div>
-          <div>{{ offer.is_active ? '启用' : '停用' }}</div>
-          <div class="actions">
-            <button class="link-btn" @click="openOfferModal(offer)">编辑</button>
-            <button class="link-btn danger" @click="deactivateOffer(offer)">停用</button>
+
+        <div class="flex-1 overflow-y-auto p-2 space-y-2">
+          <div v-if="offers.length === 0" class="text-center text-gray-500 py-4">暂无 Offer</div>
+          <div v-for="offer in offers" :key="offer.id"
+            class="p-3 rounded bg-white/5 border border-white/10 flex items-center justify-between hover:bg-white/10 transition-colors">
+            <div class="flex-1 min-w-0 mr-4">
+              <div class="font-bold text-base truncate">{{ offer.sku_name }}</div>
+              <div class="text-xs text-gray-400 mt-1">
+                有效期: {{ formatDateRange(offer.valid_from, offer.valid_until) }}
+              </div>
+            </div>
+            <div class="text-right mr-4 flex-shrink-0">
+              <div class="text-lg font-bold text-yellow-400">{{ offer.cost }} <span
+                  class="text-xs text-gray-500">分</span></div>
+              <div class="text-xs text-gray-400">数量: {{ offer.quantity }}</div>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <button class="text-blue-300 p-1 hover:bg-white/10 rounded" @click="openOfferModal(offer)">✏️</button>
+              <button class="text-red-300 p-1 hover:bg-white/10 rounded" @click="deactivateOffer(offer)">🚫</button>
+            </div>
           </div>
         </div>
       </div>
-      <div class="empty" v-else-if="!loading">暂无 Offer</div>
+
     </div>
 
-    <div class="section quick-links">
-      <h2>其他管理</h2>
-      <div class="link-grid">
-        <router-link to="/family/market/admin/draw" class="link-card">🎰 抽奖池管理</router-link>
-        <router-link to="/family/market/admin/auction" class="link-card">🔨 拍卖场次管理</router-link>
-      </div>
-    </div>
-
-    <div class="loading-state" v-if="loading">加载中...</div>
-
-    <!-- SKU 弹窗 -->
     <div class="modal-overlay" v-if="showSkuModal" @click.self="closeSkuModal">
       <div class="modal-content">
         <h3>{{ skuForm.id ? '编辑 SKU' : '新建 SKU' }}</h3>
@@ -168,7 +159,6 @@
       </div>
     </div>
 
-    <!-- Offer 弹窗 -->
     <div class="modal-overlay" v-if="showOfferModal" @click.self="closeOfferModal">
       <div class="modal-content">
         <h3>{{ offerForm.id ? '编辑 Offer' : '新建 Offer' }}</h3>
@@ -466,7 +456,6 @@ const formatSourceLabel = (sku) => {
 }
 
 .breadcrumb {
-  margin-bottom: 24px;
   font-size: 14px;
 }
 
@@ -480,109 +469,29 @@ const formatSourceLabel = (sku) => {
   color: rgba(255, 255, 255, 0.4);
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.page-header p {
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0;
-}
-
-.section {
-  margin-bottom: 32px;
-}
-
-.quick-links .link-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.link-card {
-  display: block;
-  padding: 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.quick-btn {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 12px;
   color: #fff;
   text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+.quick-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .primary-btn {
-  padding: 8px 14px;
-  border: none;
-  border-radius: 8px;
   background: linear-gradient(135deg, #667eea, #764ba2);
   color: #fff;
-  cursor: pointer;
-}
-
-.table {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.table-row {
-  display: grid;
-  grid-template-columns: 1.2fr 0.7fr 1fr 0.7fr 0.7fr 0.8fr;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.table-row.offer-row {
-  grid-template-columns: 1.2fr 0.8fr 0.8fr 0.6fr 1fr 0.7fr 0.8fr;
-}
-
-.table-row.header {
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.actions {
-  display: flex;
-  gap: 10px;
-}
-
-.link-btn {
-  background: none;
   border: none;
-  color: #8ab4f8;
+  border-radius: 6px;
   cursor: pointer;
 }
 
-.link-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.link-btn.danger {
-  color: #ff6b6b;
-}
-
-.empty {
-  padding: 16px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.loading-state {
-  text-align: center;
-  padding: 20px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
+/* 弹窗样式复用原有的即可，以下为必须的基础样式 */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -632,30 +541,38 @@ const formatSourceLabel = (sku) => {
   margin-top: 16px;
 }
 
-.cancel-btn,
+.cancel-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+}
+
 .confirm-btn {
   flex: 1;
   padding: 10px;
   border-radius: 8px;
   border: none;
-  cursor: pointer;
-}
-
-.cancel-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.confirm-btn {
   background: linear-gradient(135deg, #667eea, #764ba2);
   color: #fff;
   font-weight: 600;
+  cursor: pointer;
 }
 
-@media (max-width: 768px) {
-  .table-row {
-    grid-template-columns: 1fr 1fr;
-    grid-auto-rows: auto;
-  }
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
 }
 </style>

@@ -14,6 +14,12 @@ router.post('/revoke', controller.revokeLog);
 // 🟢 新增：竞拍结算
 router.post('/auction/settle', controller.settleAuction);
 
+// 🟢 新增：预设管理 (Presets)
+router.get('/presets', controller.getPresets);
+router.post('/presets', controller.createPreset);
+router.put('/presets/:id', controller.updatePreset);
+router.delete('/presets/:id', controller.deletePreset);
+
 // 规则管理
 router.post('/create', controller.createItem);
 router.post('/update', controller.updateItem);
@@ -35,6 +41,8 @@ router.post(
   controller.updateMember
 );
 router.post('/member/delete', controller.deleteMember);
+router.put('/presets/category/update', controller.updatePresetCategory);
+router.post('/presets/category/delete', controller.deletePresetCategory);
 
 // 🎒 背包功能
 router.get('/backpack', controller.getBackpack);

@@ -2,10 +2,12 @@ import { createRouter, createWebHistory } from 'vue-router';
 import axios from 'axios';
 import { PERMISSIONS } from '@/constants/permissions';
 
-// 引入布局组件（新结构）
+// 引入布局组件
 import PortalLayout from '../portal/layout/PortalLayout.vue';
 import EducationLayout from '../systems/education/layout/EducationLayout.vue';
 import AnalyticsLayout from '../systems/analytics/layout/AnalyticsLayout.vue';
+// ✅ 新增：引入 MemberLayout 布局组件
+import MemberLayout from '../systems/family/layout/MemberLayout.vue';
 
 // ========== Session 校验缓存 ==========
 // 缓存有效期：5分钟（毫秒）
@@ -22,12 +24,12 @@ let sessionCache = {
  */
 async function checkSessionValid() {
   const now = Date.now();
-  
+
   // 如果缓存有效且未过期，直接返回缓存结果
   if (sessionCache.isValid && (now - sessionCache.timestamp) < SESSION_CACHE_TTL) {
     return true;
   }
-  
+
   try {
     const res = await axios.get('/api/permissions/auth/permissions');
     if (res.data && res.data.code === 200) {
@@ -143,7 +145,7 @@ const routes = [
         path: 'users',
         name: 'Users',
         component: () => import('../systems/education/views/UserList.vue'),
-        meta: { 
+        meta: {
           title: '用户管理',
           permissions: [PERMISSIONS.USER.READ],
         },
@@ -152,7 +154,7 @@ const routes = [
         path: 'permissions',
         name: 'Permissions',
         component: () => import('../systems/education/views/PermissionManagement.vue'),
-        meta: { 
+        meta: {
           title: '权限配置管理',
           permissions: [PERMISSIONS.PERMISSION.MANAGE],
         },
@@ -161,7 +163,7 @@ const routes = [
         path: 'user-roles',
         name: 'UserRoles',
         component: () => import('../systems/education/views/UserRoleAssignment.vue'),
-        meta: { 
+        meta: {
           title: '用户角色分配',
           permissions: [PERMISSIONS.PERMISSION.MANAGE],
         },
@@ -238,19 +240,13 @@ const routes = [
         component: () => import('../systems/analytics/views/StrategyMap.vue'),
         meta: { requiresAuth: true }, // 子路由也需要登录
       },
-      // {
-      //   path: 'demographics',
-      //   name: 'DemographicsAnalysis',
-      //   component: () => import('../systems/analytics/views/DemographicsAnalysisView.vue'),
-      //   meta: { requiresAuth: true }
-      // },
       {
         path: 'dictionary',
         name: 'DictionaryManagement',
         component: () =>
           import('../systems/analytics/views/DictionaryManagement.vue'),
-        meta: { 
-          requiresAuth: true, 
+        meta: {
+          requiresAuth: true,
           title: '字典管理',
           permissions: [PERMISSIONS.MAP.MANAGE],
         },
@@ -344,26 +340,36 @@ const routes = [
         component: () => import('../systems/family/views/market/MarketAuctionAdmin.vue'),
       },
 
-      // ========== 成员资产层（必须 member）==========
+      // ========== ✅ 成员资产层（嵌套路由使用 MemberLayout）==========
       {
-        path: 'member/:id/wallet',
-        name: 'FamilyMemberWallet',
-        component: () => import('../systems/family/views/member/MemberWallet.vue'),
-      },
-      {
-        path: 'member/:id/inventory',
-        name: 'FamilyMemberInventory',
-        component: () => import('../systems/family/views/member/MemberInventory.vue'),
-      },
-      {
-        path: 'member/:id/orders',
-        name: 'FamilyMemberOrders',
-        component: () => import('../systems/family/views/member/MemberOrders.vue'),
-      },
-      {
-        path: 'member/:id/activity',
-        name: 'FamilyMemberActivity',
-        component: () => import('../systems/family/views/member/MemberActivity.vue'),
+        path: 'member/:id',
+        component: MemberLayout, // 使用公共头部布局
+        children: [
+          {
+            path: '',
+            redirect: { name: 'FamilyMemberWallet' }, // 默认进流水页
+          },
+          {
+            path: 'wallet',
+            name: 'FamilyMemberWallet',
+            component: () => import('../systems/family/views/member/MemberWallet.vue'),
+          },
+          {
+            path: 'inventory',
+            name: 'FamilyMemberInventory',
+            component: () => import('../systems/family/views/member/MemberInventory.vue'),
+          },
+          {
+            path: 'orders',
+            name: 'FamilyMemberOrders',
+            component: () => import('../systems/family/views/member/MemberOrders.vue'),
+          },
+          {
+            path: 'activity',
+            name: 'FamilyMemberActivity',
+            component: () => import('../systems/family/views/member/MemberActivity.vue'),
+          },
+        ]
       },
 
       // ========== 旧版兼容路由（重定向或保留）==========
@@ -449,7 +455,7 @@ router.beforeEach(async (to, from, next) => {
   if (requiredPermissions && requiredPermissions.length > 0) {
     const cachedPermissions = getCachedPermissions() || [];
     const hasPermission = requiredPermissions.some(p => cachedPermissions.includes(p));
-    
+
     if (!hasPermission) {
       // 没有权限，跳转到仪表盘并提示
       console.warn(`权限不足：需要 ${requiredPermissions.join(' 或 ')}`);

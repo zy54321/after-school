@@ -13,20 +13,20 @@ const familyRepo = require('../repos/familyRepo');
 exports.getInitData = async (userId) => {
   // 获取成员列表
   let members = await familyRepo.getMembersByParentId(userId);
-  
+
   // 如果没有成员，创建默认成员
   if (members.length === 0) {
     const newMember = await familyRepo.createDefaultMember(userId, '宝贝');
     members = [newMember];
   }
-  
+
   // 并行获取其他数据
   const [categories, tasks, rewards] = await Promise.all([
     familyRepo.getCategoriesByParentId(userId),
     familyRepo.getTasksByParentId(userId),
     familyRepo.getRewardsByParentId(userId),
   ]);
-  
+
   return {
     members,
     categories,
@@ -48,14 +48,14 @@ exports.getMemberDashboard = async (memberId, month) => {
     options.startDate = dayjs(month).startOf('month').toDate();
     options.endDate = dayjs(month).endOf('month').toDate();
   }
-  
+
   // 并行获取数据
   const [totalPoints, history, usageStats] = await Promise.all([
     familyRepo.getMemberTotalPoints(memberId),
     familyRepo.getMemberPointsHistory(memberId, options),
     familyRepo.getMemberUsageStats(memberId),
   ]);
-  
+
   return {
     totalPoints,
     history,
@@ -74,14 +74,14 @@ exports.getMemberDashboard = async (memberId, month) => {
 exports.logAction = async ({ memberId, taskId, customTitle, points, reasonCode }) => {
   // 确定描述文本
   let title = customTitle;
-  
+
   if (!title && taskId) {
     const task = await familyRepo.getTaskById(taskId);
     if (task) {
       title = task.title;
     }
   }
-  
+
   // 创建积分记录
   const log = await familyRepo.createPointsLog(
     memberId,
@@ -90,7 +90,7 @@ exports.logAction = async ({ memberId, taskId, customTitle, points, reasonCode }
     points,
     reasonCode
   );
-  
+
   return log;
 };
 
@@ -117,7 +117,7 @@ const getLimitStartTime = (limitType) => {
  */
 const addToBackpack = async (client, memberId, rewardId, pointsLogId) => {
   const existing = await familyRepo.findUnusedBackpackItem(memberId, rewardId, client);
-  
+
   if (existing) {
     await familyRepo.incrementBackpackQuantity(existing.id, client);
   } else {
@@ -135,22 +135,22 @@ const addToBackpack = async (client, memberId, rewardId, pointsLogId) => {
 exports.redeemReward = async (memberId, rewardId) => {
   const pool = familyRepo.getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     // 获取奖励信息
     const reward = await familyRepo.getRewardById(rewardId, client);
     if (!reward) {
       throw new Error('商品不存在');
     }
-    
+
     // 检查积分余额
     const balance = await familyRepo.getMemberBalance(memberId, client);
     if (balance < reward.cost) {
       throw new Error('积分不足');
     }
-    
+
     // 检查兑换限制
     if (reward.limit_type !== 'unlimited') {
       const startTime = getLimitStartTime(reward.limit_type);
@@ -159,7 +159,7 @@ exports.redeemReward = async (memberId, rewardId) => {
         throw new Error('已达兑换上限');
       }
     }
-    
+
     // 记录积分流水
     const logResult = await familyRepo.createRedeemLog(
       memberId,
@@ -168,10 +168,10 @@ exports.redeemReward = async (memberId, rewardId) => {
       -reward.cost,
       client
     );
-    
+
     // 存入背包
     await addToBackpack(client, memberId, rewardId, logResult.id);
-    
+
     await client.query('COMMIT');
     return { success: true, msg: '兑换成功！物品已存入背包 🎒' };
   } catch (err) {
@@ -191,27 +191,27 @@ exports.redeemReward = async (memberId, rewardId) => {
 exports.settleAuction = async (memberId, auctionId, bidPoints) => {
   const pool = familyRepo.getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     // 获取拍品信息
     const item = await familyRepo.getRewardById(auctionId, client);
     if (!item) {
       throw new Error('拍品不存在');
     }
-    
+
     // 检查出价是否高于起拍价
     if (bidPoints < item.cost) {
       throw new Error(`出价不能低于起拍价 (${item.cost})`);
     }
-    
+
     // 检查积分余额
     const balance = await familyRepo.getMemberBalance(memberId, client);
     if (balance < bidPoints) {
       throw new Error('该成员积分不足以支付此竞拍价');
     }
-    
+
     // 检查竞拍限制
     if (item.limit_type !== 'unlimited') {
       const startTime = getLimitStartTime(item.limit_type);
@@ -220,7 +220,7 @@ exports.settleAuction = async (memberId, auctionId, bidPoints) => {
         throw new Error('已达竞拍上限');
       }
     }
-    
+
     // 记录积分流水
     const logResult = await familyRepo.createRedeemLog(
       memberId,
@@ -229,10 +229,10 @@ exports.settleAuction = async (memberId, auctionId, bidPoints) => {
       -bidPoints,
       client
     );
-    
+
     // 存入背包
     await addToBackpack(client, memberId, auctionId, logResult.id);
-    
+
     await client.query('COMMIT');
     return { success: true, msg: '竞拍结算成功！物品已存入背包 🎒' };
   } catch (err) {
@@ -255,7 +255,7 @@ exports.getBackpack = async (memberId, status) => {
     familyRepo.getBackpackItems(memberId, status),
     familyRepo.getBackpackStats(memberId),
   ]);
-  
+
   return { items, stats };
 };
 
@@ -268,26 +268,26 @@ exports.getBackpack = async (memberId, status) => {
 exports.useBackpackItem = async (memberId, backpackId, quantity = 1) => {
   const pool = familyRepo.getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     // 获取背包物品
     const backpackItem = await familyRepo.getBackpackItemById(backpackId, memberId, client);
     if (!backpackItem) {
       throw new Error('背包物品不存在或不属于该成员');
     }
-    
+
     // 检查状态
     if (backpackItem.status !== 'unused') {
       throw new Error('该物品已使用');
     }
-    
+
     // 检查数量
     if (backpackItem.quantity < quantity) {
       throw new Error(`数量不足，当前数量：${backpackItem.quantity}`);
     }
-    
+
     // 更新背包物品
     if (backpackItem.quantity === quantity) {
       // 全部使用，标记为已使用
@@ -296,7 +296,7 @@ exports.useBackpackItem = async (memberId, backpackId, quantity = 1) => {
       // 部分使用，减少数量
       await familyRepo.decrementBackpackQuantity(backpackId, quantity, client);
     }
-    
+
     // 记录使用历史
     await familyRepo.createBackpackUsageLog(
       backpackId,
@@ -305,7 +305,7 @@ exports.useBackpackItem = async (memberId, backpackId, quantity = 1) => {
       quantity,
       client
     );
-    
+
     await client.query('COMMIT');
     return { success: true, msg: '使用成功' };
   } catch (err) {
@@ -338,15 +338,15 @@ exports.updateMember = async (id, name, avatar) => {
 exports.deleteMember = async (memberId) => {
   const pool = familyRepo.getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     // 先删除积分记录
     await familyRepo.deletePointsLogByMemberId(memberId, client);
     // 再删除成员
     await familyRepo.deleteMember(memberId, client);
-    
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -363,7 +363,7 @@ exports.deleteMember = async (memberId) => {
  */
 exports.createItem = async (userId, { type, name, points, category, limitType, limitMax, targetMembers, description }) => {
   const targets = targetMembers && targetMembers.length > 0 ? targetMembers : null;
-  
+
   if (type === 'task') {
     return await familyRepo.createTask(userId, name, category, points, targets);
   } else {
@@ -376,7 +376,7 @@ exports.createItem = async (userId, { type, name, points, category, limitType, l
  */
 exports.updateItem = async ({ id, type, name, points, category, limitType, limitMax, targetMembers, description }) => {
   const targets = targetMembers && targetMembers.length > 0 ? targetMembers : null;
-  
+
   if (type === 'task') {
     await familyRepo.updateTask(id, name, category, points, targets);
   } else {
@@ -420,38 +420,38 @@ exports.deleteCategory = async (id) => {
 exports.transferBackpackItem = async (backpackId, fromMemberId, toMemberId, quantity = 1) => {
   const pool = familyRepo.getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     // 获取源背包物品
     const backpackItem = await familyRepo.getBackpackItemById(backpackId, fromMemberId, client);
     if (!backpackItem) {
       throw new Error('背包物品不存在或不属于该成员');
     }
-    
+
     // 检查状态
     if (backpackItem.status !== 'unused') {
       throw new Error('只能转赠未使用的物品');
     }
-    
+
     // 检查数量
     if (backpackItem.quantity < quantity) {
       throw new Error(`数量不足，当前数量：${backpackItem.quantity}`);
     }
-    
+
     // 验证成员是否属于同一家庭
     const fromMember = await familyRepo.getMemberById(fromMemberId, client);
     const toMember = await familyRepo.getMemberById(toMemberId, client);
-    
+
     if (!fromMember || !toMember) {
       throw new Error('成员不存在');
     }
-    
+
     if (fromMember.parent_id !== toMember.parent_id) {
       throw new Error('只能转赠给同一家庭的成员');
     }
-    
+
     // 执行转赠
     if (backpackItem.quantity === quantity) {
       // 全部转赠，直接更新归属
@@ -459,10 +459,10 @@ exports.transferBackpackItem = async (backpackId, fromMemberId, toMemberId, quan
     } else {
       // 部分转赠
       await familyRepo.decrementBackpackQuantity(backpackId, quantity, client);
-      
+
       // 检查目标成员是否已有相同物品
       const existing = await familyRepo.findUnusedBackpackItem(toMemberId, backpackItem.reward_id, client);
-      
+
       if (existing) {
         await familyRepo.incrementBackpackQuantityBy(existing.id, quantity, client);
       } else {
@@ -475,7 +475,7 @@ exports.transferBackpackItem = async (backpackId, fromMemberId, toMemberId, quan
         );
       }
     }
-    
+
     await client.query('COMMIT');
     return { success: true, msg: '转赠成功' };
   } catch (err) {
@@ -494,22 +494,22 @@ exports.transferBackpackItem = async (backpackId, fromMemberId, toMemberId, quan
 exports.revokeLog = async (logIds) => {
   const pool = familyRepo.getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     // 获取关联的背包记录
     const backpackIds = await familyRepo.getBackpackByPointsLogIds(logIds, client);
-    
+
     // 删除背包使用记录
     await familyRepo.deleteBackpackUsageLogByBackpackIds(backpackIds, client);
-    
+
     // 删除背包记录
     await familyRepo.deleteBackpackByIds(backpackIds, client);
-    
+
     // 删除积分流水
     await familyRepo.deletePointsLogByIds(logIds, client);
-    
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -530,4 +530,31 @@ exports.getUsageHistory = async (memberId, rewardId, limit) => {
     history,
     total: history.length,
   };
+};
+
+exports.getPresets = async () => {
+  return await familyRepo.getPresets();
+};
+
+exports.createPreset = async (data) => {
+  // 解构出 category
+  const { label, points, type, icon, category } = data;
+  return await familyRepo.createPreset(label, points, type, icon || '🌟', category);
+};
+
+exports.updatePreset = async (id, data) => {
+  const { label, points, type, icon, category } = data;
+  return await familyRepo.updatePreset(id, label, points, type, icon, category);
+};
+
+exports.deletePreset = async (id) => {
+  return await familyRepo.deletePreset(id);
+};
+
+exports.updatePresetCategory = async (oldCategory, newCategory) => {
+  return await familyRepo.updatePresetCategory(oldCategory, newCategory);
+};
+
+exports.deletePresetCategory = async (category) => {
+  return await familyRepo.deletePresetCategory(category);
 };
