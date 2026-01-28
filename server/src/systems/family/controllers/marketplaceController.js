@@ -712,11 +712,17 @@ exports.getWallet = async (req, res) => {
       });
     }
     
-    const wallet = await walletService.getWalletOverview(parseInt(memberId));
+    const [wallet, memberInfo] = await Promise.all([
+      walletService.getWalletOverview(parseInt(memberId)),
+      walletService.getMemberById(parseInt(memberId))
+    ]);
     
     res.json({
       code: 200,
-      data: wallet,
+      data: {
+        ...wallet,
+        member: memberInfo, // 添加成员完整信息
+      },
     });
   } catch (err) {
     console.error('getWallet 错误:', err);

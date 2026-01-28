@@ -63,15 +63,33 @@ exports.createMember = async (req, res) => {
 };
 
 exports.updateMember = async (req, res) => {
-  const { id, name } = req.body;
+  const { id, name, bio } = req.body;
   const avatar = req.file ? `/uploads/${req.file.filename}` : null;
 
+  // 验证 id 参数
+  if (!id || id === 'undefined' || id === 'null') {
+    return res.status(400).json({ code: 400, msg: '成员ID不能为空' });
+  }
+
+  const memberId = parseInt(id, 10);
+  if (isNaN(memberId)) {
+    return res.status(400).json({ code: 400, msg: '无效的成员ID' });
+  }
+
   try {
-    await familyService.updateMember(id, name, avatar);
+    await familyService.updateMember(memberId, name, avatar, bio);
     res.json({ code: 200, msg: '更新成功' });
   } catch (err) {
     console.error('updateMember 错误:', err);
-    res.status(500).json({ msg: '更新失败' });
+    // 如果是数据库字段不存在的错误，给出明确提示
+    if (err.code === '42703' || (err.message && err.message.includes('column') && err.message.includes('does not exist'))) {
+      return res.status(500).json({ 
+        code: 500, 
+        msg: '数据库字段不存在，请先运行迁移脚本：017_add_member_bio.sql',
+        error: err.message 
+      });
+    }
+    res.status(500).json({ code: 500, msg: '更新失败', error: err.message });
   }
 };
 

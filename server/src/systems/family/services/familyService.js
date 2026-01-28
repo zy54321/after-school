@@ -328,8 +328,8 @@ exports.createMember = async (parentId, name, avatar) => {
 /**
  * 更新成员
  */
-exports.updateMember = async (id, name, avatar) => {
-  await familyRepo.updateMember(id, name, avatar);
+exports.updateMember = async (id, name, avatar, bio) => {
+  await familyRepo.updateMember(id, name, avatar, bio);
 };
 
 /**

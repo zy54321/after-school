@@ -342,18 +342,39 @@ exports.createMember = async (parentId, name, avatar = '') => {
 /**
  * 更新成员
  */
-exports.updateMember = async (id, name, avatar = null) => {
-  if (avatar !== null) {
-    await pool.query(
-      'UPDATE family_members SET name=$1, avatar=$2 WHERE id=$3',
-      [name, avatar, id]
-    );
-  } else {
-    await pool.query(
-      'UPDATE family_members SET name=$1 WHERE id=$2',
-      [name, id]
-    );
+exports.updateMember = async (id, name, avatar = null, bio = null) => {
+  // 验证 id 必须是有效的整数
+  const memberId = parseInt(id, 10);
+  if (isNaN(memberId) || memberId <= 0) {
+    throw new Error('无效的成员ID');
   }
+
+  const updates = [];
+  const values = [];
+  let paramIndex = 1;
+
+  if (name !== undefined && name !== null) {
+    updates.push(`name=$${paramIndex++}`);
+    values.push(name);
+  }
+  if (avatar !== null && avatar !== undefined) {
+    updates.push(`avatar=$${paramIndex++}`);
+    values.push(avatar);
+  }
+  if (bio !== null && bio !== undefined) {
+    updates.push(`bio=$${paramIndex++}`);
+    values.push(bio);
+  }
+
+  if (updates.length === 0) {
+    throw new Error('没有需要更新的字段');
+  }
+
+  values.push(memberId);
+  await pool.query(
+    `UPDATE family_members SET ${updates.join(', ')} WHERE id=$${paramIndex}`,
+    values
+  );
 };
 
 /**

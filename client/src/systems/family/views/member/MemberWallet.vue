@@ -1,15 +1,6 @@
 <template>
   <div class="member-wallet-view h-full flex flex-col p-6 pt-4 box-border">
 
-    <div class="flex justify-end gap-3 mb-4 flex-none">
-      <button class="action-btn add" @click="openAdjustModal('add')">
-        <span class="text-lg mr-1">+</span> 奖励加分
-      </button>
-      <button class="action-btn deduct" @click="openAdjustModal('deduct')">
-        <span class="text-lg mr-1">-</span> 惩罚扣分
-      </button>
-    </div>
-
     <section
       class="wallet-section flex-1 flex flex-col min-h-0 bg-[#151520] rounded-2xl border border-white/5 overflow-hidden">
 
@@ -337,7 +328,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -627,6 +618,20 @@ const openAdjustModal = (type) => {
 };
 
 const closeAdjustModal = () => { showAdjustModal.value = false; adjusting.value = false; };
+
+// 监听来自父组件的打开弹窗事件
+const handleTriggerAdjustModal = (e) => {
+  openAdjustModal(e.detail.type);
+};
+
+onMounted(() => {
+  window.addEventListener('trigger-adjust-modal', handleTriggerAdjustModal);
+  loadLogs();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('trigger-adjust-modal', handleTriggerAdjustModal);
+});
 
 const formatTime = (dateStr) => {
   const date = new Date(dateStr);
