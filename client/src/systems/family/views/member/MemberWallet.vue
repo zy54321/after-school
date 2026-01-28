@@ -156,7 +156,7 @@
               <label class="block text-xs font-medium text-gray-400 mb-1.5 ml-1">积分数额</label>
               <div class="relative">
                 <input type="number" v-model.number="adjustForm.points" min="1"
-                  class="w-[392px] max-w-full bg-[#252538] text-white text-base font-bold border border-white/10 rounded-xl px-3 py-2.5 pl-10 focus:ring-2 focus:border-transparent transition-all outline-none"
+                  class="w-[342px] max-w-full bg-[#252538] text-white text-base font-bold border border-white/10 rounded-xl px-3 py-2.5 pl-10 focus:ring-2 focus:border-transparent transition-all outline-none"
                   :class="adjustForm.type === 'add' ? 'focus:ring-blue-500/50' : 'focus:ring-red-500/50'" />
                 <div class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-base">
                   {{ adjustForm.type === 'add' ? '+' : '-' }}
@@ -167,7 +167,7 @@
             <div>
               <label class="block text-xs font-medium text-gray-400 mb-1.5 ml-1">变动原因</label>
               <input v-model="adjustForm.reason" placeholder="请输入原因..."
-                class="w-[392px] max-w-full bg-[#252538] text-white border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:border-transparent transition-all outline-none placeholder-gray-600"
+                class="w-[372px] max-w-full bg-[#252538] text-white border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:border-transparent transition-all outline-none placeholder-gray-600"
                 :class="adjustForm.type === 'add' ? 'focus:ring-blue-500/50' : 'focus:ring-red-500/50'" />
             </div>
           </div>
