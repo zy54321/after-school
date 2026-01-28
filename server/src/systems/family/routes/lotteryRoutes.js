@@ -48,4 +48,7 @@ router.get('/history', controller.getHistory);
 // GET /api/v2/draw/tickets - 获取抽奖券统计
 router.get('/tickets', controller.getTickets);
 
+// GET /api/v2/draw/pools/:id/stats - 获取成员在指定抽奖池的统计信息
+router.get('/pools/:id/stats', controller.getPoolStats);
+
 module.exports = router;

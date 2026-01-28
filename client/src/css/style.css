@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  height: 100%;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -10,10 +14,13 @@ body {
   overflow-x: hidden;
   width: 100vw;
   min-height: 100vh;
+  /* 兜底背景：避免任何页面高度不足时露出白底 */
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 #app {
   width: 100%;
+  min-height: 100vh;
   height: 100%;
 }

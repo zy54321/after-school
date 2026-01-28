@@ -310,13 +310,25 @@ exports.getPoolDetail = async (req, res) => {
  */
 exports.getHistory = async (req, res) => {
   try {
-    const { member_id: memberId, limit = 50 } = req.query;
+    const userId = req.session.user.id;
+    const { member_id: memberId, pool_id: poolId, limit = 100 } = req.query;
 
     if (!memberId) {
       return res.status(400).json({ code: 400, msg: '缺少必填参数: member_id' });
     }
 
-    const history = await lotteryService.getDrawHistory(parseInt(memberId), parseInt(limit));
+    // 验证成员是否属于当前用户
+    const familyRepo = require('../repos/familyRepo');
+    const member = await familyRepo.getMemberById(parseInt(memberId));
+    if (!member || member.parent_id !== userId) {
+      return res.status(403).json({ code: 403, msg: '无权查看该成员的抽奖记录' });
+    }
+
+    const history = await lotteryService.getDrawHistory(
+      parseInt(memberId), 
+      poolId ? parseInt(poolId) : null, 
+      parseInt(limit)
+    );
 
     res.json({
       code: 200,
@@ -350,5 +362,35 @@ exports.getTickets = async (req, res) => {
   } catch (err) {
     console.error('getTickets 错误:', err);
     res.status(500).json({ code: 500, msg: '获取抽奖券失败', error: err.message });
+  }
+};
+
+/**
+ * GET /api/v2/draw/pools/:id/stats
+ * 获取成员在指定抽奖池的统计信息
+ */
+exports.getPoolStats = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { member_id: memberId } = req.query;
+    const poolId = parseInt(req.params.id);
+
+    if (!memberId) {
+      return res.status(400).json({ code: 400, msg: '缺少必填参数: member_id' });
+    }
+
+    if (!poolId) {
+      return res.status(400).json({ code: 400, msg: '无效的抽奖池ID' });
+    }
+
+    const stats = await lotteryService.getMemberPoolStats(parseInt(memberId), poolId);
+
+    res.json({
+      code: 200,
+      data: stats,
+    });
+  } catch (err) {
+    console.error('getPoolStats 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取统计信息失败', error: err.message });
   }
 };

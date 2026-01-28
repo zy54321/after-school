@@ -73,4 +73,9 @@ router.get('/mystery-shop', controller.getMysteryShop);
 // POST /api/v2/mystery-shop/refresh - 刷新神秘商店（付费时需要 payer_member_id）
 router.post('/mystery-shop/refresh', controller.refreshMysteryShop);
 
+// POST /api/v2/admin/quick-publish - 快速发布商品
+router.post('/admin/quick-publish', controller.quickPublish);
+// PUT /api/v2/admin/quick-update/:offerId - 快速更新商品
+router.put('/admin/quick-update/:offerId', controller.quickUpdate);
+
 module.exports = router;

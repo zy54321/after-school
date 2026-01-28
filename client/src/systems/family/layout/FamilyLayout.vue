@@ -177,10 +177,15 @@ const handleLogout = async () => {
 
 .family-main {
   flex: 1;
-  padding: 24px;
+  min-height: calc(100vh - 70px);
+  height: calc(100vh - 70px);
+  padding: 0;
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 响应式 */

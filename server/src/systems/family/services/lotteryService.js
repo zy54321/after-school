@@ -543,8 +543,8 @@ exports.getPoolsForMember = async (parentId, memberId) => {
 /**
  * 获取成员的抽奖记录
  */
-exports.getDrawHistory = async (memberId, limit = 50) => {
-  return await lotteryRepo.getDrawLogsByMemberId(memberId, limit);
+exports.getDrawHistory = async (memberId, poolId = null, limit = 100) => {
+  return await lotteryRepo.getDrawLogsByMemberId(memberId, poolId, limit);
 };
 
 /**
@@ -552,6 +552,13 @@ exports.getDrawHistory = async (memberId, limit = 50) => {
  */
 exports.getMemberTicketStats = async (memberId, parentId) => {
   return await lotteryRepo.getMemberTicketStats(memberId, parentId);
+};
+
+/**
+ * 获取成员在指定抽奖池的统计信息
+ */
+exports.getMemberPoolStats = async (memberId, poolId) => {
+  return await lotteryRepo.getMemberPoolStats(memberId, poolId);
 };
 
 // ========== 内部辅助函数 ==========

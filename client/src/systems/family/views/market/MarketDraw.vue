@@ -28,17 +28,6 @@
           </div>
         </div>
 
-        <div class="pool-stats">
-          <div class="stat-item">
-            <span class="stat-label">抽奖次数</span>
-            <span class="stat-value">{{ pool.draw_count || 0 }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">保底计数</span>
-            <span class="stat-value">{{ pool.pity_count || 0 }} / {{ pool.pity_threshold || 10 }}</span>
-          </div>
-        </div>
-
         <div class="prizes-preview">
           <div class="prize-item" v-for="(prize, idx) in pool.prizes?.slice(0, 4)" :key="idx">
             <span class="prize-icon">{{ getPrizeIcon(prize.type) }}</span>

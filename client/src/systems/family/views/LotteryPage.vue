@@ -24,9 +24,15 @@ const poolDetail = ref(null);
 const showResult = ref(false);
 const spinResult = ref(null);
 
-// 历史记录
-const history = ref([]);
-const showHistory = ref(false);
+// 历史记录（分离为历史记录和当前记录）
+const historyRecords = ref([]); // 历史记录（今天之前的）
+const currentRecords = ref([]); // 当前记录（今天的）
+
+// 成员统计信息
+const memberStats = ref(null);
+
+// Tab 切换状态
+const activeTab = ref('today'); // 'today' 或 'history'
 
 // 转盘状态
 const wheelRotation = ref(0);
@@ -37,45 +43,38 @@ const showMemberSelector = ref(false);
 
 // ========== 计算属性 ==========
 const canSpin = computed(() => {
+  // 基础检查：是否有池子，是否有奖品
   if (!selectedPool.value) return false;
   if (!poolDetail.value?.version || (poolDetail.value?.version?.prizes || []).length === 0) {
     return false;
   }
-  // 不再在这里检查成员是否有券，因为成员可能还没选择
+  // 注意：券余额的检查下沉到 UI 按钮逻辑中，以便显示不同的按钮状态（去购买 vs 抽奖）
   return true;
 });
 
+// 计算扇区数据（带权重）
 const wheelSectors = computed(() => {
   const prizes = poolDetail.value?.version?.prizes || [];
   if (prizes.length === 0) return [];
 
-  // 1. 计算总权重
   const totalWeight = prizes.reduce((sum, p) => sum + (p.weight || 1), 0);
-  
-  // 2. 计算每个奖品的角度
-  const MIN_ANGLE = 15; // 最小扇区角度，防止看不见
-  let availableAngle = 360;
+  const MIN_ANGLE = 15;
+
   let rawSlices = prizes.map((p, index) => {
     const weight = p.weight || 1;
-    // 理论角度
     const rawAngle = totalWeight > 0 ? (weight / totalWeight) * 360 : (360 / prizes.length);
     return { ...p, rawAngle, index, isSmall: rawAngle < MIN_ANGLE };
   });
 
-  // 3. 调整角度 (简单的保底逻辑：如果小于MIN_ANGLE，强制设为MIN_ANGLE，然后压缩其他扇区)
-  // 为了简化，这里使用一种“加权+保底”的混合算法
   const smallCount = rawSlices.filter(s => s.isSmall).length;
   const largeSlices = rawSlices.filter(s => !s.isSmall);
-  
-  // 给小扇区分配固定角度
+
   const reservedAngle = smallCount * MIN_ANGLE;
-  
-  // 剩余角度按权重分配给大扇区
   const remainingAngle = 360 - reservedAngle;
   const largeTotalWeight = largeSlices.reduce((sum, p) => sum + (p.weight || 1), 0);
 
   let currentStart = 0;
-  const sectors = rawSlices.map((item) => {
+  return rawSlices.map((item) => {
     let finalAngle;
     if (item.isSmall) {
       finalAngle = MIN_ANGLE;
@@ -89,13 +88,11 @@ const wheelSectors = computed(() => {
       prize: item,
       angleStart: currentStart,
       angleSpan: finalAngle,
-      angleMid: angleMid, 
+      angleMid: angleMid,
     };
     currentStart += finalAngle;
     return sector;
   });
-
-  return sectors;
 });
 
 const wheelBackground = computed(() => {
@@ -103,30 +100,37 @@ const wheelBackground = computed(() => {
   if (sectors.length === 0) {
     return 'conic-gradient(#2f2f3a 0deg 360deg)';
   }
-
   const parts = [];
   sectors.forEach((sector, index) => {
     const color = getPrizeColor(index, sectors.length);
     parts.push(`${color} ${sector.angleStart}deg ${sector.angleStart + sector.angleSpan}deg`);
   });
-  
   return `conic-gradient(from 0deg, ${parts.join(', ')})`;
 });
 
 // ========== API 调用 ==========
+
+// 🟢 修复 1：加载列表时传入 member_id 以获取券余额
 const loadPools = async (preferredPoolId = null) => {
   loading.value = true;
   try {
-    const res = await axios.get('/api/v2/draw/pools');
+    const params = {};
+    if (currentMemberId.value) {
+      params.member_id = currentMemberId.value;
+    }
+
+    const res = await axios.get('/api/v2/draw/pools', { params });
     if (res.data?.code === 200) {
       pools.value = res.data.data?.pools || [];
-      console.log('[lottery] pools loaded', {
-        count: pools.value.length,
-        preferredPoolId,
-      });
+
+      // 更新当前选中池子的数据（主要是券余额 memberTicketCount）
+      if (selectedPool.value) {
+        const updated = pools.value.find(p => p.id === selectedPool.value.id);
+        if (updated) selectedPool.value = updated;
+      }
+
       if (pools.value.length > 0) {
-        const preferred =
-          preferredPoolId && pools.value.find((pool) => pool.id === preferredPoolId);
+        const preferred = preferredPoolId && pools.value.find((pool) => pool.id === preferredPoolId);
         if (preferred) {
           selectPool(preferred);
         } else if (!selectedPool.value) {
@@ -143,17 +147,12 @@ const loadPools = async (preferredPoolId = null) => {
 };
 
 const selectPool = async (pool) => {
-  selectedPool.value = pool;
-  console.log('[lottery] select pool', { poolId: pool?.id });
+  selectedPool.value = pool; // 这会包含列表中带回的 memberTicketCount
   loading.value = true;
   try {
     const res = await axios.get(`/api/v2/draw/pools/${pool.id}`);
     if (res.data.code === 200) {
       poolDetail.value = res.data.data;
-      console.log('[lottery] pool detail', {
-        hasVersion: !!poolDetail.value?.version,
-        prizeCount: poolDetail.value?.version?.prizes?.length || 0,
-      });
     }
   } catch (err) {
     console.error('加载抽奖池详情失败:', err);
@@ -162,46 +161,56 @@ const selectPool = async (pool) => {
   }
 };
 
-// 点击抽奖按钮
 const handleSpinClick = () => {
-  console.log('[lottery] spin click', {
-    selectedPoolId: selectedPool.value?.id,
-    memberSelected: !!currentMemberId.value,
-  });
   if (!selectedPool.value || spinning.value) return;
-  if (currentMemberId.value) {
-    doSpin(currentMemberId.value);
-  } else {
+  
+  // 如果没有选择成员，弹出成员选择弹窗
+  if (!currentMemberId.value) {
     showMemberSelector.value = true;
+    return;
   }
+  
+  // 如果已经选择了成员，直接执行抽奖
+  // 再次校验余额（虽然 UI 已经做了限制）
+  if (selectedPool.value.entry_ticket_type_id) {
+    const cost = selectedPool.value.tickets_per_draw || 1;
+    const balance = selectedPool.value.memberTicketCount || 0;
+    if (balance < cost) {
+      ElMessage.warning('抽奖券不足，请先去商城兑换');
+      return;
+    }
+  }
+  
+  doSpin(currentMemberId.value);
 };
 
-// 成员确认后执行抽奖
 const handleMemberConfirm = async ({ memberId }) => {
   currentMemberId.value = memberId;
   showMemberSelector.value = false;
-  doSpin(memberId);
+  
+  // 加载成员统计信息
+  await loadMemberStats(memberId);
+  
+  // 刷新抽奖池数据（获取券余额）
+  await loadPools(selectedPool.value?.id);
+  
+  // 加载抽奖记录
+  await loadHistory();
 };
 
-// 关闭成员选择器
 const closeMemberSelector = () => {
   showMemberSelector.value = false;
 };
 
-// 执行抽奖
 const doSpin = async (memberId) => {
   if (!selectedPool.value || spinning.value) return;
 
-  console.log('[lottery] spin start', {
-    poolId: selectedPool.value?.id,
-    memberId,
-    currentRotation: wheelRotation.value,
-  });
   spinning.value = true;
   showResult.value = false;
   isWheelSpinning.value = true;
+
+  // 启动时的随机预转
   wheelRotation.value += 360 * (2 + Math.floor(Math.random() * 2));
-  console.log('[lottery] pre-spin rotation set', { wheelRotation: wheelRotation.value });
 
   try {
     const res = await axios.post('/api/v2/draw/spin', {
@@ -213,32 +222,43 @@ const doSpin = async (memberId) => {
       spinResult.value = res.data.data;
       const prizeId = spinResult.value?.prize?.id;
       const prizes = poolDetail.value?.version?.prizes || [];
+
+      // 🟢 修复 2：使用真实权重角度计算目标位置
       const targetRotation = getTargetRotation(prizes, prizeId);
-      console.log('[lottery] spin result', {
-        prizeId,
-        prizeName: spinResult.value?.prize?.name,
-        prizesCount: prizes.length,
-        targetRotation,
-      });
+
       await nextTick();
       wheelRotation.value = targetRotation;
-      console.log('[lottery] target rotation set', { wheelRotation: wheelRotation.value });
 
+      // 等待动画结束 (3s)
       await new Promise((resolve) => setTimeout(resolve, 3000));
       showResult.value = true;
-      
-      await loadPools();
+
+      // 刷新数据（扣除券、增加记录）
+      await loadPools(selectedPool.value?.id);
+      await loadMemberStats(memberId);
       await loadHistory();
     } else {
       ElMessage.error(res.data.msg);
     }
   } catch (err) {
     ElMessage.error(err.response?.data?.msg || '抽奖失败');
-    console.error('[lottery] spin error', err);
   } finally {
     spinning.value = false;
     isWheelSpinning.value = false;
-    console.log('[lottery] spin end', { wheelRotation: wheelRotation.value });
+  }
+};
+
+const loadMemberStats = async (memberId) => {
+  if (!memberId || !selectedPool.value) return;
+  try {
+    const res = await axios.get(`/api/v2/draw/pools/${selectedPool.value.id}/stats`, {
+      params: { member_id: memberId },
+    });
+    if (res.data?.code === 200) {
+      memberStats.value = res.data.data;
+    }
+  } catch (err) {
+    console.error('加载成员统计失败:', err);
   }
 };
 
@@ -246,10 +266,23 @@ const loadHistory = async () => {
   if (!currentMemberId.value) return;
   try {
     const res = await axios.get('/api/v2/draw/history', {
-      params: { member_id: currentMemberId.value, limit: 20 },
+      params: { member_id: currentMemberId.value, limit: 100 },
     });
     if (res.data?.code === 200) {
-      history.value = res.data.data?.history || [];
+      const allRecords = res.data.data?.history || [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // 分离历史记录和当前记录
+      currentRecords.value = allRecords.filter(record => {
+        const recordDate = new Date(record.created_at);
+        return recordDate >= today;
+      });
+      
+      historyRecords.value = allRecords.filter(record => {
+        const recordDate = new Date(record.created_at);
+        return recordDate < today;
+      });
     }
   } catch (err) {
     console.error('加载历史记录失败:', err);
@@ -260,7 +293,10 @@ const goBack = () => {
   router.push('/family/market/draw');
 };
 
-// ========== 辅助函数 ==========
+const goToMarket = () => {
+  router.push('/family/market');
+};
+
 const getPrizeColor = (index, total) => {
   const colors = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
@@ -269,16 +305,26 @@ const getPrizeColor = (index, total) => {
   return colors[index % colors.length];
 };
 
+// 🟢 核心修复：基于真实扇区角度计算旋转目标
 const getTargetRotation = (prizes, prizeId) => {
-  if (!prizes.length) {
-    return wheelRotation.value + 360 * (5 + Math.floor(Math.random() * 3));
-  }
-  const prizeIndex = prizes.findIndex((prize) => prize.id === prizeId);
-  const finalIndex = prizeIndex >= 0 ? prizeIndex : Math.floor(Math.random() * prizes.length);
-  const angle = 360 / prizes.length;
-  const targetAngle = 360 - (finalIndex * angle + angle / 2);
-  const spins = 5 + Math.floor(Math.random() * 3);
-  return wheelRotation.value + 360 * spins + targetAngle;
+  // 从计算属性 wheelSectors 中找到对应的扇区数据（包含 angleMid）
+  const sector = wheelSectors.value.find((s) => s.prize.id === prizeId);
+  // 兜底防止报错
+  if (!sector) return wheelRotation.value + 360 * 5;
+
+  const currentRotation = wheelRotation.value;
+  // 向上取整到最近的整圈，确保始终顺时针向前旋转
+  const baseRotation = Math.ceil(currentRotation / 360) * 360;
+
+  // 计算对齐角度：
+  // 指针在顶部(0度)，扇区中心为 sector.angleMid (顺时针角度)
+  // 要让扇区中心转到顶部，需要再转 (360 - angleMid) 度
+  const alignRotation = 360 - sector.angleMid;
+
+  // 加上额外的旋转圈数 (5圈)
+  const spins = 360 * 5;
+
+  return baseRotation + spins + alignRotation;
 };
 
 const getResultTypeLabel = (type) => {
@@ -291,34 +337,31 @@ const getResultTypeLabel = (type) => {
   return map[type] || type;
 };
 
-// ========== 生命周期 ==========
+// ========== 生命周期 & 监听 ==========
 onMounted(async () => {
-  console.log('[lottery] page mounted', {
-    route: route.fullPath,
-    poolId: route.params.poolId,
-  });
   const routePoolId = parseInt(route.params.poolId, 10);
   await loadPools(Number.isFinite(routePoolId) ? routePoolId : null);
 });
 
-watch(currentMemberId, async () => {
-  await loadHistory();
+// 监听成员切换，立刻刷新券余额和统计信息
+watch(currentMemberId, async (newId) => {
+  if (newId && selectedPool.value) {
+    await loadPools(selectedPool.value?.id);
+    await loadMemberStats(newId);
+    await loadHistory();
+  }
 });
 
-watch(
-  () => route.params.poolId,
-  async (poolId) => {
-    const parsedId = parseInt(poolId, 10);
-    if (Number.isFinite(parsedId)) {
-      await loadPools(parsedId);
-    }
+watch(() => route.params.poolId, async (poolId) => {
+  const parsedId = parseInt(poolId, 10);
+  if (Number.isFinite(parsedId)) {
+    await loadPools(parsedId);
   }
-);
+});
 </script>
 
 <template>
   <div class="lottery-page">
-    <!-- 顶部导航 -->
     <header class="lottery-header">
       <div class="header-left">
         <el-button :icon="ArrowLeft" circle @click="goBack" />
@@ -327,122 +370,186 @@ watch(
     </header>
 
     <main class="lottery-main" v-loading="loading">
-      <!-- 抽奖池选择 -->
-      <div class="pool-selector" v-if="pools.length > 0">
-        <div
-          v-for="pool in pools"
-          :key="pool.id"
-          class="pool-tab"
-          :class="{ active: selectedPool?.id === pool.id }"
-          @click="selectPool(pool)"
-        >
-          <span class="pool-icon">{{ pool.icon }}</span>
-          <span class="pool-name">{{ pool.name }}</span>
-        </div>
-      </div>
+      <div class="lottery-content">
+        <!-- 左侧：转盘抽奖区域 -->
+        <div class="lottery-left">
+          <div class="pool-selector" v-if="pools.length > 0">
+            <div v-for="pool in pools" :key="pool.id" class="pool-tab" :class="{ active: selectedPool?.id === pool.id }"
+              @click="selectPool(pool)">
+              <span class="pool-icon">{{ pool.icon }}</span>
+              <span class="pool-name">{{ pool.name }}</span>
+            </div>
+          </div>
 
-      <!-- 转盘区域 -->
-      <div class="wheel-section" v-if="poolDetail?.version && (poolDetail.version.prizes || []).length > 0">
-        <div class="wheel-container">
-          <!-- 转盘 -->
-          <div
-            class="wheel"
-            :style="{
-              transform: `rotate(${wheelRotation}deg)`,
-              transition: isWheelSpinning ? 'transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
-              background: wheelBackground,
-            }"
-          >
-            <div class="wheel-labels">
-              <div
-                v-for="sector in wheelSectors"
-                :key="sector.key"
-                class="wheel-label"
-                :style="{ transform: `rotate(${sector.angleMid}deg)` }"
+          <div class="wheel-section" v-if="poolDetail?.version && (poolDetail.version.prizes || []).length > 0">
+            <div class="wheel-container">
+              <div class="wheel" :style="{
+                transform: `rotate(${wheelRotation}deg)`,
+                transition: isWheelSpinning ? 'transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
+                background: wheelBackground,
+              }">
+                <div class="wheel-labels">
+                  <div v-for="sector in wheelSectors" :key="sector.key" class="wheel-label"
+                    :style="{ transform: `rotate(${sector.angleMid}deg)` }">
+                    <div class="label-content" :style="{ transform: `translateY(18px) rotate(${-sector.angleMid}deg)` }">
+                      <span class="prize-icon">{{ sector.prize.icon }}</span>
+                      <span class="prize-name">{{ sector.prize.name }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="wheel-pointer">▼</div>
+            </div>
+
+            <div class="spin-area">
+              <!-- 成员统计信息 -->
+              <div v-if="currentMemberId && memberStats" class="member-stats mb-4 p-4 bg-white/5 rounded-xl border border-white/10">
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div class="text-gray-400 mb-1">抽奖券剩余</div>
+                    <div class="text-yellow-400 font-bold text-lg">{{ selectedPool.memberTicketCount || 0 }} 张</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-400 mb-1">历史总抽奖次数</div>
+                    <div class="text-white font-bold text-lg">{{ memberStats.totalCount || 0 }} 次</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-400 mb-1">当前抽奖次数</div>
+                    <div class="text-white font-bold text-lg">{{ memberStats.todayCount || 0 }} 次</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-400 mb-1">当前保底计数</div>
+                    <div class="text-orange-400 font-bold text-lg">
+                      {{ memberStats.consecutiveCount || 0 }}
+                      <span v-if="memberStats.guaranteeThreshold" class="text-xs opacity-70">
+                        / {{ memberStats.guaranteeThreshold }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <template v-if="selectedPool?.entry_ticket_type_id">
+                <div v-if="!currentMemberId" class="ticket-status mb-3 text-sm text-gray-300 text-center">
+                  请先选择抽奖成员
+                </div>
+
+                <div v-else-if="(selectedPool.memberTicketCount || 0) < selectedPool.tickets_per_draw"
+                  class="flex flex-col items-center gap-2">
+                  <button class="spin-btn disabled bg-gray-600 cursor-not-allowed opacity-50" disabled>
+                    券不足
+                  </button>
+                  <button class="text-blue-400 text-sm hover:text-blue-300 underline underline-offset-4 cursor-pointer mt-1"
+                    @click="goToMarket">
+                    去商城获取 &rarr;
+                  </button>
+                </div>
+
+                <button v-else class="spin-btn" :class="{ disabled: spinning }" :disabled="spinning"
+                  @click="handleSpinClick">
+                  <span v-if="spinning">抽奖中...</span>
+                  <span v-else>立即抽奖 <span class="text-xs opacity-80">(消耗{{ selectedPool.tickets_per_draw }})</span></span>
+                </button>
+              </template>
+
+              <button v-else class="spin-btn" :class="{ disabled: spinning }" :disabled="spinning" @click="handleSpinClick">
+                <span v-if="spinning">抽奖中...</span>
+                <span v-else>{{ currentMemberId ? '立即抽奖' : '选择成员开始抽奖' }}</span>
+              </button>
+            </div>
+
+            <div class="guarantee-info" v-if="poolDetail.version.minGuaranteeCount">
+              <span>🎁 {{ poolDetail.version.minGuaranteeCount }} 次保底大奖</span>
+            </div>
+          </div>
+
+          <div class="empty-state" v-else-if="!loading && selectedPool">
+            <p>该抽奖池尚未配置奖品</p>
+          </div>
+          <div class="empty-state" v-else-if="!loading && pools.length === 0">
+            <p>暂无可用的抽奖池</p>
+          </div>
+        </div>
+
+        <!-- 右侧：抽奖记录区域 -->
+        <div class="lottery-right" v-if="currentMemberId">
+          <div class="history-section">
+            <div class="section-header">
+              <h2>🎲 抽奖记录</h2>
+              <el-button size="small" :icon="Refresh" @click="loadHistory">刷新</el-button>
+            </div>
+
+            <!-- Tab 标签 -->
+            <div class="history-tabs">
+              <button 
+                class="history-tab" 
+                :class="{ active: activeTab === 'today' }"
+                @click="activeTab = 'today'"
               >
-                <div
-                  class="label-content"
-                  :style="{ transform: `translateY(18px) rotate(${-sector.angleMid}deg)` }"
-                >
-                  <span class="prize-icon">{{ sector.prize.icon }}</span>
-                  <span class="prize-name">{{ sector.prize.name }}</span>
+                📅 今日抽奖记录
+                <span v-if="currentRecords.length > 0" class="tab-badge">{{ currentRecords.length }}</span>
+              </button>
+              <button 
+                class="history-tab" 
+                :class="{ active: activeTab === 'history' }"
+                @click="activeTab = 'history'"
+              >
+                📚 历史抽奖记录
+                <span v-if="historyRecords.length > 0" class="tab-badge">{{ historyRecords.length }}</span>
+              </button>
+            </div>
+
+            <!-- Tab 内容 -->
+            <div class="history-content">
+              <!-- 今日抽奖记录 -->
+              <div v-show="activeTab === 'today'" class="history-tab-content">
+                <div v-if="currentRecords.length > 0" class="history-list">
+                  <div v-for="log in currentRecords" :key="log.id" class="history-item" :class="log.result_type">
+                    <div class="history-left">
+                      <span class="history-pool">{{ log.pool_icon }} {{ log.pool_name }}</span>
+                      <span class="history-time">{{ dayjs(log.created_at).format('HH:mm') }}</span>
+                    </div>
+                    <div class="history-right">
+                      <span class="history-prize" :class="{ guarantee: log.is_guarantee }">
+                        {{ log.result_name }}
+                        <span v-if="log.is_guarantee" class="guarantee-tag">保底</span>
+                      </span>
+                      <span class="history-type">{{ getResultTypeLabel(log.result_type) }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="empty-history">
+                  今日暂无抽奖记录
+                </div>
+              </div>
+
+              <!-- 历史抽奖记录 -->
+              <div v-show="activeTab === 'history'" class="history-tab-content">
+                <div v-if="historyRecords.length > 0" class="history-list">
+                  <div v-for="log in historyRecords" :key="log.id" class="history-item" :class="log.result_type">
+                    <div class="history-left">
+                      <span class="history-pool">{{ log.pool_icon }} {{ log.pool_name }}</span>
+                      <span class="history-time">{{ dayjs(log.created_at).format('MM/DD HH:mm') }}</span>
+                    </div>
+                    <div class="history-right">
+                      <span class="history-prize" :class="{ guarantee: log.is_guarantee }">
+                        {{ log.result_name }}
+                        <span v-if="log.is_guarantee" class="guarantee-tag">保底</span>
+                      </span>
+                      <span class="history-type">{{ getResultTypeLabel(log.result_type) }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="empty-history">
+                  暂无历史抽奖记录
                 </div>
               </div>
             </div>
-          </div>
-          <!-- 指针 -->
-          <div class="wheel-pointer">▼</div>
-        </div>
-
-        <!-- 抽奖按钮 -->
-        <div class="spin-area">
-          <button
-            class="spin-btn"
-            :class="{ disabled: !canSpin, spinning }"
-            :disabled="!canSpin || spinning"
-            @click="handleSpinClick"
-          >
-            <span v-if="spinning">抽奖中...</span>
-            <span v-else-if="!canSpin">券不足</span>
-            <span v-else>立即抽奖</span>
-          </button>
-          <p class="spin-hint" v-if="selectedPool?.entry_ticket_type_id">
-            消耗 {{ selectedPool.tickets_per_draw }} 张 {{ selectedPool.ticket_type_name }}
-          </p>
-        </div>
-
-        <!-- 保底提示 -->
-        <div class="guarantee-info" v-if="poolDetail.version.minGuaranteeCount">
-          <span>🎁 {{ poolDetail.version.minGuaranteeCount }} 次保底大奖</span>
-        </div>
-      </div>
-
-      <!-- 未配置奖品版本 -->
-      <div class="empty-state" v-else-if="!loading && selectedPool">
-        <p>该抽奖池尚未配置奖品，请先在“抽奖池管理-配置奖品”中设置。</p>
-        <el-button type="primary" @click="router.push('/family/market/admin/draw')">
-          去配置奖品
-        </el-button>
-      </div>
-
-      <!-- 无抽奖池提示 -->
-      <div class="empty-state" v-else-if="!loading && pools.length === 0">
-        <p>暂无可用的抽奖池</p>
-      </div>
-
-      <!-- 历史记录 -->
-      <div class="history-section">
-        <div class="section-header">
-          <h2>🎲 抽奖记录</h2>
-          <el-button size="small" :icon="Refresh" @click="loadHistory">刷新</el-button>
-        </div>
-        <div class="history-list">
-          <div
-            v-for="log in history"
-            :key="log.id"
-            class="history-item"
-            :class="log.result_type"
-          >
-            <div class="history-left">
-              <span class="history-pool">{{ log.pool_icon }} {{ log.pool_name }}</span>
-              <span class="history-time">{{ dayjs(log.created_at).format('MM/DD HH:mm') }}</span>
-            </div>
-            <div class="history-right">
-              <span class="history-prize" :class="{ guarantee: log.is_guarantee }">
-                {{ log.result_name }}
-                <span v-if="log.is_guarantee" class="guarantee-tag">保底</span>
-              </span>
-              <span class="history-type">{{ getResultTypeLabel(log.result_type) }}</span>
-            </div>
-          </div>
-          <div v-if="history.length === 0" class="empty-history">
-            暂无抽奖记录
           </div>
         </div>
       </div>
     </main>
 
-    <!-- 抽奖结果弹窗 -->
     <div class="result-modal" v-if="showResult" @click="showResult = false">
       <div class="result-content" @click.stop>
         <div class="result-icon">{{ spinResult?.prize?.icon }}</div>
@@ -453,24 +560,20 @@ watch(
       </div>
     </div>
 
-    <!-- 统一成员选择器 -->
-    <MemberSelector
-      v-model:visible="showMemberSelector"
-      title="选择抽奖成员"
-      :action-description="selectedPool ? `在「${selectedPool.name}」抽奖` : '选择进行抽奖的成员'"
-      action-icon="🎰"
-      confirm-text="开始抽奖"
-      :loading="spinning"
-      @confirm="handleMemberConfirm"
-      @cancel="closeMemberSelector"
-    />
+    <MemberSelector v-model:visible="showMemberSelector" title="选择抽奖成员"
+      :action-description="selectedPool ? `在「${selectedPool.name}」抽奖` : '选择进行抽奖的成员'" action-icon="🎰"
+      confirm-text="开始抽奖" :loading="spinning" @confirm="handleMemberConfirm" @cancel="closeMemberSelector" />
   </div>
 </template>
 
 <style scoped>
 .lottery-page {
-  min-height: 100vh;
+  height: 860px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  background-attachment: fixed;
   color: #fff;
   font-family: 'Segoe UI', 'SF Pro Display', -apple-system, sans-serif;
 }
@@ -504,9 +607,41 @@ watch(
 
 /* Main */
 .lottery-main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lottery-content {
+  flex: 1;
+  display: flex;
+  gap: 24px;
   padding: 20px;
-  max-width: 600px;
-  margin: 0 auto;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.lottery-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lottery-right {
+  width: 400px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding-left: 24px;
+  min-height: 0;
 }
 
 /* Pool Selector */
@@ -514,8 +649,10 @@ watch(
   display: flex;
   gap: 12px;
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 12px;
   margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .pool-tab {
@@ -549,18 +686,16 @@ watch(
   font-weight: 600;
 }
 
-.ticket-count {
-  font-size: 12px;
-  opacity: 0.8;
-  margin-top: 2px;
-}
-
 /* Wheel Section */
 .wheel-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 32px;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .wheel-container {
@@ -625,14 +760,17 @@ watch(
   z-index: 10;
 }
 
-/* Spin Button */
+/* Spin Area */
 .spin-area {
   text-align: center;
+  width: 100%;
+  max-width: 300px;
 }
 
 .spin-btn {
-  padding: 16px 48px;
-  font-size: 20px;
+  width: 100%;
+  padding: 16px 0;
+  font-size: 18px;
   font-weight: 700;
   color: #fff;
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
@@ -659,14 +797,47 @@ watch(
 }
 
 @keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .spin-hint {
   margin-top: 12px;
   font-size: 14px;
   opacity: 0.7;
+}
+
+.ticket-status {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 12px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+.member-stats {
+  backdrop-filter: blur(10px);
+}
+
+.member-stats .grid {
+  display: grid;
+}
+
+.history-group {
+  margin-bottom: 24px;
+}
+
+.history-group-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .guarantee-info {
@@ -680,7 +851,11 @@ watch(
 
 /* History Section */
 .history-section {
-  margin-top: 32px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .section-header {
@@ -688,11 +863,114 @@ watch(
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.history-content {
+  flex: 1 1 0;
+  overflow: hidden;
+  min-height: 0;
+  height: 0;
+}
+
+.history-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.history-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.history-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.history-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .section-header h2 {
   font-size: 18px;
   margin: 0;
+}
+
+.history-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.history-tab {
+  flex: 1;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  position: relative;
+}
+
+.history-tab:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.history-tab.active {
+  color: #fff;
+  border-bottom-color: #667eea;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: rgba(102, 126, 234, 0.3);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.history-tab.active .tab-badge {
+  background: rgba(102, 126, 234, 0.5);
+}
+
+.history-tab-content {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+}
+
+.history-tab-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.history-tab-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.history-tab-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.history-tab-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .history-list {
@@ -786,6 +1064,10 @@ watch(
   text-align: center;
   padding: 60px 20px;
   color: rgba(255, 255, 255, 0.6);
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Result Modal */
@@ -804,8 +1086,13 @@ watch(
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .result-content {
@@ -819,9 +1106,19 @@ watch(
 }
 
 @keyframes bounceIn {
-  0% { transform: scale(0.5); opacity: 0; }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .result-icon {

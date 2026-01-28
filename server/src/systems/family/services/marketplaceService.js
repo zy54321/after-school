@@ -300,3 +300,96 @@ exports.getMarketCatalog = async (parentId, options = {}) => {
 exports.getActiveOffers = async (parentId, options = {}) => {
   return await marketplaceRepo.getActiveOffers(parentId, options);
 };
+
+/**
+ * 快速发布商品 (一键创建 SKU + Offer)
+ * 事务操作，确保原子性
+ */
+exports.publishProduct = async (userId, data) => {
+  const pool = marketplaceRepo.getPool();
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+
+    // 1. 创建 SKU
+    const sku = await marketplaceRepo.createSku({
+      parentId: userId,
+      name: data.name,
+      description: data.description,
+      icon: data.icon,
+      type: 'reward', // 默认为奖励商品
+      baseCost: data.cost, // SKU 基价 = 初始售价
+      limitType: data.limit_type,
+      limitMax: data.limit_max,
+      isActive: true
+    }, client);
+
+    // 2. 创建 Offer
+    const offer = await marketplaceRepo.createOffer({
+      parentId: userId,
+      skuId: sku.id,
+      cost: data.cost,
+      quantity: data.quantity,
+      validFrom: new Date(),
+      validUntil: data.valid_until ? new Date(data.valid_until) : null,
+      isActive: true
+    }, client);
+
+    await client.query('COMMIT');
+    
+    return { sku, offer };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * 快速更新商品 (同时更新 Offer 和 SKU)
+ */
+exports.updateProduct = async (userId, offerId, data) => {
+  const pool = marketplaceRepo.getPool();
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+
+    // 1. 获取 Offer 确认归属
+    const oldOffer = await marketplaceRepo.getOfferByIdRaw(offerId, client);
+    if (!oldOffer || oldOffer.parent_id !== userId) {
+      throw new Error('商品不存在或无权限');
+    }
+
+    // 2. 更新 Offer 信息 (价格、库存、有效期)
+    const updatedOffer = await marketplaceRepo.updateOffer({
+      offerId: offerId,
+      cost: data.cost,
+      quantity: data.quantity,
+      validUntil: data.valid_until ? new Date(data.valid_until) : null,
+      isActive: data.is_active // 支持上下架
+    }, client);
+
+    // 3. 更新关联 SKU 信息 (名称、图标、描述、限购)
+    await marketplaceRepo.updateSku({
+      skuId: oldOffer.sku_id,
+      name: data.name,
+      icon: data.icon,
+      description: data.description,
+      limitType: data.limit_type,
+      limitMax: data.limit_max,
+      baseCost: data.cost, // 同步基价
+      isActive: data.is_active // 同步状态
+    }, client);
+
+    await client.query('COMMIT');
+    return updatedOffer;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+};

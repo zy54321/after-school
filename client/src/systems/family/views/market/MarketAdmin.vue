@@ -1,5 +1,5 @@
 <template>
-  <div class="market-admin h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+  <div class="market-admin h-[calc(100vh-85px)] flex flex-col overflow-hidden bg-[#151520]">
     <nav class="breadcrumb flex-none p-4 bg-[#1a1a2e]">
       <router-link to="/family/market">市场</router-link>
       <span class="separator">/</span>
@@ -7,198 +7,186 @@
     </nav>
 
     <header
-      class="page-header flex-none px-4 pb-4 bg-[#1a1a2e] border-b border-white/10 flex justify-between items-center">
+      class="page-header flex-none px-6 py-5 bg-[#1a1a2e] border-b border-white/10 flex justify-between items-center shadow-md z-10">
       <div class="header-left">
-        <h1 class="text-xl font-bold flex items-center gap-2">
-          <span class="header-icon">🧩</span> 市场管理
+        <h1 class="text-xl font-bold flex items-center gap-2 text-white">
+          <span class="text-2xl">🏪</span> 商品管理
         </h1>
-        <p class="text-sm text-gray-400 m-0">管理 SKU 与 Offer</p>
+        <p class="text-sm text-gray-400 mt-1">管理 SKU 与 Offer (一键发布模式)</p>
       </div>
-      <div class="flex gap-2">
+
+      <div class="flex items-center gap-3">
         <router-link to="/family/market/admin/draw" class="quick-btn">🎰 抽奖管理</router-link>
         <router-link to="/family/market/admin/auction" class="quick-btn">🔨 拍卖管理</router-link>
+
+        <div class="h-6 w-px bg-white/10 mx-1"></div>
+
+        <button class="modern-btn primary-blue" @click="openModal()">
+          <span class="text-lg leading-none mr-1">+</span> 发布新商品
+        </button>
       </div>
     </header>
 
-    <div class="flex flex-1 overflow-hidden p-4 gap-4">
+    <div class="flex-1 overflow-y-auto p-6 custom-scroll">
+      <div v-if="loading" class="text-center py-20 text-gray-500">加载中...</div>
 
-      <div class="flex flex-col w-2/5 bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-        <div class="p-3 border-b border-white/10 flex justify-between items-center bg-white/5">
-          <h2 class="text-lg font-bold m-0">📦 SKU 库</h2>
-          <button class="primary-btn text-xs px-2 py-1" @click="openSkuModal()">+ 新建</button>
-        </div>
-
-        <div class="flex-1 overflow-y-auto p-2 space-y-2">
-          <div v-if="skus.length === 0" class="text-center text-gray-500 py-4">暂无 SKU</div>
-          <div v-for="sku in skus" :key="sku.id"
-            class="p-3 rounded bg-white/5 hover:bg-white/10 border border-transparent hover:border-blue-500/50 transition-all cursor-pointer group"
-            @click="openSkuModal(sku)">
-            <div class="flex justify-between items-start mb-1">
-              <span class="font-bold text-sm">{{ sku.name }}</span>
-              <span class="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">{{ sku.type }}</span>
-            </div>
-            <div class="text-xs text-gray-400 flex justify-between items-center">
-              <span>💰 基价: {{ sku.base_cost }}</span>
-              <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button class="text-blue-300 hover:text-blue-200" @click.stop="openSkuModal(sku)">编辑</button>
-                <button class="text-red-300 hover:text-red-200" @click.stop="deactivateSku(sku)">停用</button>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div v-else-if="products.length === 0"
+        class="flex flex-col items-center justify-center h-full text-gray-500 opacity-60">
+        <span class="text-6xl mb-4">🛒</span>
+        <p>还没有上架任何商品，快去发布一个吧！</p>
       </div>
 
-      <div class="flex flex-col w-3/5 bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-        <div class="p-3 border-b border-white/10 flex justify-between items-center bg-white/5">
-          <h2 class="text-lg font-bold m-0">🏷️ 上架商品 (Offers)</h2>
-          <button class="primary-btn text-xs px-2 py-1" @click="openOfferModal()">+ 新建</button>
-        </div>
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div v-for="item in products" :key="item.id"
+          class="group relative bg-[#1e1e2d] rounded-2xl border border-white/5 hover:border-white/10 overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1">
 
-        <div class="flex-1 overflow-y-auto p-2 space-y-2">
-          <div v-if="offers.length === 0" class="text-center text-gray-500 py-4">暂无 Offer</div>
-          <div v-for="offer in offers" :key="offer.id"
-            class="p-3 rounded bg-white/5 border border-white/10 flex items-center justify-between hover:bg-white/10 transition-colors">
-            <div class="flex-1 min-w-0 mr-4">
-              <div class="font-bold text-base truncate">{{ offer.sku_name }}</div>
-              <div class="text-xs text-gray-400 mt-1">
-                有效期: {{ formatDateRange(offer.valid_from, offer.valid_until) }}
+          <div class="absolute top-3 right-3 z-10">
+            <span v-if="!item.is_active"
+              class="px-2 py-1 bg-red-500/20 text-red-300 text-xs rounded-md font-bold border border-red-500/20">已下架</span>
+            <span v-else-if="item.quantity <= 0"
+              class="px-2 py-1 bg-gray-500/20 text-gray-400 text-xs rounded-md font-bold border border-gray-500/20">售罄</span>
+            <span v-else
+              class="px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-md font-bold border border-green-500/20">销售中</span>
+          </div>
+
+          <div class="p-5">
+            <div class="flex items-start gap-4 mb-4">
+              <div
+                class="w-14 h-14 rounded-2xl bg-[#2a2a3e] flex items-center justify-center text-3xl shadow-inner flex-shrink-0">
+                {{ item.sku_icon || '🎁' }}
+              </div>
+              <div class="min-w-0 flex-1 pt-1">
+                <h3 class="font-bold text-lg text-white truncate">{{ item.sku_name }}</h3>
+                <div class="text-xs text-gray-400 mt-1 truncate">{{ item.sku_description || '暂无描述' }}</div>
               </div>
             </div>
-            <div class="text-right mr-4 flex-shrink-0">
-              <div class="text-lg font-bold text-yellow-400">{{ offer.cost }} <span
-                  class="text-xs text-gray-500">分</span></div>
-              <div class="text-xs text-gray-400">数量: {{ offer.quantity }}</div>
+
+            <div class="flex items-end justify-between border-t border-white/5 pt-4">
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">价格</div>
+                <div class="text-xl font-bold text-yellow-400 font-mono">{{ item.cost }} <span
+                    class="text-xs text-gray-500">积分</span></div>
+              </div>
+              <div class="text-right">
+                <div class="text-xs text-gray-500 mb-0.5">库存</div>
+                <div class="text-sm font-bold text-white">{{ item.quantity > 99 ? '99+' : item.quantity }}</div>
+              </div>
             </div>
-            <div class="flex gap-2 flex-shrink-0">
-              <button class="text-blue-300 p-1 hover:bg-white/10 rounded" @click="openOfferModal(offer)">✏️</button>
-              <button class="text-red-300 p-1 hover:bg-white/10 rounded" @click="deactivateOffer(offer)">🚫</button>
+
+            <div v-if="item.limit_type && item.limit_type !== 'unlimited'" class="mt-3 flex gap-2">
+              <span class="text-[10px] px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">
+                {{ getLimitLabel(item.limit_type, item.limit_max) }}
+              </span>
             </div>
           </div>
-        </div>
-      </div>
 
-    </div>
-
-    <div class="modal-overlay" v-if="showSkuModal" @click.self="closeSkuModal">
-      <div class="modal-content">
-        <h3>{{ skuForm.id ? '编辑 SKU' : '新建 SKU' }}</h3>
-        <div class="form-group">
-          <label>名称</label>
-          <input v-model="skuForm.name" />
-        </div>
-        <div class="form-group">
-          <label>描述</label>
-          <textarea v-model="skuForm.description" rows="2"></textarea>
-        </div>
-        <div class="form-group">
-          <label>图标</label>
-          <input v-model="skuForm.icon" placeholder="🎁" />
-        </div>
-        <div class="form-group">
-          <label>类型</label>
-          <select v-model="skuForm.type">
-            <option value="reward">reward</option>
-            <option value="auction">auction</option>
-            <option value="ticket">ticket</option>
-            <option value="item">item</option>
-            <option value="permission">permission</option>
-            <option value="service">service</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>来源类型</label>
-          <select v-model="skuForm.source_type">
-            <option value="custom">custom</option>
-            <option value="item">item</option>
-            <option value="permission">permission</option>
-            <option value="service">service</option>
-            <option value="ticket_type">ticket_type</option>
-          </select>
-        </div>
-        <div class="form-group" v-if="skuForm.source_type === 'ticket_type' || skuForm.type === 'ticket'">
-          <label>关联抽奖券类型</label>
-          <select v-model.number="skuForm.ticket_type_id">
-            <option :value="null">无</option>
-            <option v-for="t in ticketTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>基础价格</label>
-          <input type="number" v-model.number="skuForm.base_cost" />
-        </div>
-        <div class="form-group">
-          <label>限制类型</label>
-          <select v-model="skuForm.limit_type">
-            <option value="unlimited">unlimited</option>
-            <option value="daily">daily</option>
-            <option value="weekly">weekly</option>
-            <option value="monthly">monthly</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>限制次数</label>
-          <input type="number" v-model.number="skuForm.limit_max" />
-        </div>
-        <div class="form-group">
-          <label>目标成员（ID逗号分隔，可选）</label>
-          <input v-model="skuForm.target_members_text" placeholder="1,2,3" />
-        </div>
-        <div class="form-group">
-          <label>状态</label>
-          <select v-model="skuForm.is_active">
-            <option :value="true">启用</option>
-            <option :value="false">停用</option>
-          </select>
-        </div>
-        <div class="modal-actions">
-          <button class="cancel-btn" @click="closeSkuModal">取消</button>
-          <button class="confirm-btn" @click="submitSku" :disabled="saving">
-            {{ saving ? '保存中...' : '保存' }}
-          </button>
+          <div
+            class="absolute inset-0 bg-black/60 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+            <button @click="openModal(item)" class="action-icon-btn" title="编辑">
+              ✏️
+            </button>
+            <button @click="toggleStatus(item)" class="action-icon-btn"
+              :class="item.is_active ? 'action-icon-btn-danger' : 'action-icon-btn-success'"
+              :title="item.is_active ? '下架' : '上架'">
+              {{ item.is_active ? '🚫' : '✅' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="modal-overlay" v-if="showOfferModal" @click.self="closeOfferModal">
-      <div class="modal-content">
-        <h3>{{ offerForm.id ? '编辑 Offer' : '新建 Offer' }}</h3>
-        <div class="form-group">
-          <label>SKU</label>
-          <select v-model.number="offerForm.sku_id">
-            <option v-for="sku in allSkus" :key="sku.id" :value="sku.id">
-              {{ sku.name }} ({{ sku.type }})
-            </option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>价格</label>
-          <input type="number" v-model.number="offerForm.cost" />
-        </div>
-        <div class="form-group">
-          <label>数量</label>
-          <input type="number" v-model.number="offerForm.quantity" />
-        </div>
-        <div class="form-group">
-          <label>生效时间</label>
-          <input type="datetime-local" v-model="offerForm.valid_from" />
-        </div>
-        <div class="form-group">
-          <label>失效时间</label>
-          <input type="datetime-local" v-model="offerForm.valid_until" />
-        </div>
-        <div class="form-group">
-          <label>状态</label>
-          <select v-model="offerForm.is_active">
-            <option :value="true">启用</option>
-            <option :value="false">停用</option>
-          </select>
-        </div>
-        <div class="modal-actions">
-          <button class="cancel-btn" @click="closeOfferModal">取消</button>
-          <button class="confirm-btn" @click="submitOffer" :disabled="saving">
-            {{ saving ? '保存中...' : '保存' }}
+    <div class="modal-overlay fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
+      v-if="showModal" @click.self="closeModal">
+      <div
+        class="bg-[#1e1e2d] border border-white/10 rounded-2xl w-[90%] max-w-[500px] shadow-2xl overflow-hidden animate-scale-up">
+
+        <div class="px-6 py-4 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
+          <h3 class="text-lg font-bold text-white">{{ form.id ? '✏️ 编辑商品' : '✨ 发布新商品' }}</h3>
+          <button @click="closeModal" class="modal-close-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
+
+        <div class="p-6 space-y-5 max-h-[75vh] overflow-y-auto custom-scroll">
+
+          <div class="space-y-3">
+            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">📦 基本信息</div>
+            <div class="grid grid-cols-5 gap-3">
+              <div class="col-span-4">
+                <label class="block text-xs text-gray-400 mb-1">商品名称</label>
+                <input v-model="form.name"
+                  class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white focus:border-blue-500 outline-none"
+                  placeholder="如：看电视1小时" />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">图标</label>
+                <input v-model="form.icon"
+                  class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-center text-white focus:border-blue-500 outline-none"
+                  placeholder="📺" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">描述 (可选)</label>
+              <textarea v-model="form.description" rows="2"
+                class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white text-sm focus:border-blue-500 outline-none resize-none"
+                placeholder="简短描述这个奖励..."></textarea>
+            </div>
+          </div>
+
+          <div class="space-y-3 pt-2 border-t border-white/5">
+            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">💰 售卖规则</div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">价格 (积分)</label>
+                <input type="number" v-model.number="form.cost"
+                  class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white font-mono font-bold focus:border-yellow-500 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">库存数量</label>
+                <input type="number" v-model.number="form.quantity"
+                  class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white font-mono focus:border-blue-500 outline-none" />
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3 pt-2 border-t border-white/5">
+            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">⛔️ 限制规则</div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">限购周期</label>
+                <select v-model="form.limit_type"
+                  class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white focus:border-blue-500 outline-none appearance-none">
+                  <option value="unlimited">无限制</option>
+                  <option value="daily">每天 (Daily)</option>
+                  <option value="weekly">每周 (Weekly)</option>
+                  <option value="monthly">每月 (Monthly)</option>
+                </select>
+              </div>
+              <div v-if="form.limit_type !== 'unlimited'">
+                <label class="block text-xs text-gray-400 mb-1">限购次数</label>
+                <input type="number" v-model.number="form.limit_max"
+                  class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white focus:border-blue-500 outline-none" />
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="p-4 border-t border-white/5 bg-[#1a1a2e] flex gap-3">
+          <button @click="closeModal" class="modern-btn neutral flex-1">
+            取消
+          </button>
+          <button @click="submit" :disabled="submitting" class="modern-btn primary-blue flex-[2]">
+            <span v-if="submitting" class="flex items-center justify-center gap-2">
+              <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+              保存中...
+            </span>
+            <span v-else>确认保存</span>
+          </button>
+        </div>
+
       </div>
     </div>
   </div>
@@ -207,254 +195,131 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 const loading = ref(false);
-const saving = ref(false);
-const skus = ref([]);
-const offers = ref([]);
-const allSkus = ref([]);
-const ticketTypes = ref([]);
+const submitting = ref(false);
+const products = ref([]);
+const showModal = ref(false);
 
-const showSkuModal = ref(false);
-const showOfferModal = ref(false);
-
-const skuForm = ref({
-  id: null,
-  name: '',
-  description: '',
-  icon: '',
-  type: 'reward',
-  source_type: 'custom',
-  ticket_type_id: null,
-  base_cost: 0,
-  limit_type: 'unlimited',
-  limit_max: 0,
-  target_members_text: '',
-  is_active: true,
+// 统一表单：合并了 SKU 和 Offer 的字段
+const form = ref({
+  id: null, // Offer ID
+  name: '', // SKU Name
+  icon: '🎁', // SKU Icon
+  description: '', // SKU Desc
+  cost: 100, // Offer Cost
+  quantity: 999, // Offer Qty
+  limit_type: 'unlimited', // SKU Limit
+  limit_max: 1, // SKU Limit Max
+  is_active: true
 });
 
-const offerForm = ref({
-  id: null,
-  sku_id: null,
-  cost: 0,
-  quantity: 1,
-  valid_from: '',
-  valid_until: '',
-  is_active: true,
-});
-
-const loadSkus = async () => {
-  const res = await axios.get('/api/v2/admin/skus');
-  if (res.data?.code === 200) {
-    skus.value = res.data.data?.skus || [];
-  }
-};
-
-const loadOffers = async () => {
-  const res = await axios.get('/api/v2/admin/offers');
-  if (res.data?.code === 200) {
-    offers.value = res.data.data?.offers || [];
-  }
-};
-
-const loadAllSkus = async () => {
-  const res = await axios.get('/api/v2/skus');
-  if (res.data?.code === 200) {
-    allSkus.value = res.data.data?.skus || [];
-  }
-};
-
-const loadTicketTypes = async () => {
-  const res = await axios.get('/api/v2/draw/overview');
-  if (res.data?.code === 200) {
-    ticketTypes.value = res.data.data?.ticketTypes || [];
-  }
-};
-
-const refresh = async () => {
+const loadProducts = async () => {
   loading.value = true;
   try {
-    await Promise.all([loadSkus(), loadOffers(), loadAllSkus(), loadTicketTypes()]);
+    // 使用 admin 接口获取家庭的所有 Offer
+    const res = await axios.get('/api/v2/admin/offers');
+    if (res.data?.code === 200) {
+      products.value = res.data.data?.offers || [];
+    }
+  } catch (err) {
+    ElMessage.error('加载商品失败');
   } finally {
     loading.value = false;
   }
 };
 
-const openSkuModal = (sku = null) => {
-  if (sku) {
-    const linkedTicket = ticketTypes.value.find((t) => t.sku_id === sku.id);
-    skuForm.value = {
-      id: sku.id,
-      name: sku.name,
-      description: sku.description || '',
-      icon: sku.icon || '',
-      type: sku.type || 'reward',
-      source_type: sku.source_type || 'custom',
-      ticket_type_id: linkedTicket?.id || (sku.source_type === 'ticket_type' ? sku.source_id : null),
-      base_cost: sku.base_cost || 0,
-      limit_type: sku.limit_type || 'unlimited',
-      limit_max: sku.limit_max || 0,
-      target_members_text: sku.target_members ? sku.target_members.join(',') : '',
-      is_active: sku.is_active !== false,
+const openModal = (item = null) => {
+  if (item) {
+    // 编辑模式：回填数据
+    form.value = {
+      id: item.id,
+      name: item.sku_name,
+      // 如果后端没返回 icon，这里会是 undefined，前端模板里有 fallback
+      icon: item.sku_icon || '🎁',
+      description: item.sku_description || '',
+      cost: item.cost,
+      quantity: item.quantity,
+      limit_type: item.limit_type || 'unlimited',
+      limit_max: item.limit_max || 1,
+      is_active: item.is_active
     };
   } else {
-    skuForm.value = {
+    // 新建模式：重置
+    form.value = {
       id: null,
       name: '',
+      icon: '🎁',
       description: '',
-      icon: '',
-      type: 'reward',
-      source_type: 'custom',
-      ticket_type_id: null,
-      base_cost: 0,
+      cost: 100,
+      quantity: 999,
       limit_type: 'unlimited',
-      limit_max: 0,
-      target_members_text: '',
-      is_active: true,
+      limit_max: 1,
+      is_active: true
     };
   }
-  showSkuModal.value = true;
+  showModal.value = true;
 };
 
-const closeSkuModal = () => {
-  showSkuModal.value = false;
-};
+const closeModal = () => showModal.value = false;
 
-const submitSku = async () => {
-  saving.value = true;
+const submit = async () => {
+  if (!form.value.name) return ElMessage.warning('请输入商品名称');
+  if (form.value.cost < 0) return ElMessage.warning('价格不能为负');
+
+  submitting.value = true;
   try {
-    const resolvedSourceType = skuForm.value.ticket_type_id ? 'ticket_type' : skuForm.value.source_type;
-    const payload = {
-      name: skuForm.value.name,
-      description: skuForm.value.description || undefined,
-      icon: skuForm.value.icon || undefined,
-      type: skuForm.value.type,
-      source_type: resolvedSourceType,
-      source_id: resolvedSourceType === 'ticket_type' ? skuForm.value.ticket_type_id : null,
-      ticket_type_id: skuForm.value.ticket_type_id || null,
-      base_cost: skuForm.value.base_cost,
-      limit_type: skuForm.value.limit_type,
-      limit_max: skuForm.value.limit_max,
-      target_members: skuForm.value.target_members_text
-        ? skuForm.value.target_members_text.split(',').map(v => parseInt(v.trim())).filter(Boolean)
-        : null,
-      is_active: skuForm.value.is_active,
-    };
-
-    if (skuForm.value.id) {
-      await axios.put(`/api/v2/skus/${skuForm.value.id}`, payload);
+    if (form.value.id) {
+      // 🟢 更新：调用一键更新接口
+      await axios.put(`/api/v2/admin/quick-update/${form.value.id}`, form.value);
+      ElMessage.success('更新成功');
     } else {
-      await axios.post('/api/v2/skus', payload);
+      // 🟢 新增：调用一键发布接口
+      await axios.post('/api/v2/admin/quick-publish', form.value);
+      ElMessage.success('发布成功');
     }
-    closeSkuModal();
-    await refresh();
+    closeModal();
+    loadProducts();
+  } catch (err) {
+    ElMessage.error(err.response?.data?.msg || '操作失败');
   } finally {
-    saving.value = false;
+    submitting.value = false;
   }
 };
 
-const deactivateSku = async (sku) => {
-  await axios.delete(`/api/v2/skus/${sku.id}`);
-  await refresh();
-};
-
-const openOfferModal = (offer = null) => {
-  if (offer) {
-    offerForm.value = {
-      id: offer.id,
-      sku_id: offer.sku_id,
-      cost: offer.cost,
-      quantity: offer.quantity,
-      valid_from: offer.valid_from ? offer.valid_from.slice(0, 16) : '',
-      valid_until: offer.valid_until ? offer.valid_until.slice(0, 16) : '',
-      is_active: offer.is_active !== false,
-    };
-  } else {
-    offerForm.value = {
-      id: null,
-      sku_id: allSkus.value[0]?.id || null,
-      cost: 0,
-      quantity: 1,
-      valid_from: '',
-      valid_until: '',
-      is_active: true,
-    };
-  }
-  showOfferModal.value = true;
-};
-
-const closeOfferModal = () => {
-  showOfferModal.value = false;
-};
-
-const submitOffer = async () => {
-  if (!offerForm.value.sku_id) return;
-  saving.value = true;
+const toggleStatus = async (item) => {
   try {
-    const payload = {
-      sku_id: offerForm.value.sku_id,
-      cost: offerForm.value.cost,
-      quantity: offerForm.value.quantity,
-      valid_from: offerForm.value.valid_from || undefined,
-      valid_until: offerForm.value.valid_until || undefined,
-      is_active: offerForm.value.is_active,
-    };
-
-    if (offerForm.value.id) {
-      await axios.put(`/api/v2/offers/${offerForm.value.id}`, payload);
-    } else {
-      await axios.post('/api/v2/offers', payload);
-    }
-    closeOfferModal();
-    await refresh();
-  } finally {
-    saving.value = false;
+    // 简单更新状态，复用 quick-update 接口
+    const newStatus = !item.is_active;
+    await axios.put(`/api/v2/admin/quick-update/${item.id}`, {
+      ...item, // 补全字段
+      name: item.sku_name,
+      icon: item.sku_icon,
+      cost: item.cost,
+      quantity: item.quantity,
+      limit_type: item.limit_type,
+      limit_max: item.limit_max,
+      is_active: newStatus
+    });
+    item.is_active = newStatus; // 乐观更新
+    ElMessage.success(newStatus ? '已上架' : '已下架');
+  } catch (err) {
+    ElMessage.error('操作失败');
+    loadProducts(); // 失败还原
   }
 };
 
-const deactivateOffer = async (offer) => {
-  await axios.delete(`/api/v2/offers/${offer.id}`);
-  await refresh();
+const getLimitLabel = (type, max) => {
+  const map = { daily: '每日', weekly: '每周', monthly: '每月' };
+  return `${map[type] || type}限购 ${max} 次`;
 };
 
-const formatDateRange = (from, until) => {
-  const start = from ? new Date(from).toLocaleDateString('zh-CN') : '即时';
-  const end = until ? new Date(until).toLocaleDateString('zh-CN') : '永久';
-  return `${start} ~ ${end}`;
-};
-
-const formatOfferSource = (offer) => {
-  const type = offer.offer_type || 'market';
-  const map = {
-    market: '奖励商城',
-    mystery_shop: '神秘商店',
-    auction: '拍卖',
-    lottery: '抽奖',
-  };
-  return map[type] || type;
-};
-
-onMounted(() => {
-  refresh();
-});
-
-const formatSourceLabel = (sku) => {
-  if (sku.parent_id === 0) {
-    return '系统';
-  }
-  if (sku.source_type === 'ticket_type') {
-    const ticket = ticketTypes.value.find((t) => t.id === sku.source_id || t.sku_id === sku.id);
-    return ticket ? `ticket_type: ${ticket.name}` : 'ticket_type';
-  }
-  return sku.source_type || 'custom';
-};
+onMounted(loadProducts);
 </script>
 
 <style scoped>
-.market-admin {
-  color: #fff;
-}
-
+/* 原有的样式保留，增加新的样式 */
 .breadcrumb {
   font-size: 14px;
 }
@@ -469,6 +334,11 @@ const formatSourceLabel = (sku) => {
   color: rgba(255, 255, 255, 0.4);
 }
 
+.breadcrumb .current {
+  color: #fff;
+}
+
+/* Quick Btn 样式，用于头部右侧链接 */
 .quick-btn {
   padding: 6px 12px;
   background: rgba(255, 255, 255, 0.1);
@@ -477,102 +347,162 @@ const formatSourceLabel = (sku) => {
   color: #fff;
   text-decoration: none;
   border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s;
 }
 
 .quick-btn:hover {
   background: rgba(255, 255, 255, 0.2);
-}
-
-.primary-btn {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-/* 弹窗样式复用原有的即可，以下为必须的基础样式 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #1a1a2e;
-  padding: 24px;
-  border-radius: 16px;
-  width: 90%;
-  max-width: 480px;
-}
-
-.form-group {
-  margin-bottom: 12px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 6px;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-}
-
-.form-group input,
-.form-group textarea,
-.form-group select {
-  width: 100%;
-  padding: 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.cancel-btn {
-  flex: 1;
-  padding: 10px;
-  border-radius: 8px;
-  border: none;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  cursor: pointer;
-}
-
-.confirm-btn {
-  flex: 1;
-  padding: 10px;
-  border-radius: 8px;
-  border: none;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* 滚动条美化 */
-::-webkit-scrollbar {
+.custom-scroll::-webkit-scrollbar {
   width: 6px;
 }
 
-::-webkit-scrollbar-track {
+.custom-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes scale-up {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-scale-up {
+  animation: scale-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 统一按钮样式 */
+.modern-btn {
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.modern-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+
+.modern-btn:active {
+  transform: translateY(0);
+}
+
+.modern-btn.primary-blue {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+}
+
+.modern-btn.neutral {
+  color: #9ca3af;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.modern-btn.neutral:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.modern-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* 操作图标按钮（卡片hover时显示） */
+.action-icon-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+}
+
+.action-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.action-icon-btn-danger {
+  color: #fca5a5;
+}
+
+.action-icon-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fee2e2;
+}
+
+.action-icon-btn-success {
+  color: #86efac;
+}
+
+.action-icon-btn-success:hover {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #dcfce7;
+}
+
+/* 弹窗关闭按钮 */
+.modal-close-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  transform: scale(1.05);
+}
+
+.modal-close-btn:active {
+  transform: scale(0.95);
 }
 </style>

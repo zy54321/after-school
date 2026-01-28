@@ -331,16 +331,24 @@ exports.createDrawLog = async ({
 /**
  * 获取成员的抽奖记录
  */
-exports.getDrawLogsByMemberId = async (memberId, limit = 50, client = pool) => {
-  const result = await client.query(
-    `SELECT dl.*, dp.name as pool_name, dp.icon as pool_icon
-     FROM draw_log dl
-     JOIN draw_pool dp ON dl.pool_id = dp.id
-     WHERE dl.member_id = $1
-     ORDER BY dl.created_at DESC
-     LIMIT $2`,
-    [memberId, limit]
-  );
+exports.getDrawLogsByMemberId = async (memberId, poolId = null, limit = 100, client = pool) => {
+  let query = `
+    SELECT dl.*, dp.name as pool_name, dp.icon as pool_icon
+    FROM draw_log dl
+    JOIN draw_pool dp ON dl.pool_id = dp.id
+    WHERE dl.member_id = $1
+  `;
+  const params = [memberId];
+  
+  if (poolId) {
+    query += ` AND dl.pool_id = $${params.length + 1}`;
+    params.push(poolId);
+  }
+  
+  query += ` ORDER BY dl.created_at DESC LIMIT $${params.length + 1}`;
+  params.push(limit);
+  
+  const result = await client.query(query, params);
   return result.rows;
 };
 
@@ -407,6 +415,56 @@ exports.getWeeklyTicketUsage = async (memberId, ticketTypeId, client = pool) => 
     [memberId, ticketTypeId]
   );
   return parseInt(result.rows[0].used_count);
+};
+
+/**
+ * 获取成员在指定抽奖池的统计信息
+ */
+exports.getMemberPoolStats = async (memberId, poolId, client = pool) => {
+  // 历史总抽奖次数
+  const totalCountResult = await client.query(
+    `SELECT COUNT(*) as total_count
+     FROM draw_log 
+     WHERE member_id = $1 AND pool_id = $2`,
+    [memberId, poolId]
+  );
+  const totalCount = parseInt(totalCountResult.rows[0].total_count);
+
+  // 当前抽奖次数（今日）
+  const todayCountResult = await client.query(
+    `SELECT COUNT(*) as today_count
+     FROM draw_log 
+     WHERE member_id = $1 AND pool_id = $2
+       AND created_at >= CURRENT_DATE`,
+    [memberId, poolId]
+  );
+  const todayCount = parseInt(todayCountResult.rows[0].today_count);
+
+  // 获取抽奖池的保底配置
+  const poolResult = await client.query(
+    `SELECT dpv.min_guarantee_count, dpv.guarantee_prize_id
+     FROM draw_pool dp
+     JOIN draw_pool_version dpv ON dp.id = dpv.pool_id AND dpv.is_current = TRUE
+     WHERE dp.id = $1`,
+    [poolId]
+  );
+
+  let consecutiveCount = 0;
+  if (poolResult.rows.length > 0 && poolResult.rows[0].guarantee_prize_id) {
+    consecutiveCount = await exports.getConsecutiveCountSinceLastBigWin(
+      memberId,
+      poolId,
+      poolResult.rows[0].guarantee_prize_id,
+      client
+    );
+  }
+
+  return {
+    totalCount,
+    todayCount,
+    consecutiveCount,
+    guaranteeThreshold: poolResult.rows[0]?.min_guarantee_count || null,
+  };
 };
 
 // ========== Inventory (抽奖券库存) ==========

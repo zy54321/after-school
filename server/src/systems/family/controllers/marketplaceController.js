@@ -932,3 +932,61 @@ exports.getMysteryShopOverview = async (req, res) => {
     });
   }
 };
+
+/**
+ * POST /api/v2/admin/quick-publish
+ * 一键发布商品
+ */
+exports.quickPublish = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { 
+      name, icon, description, 
+      cost, quantity, 
+      limit_type, limit_max,
+      valid_until 
+    } = req.body;
+
+    if (!name || !cost) {
+      return res.status(400).json({ code: 400, msg: '商品名称和价格必填' });
+    }
+
+    const result = await marketplaceService.publishProduct(userId, {
+      name, icon, description,
+      cost: parseInt(cost),
+      quantity: quantity ? parseInt(quantity) : 999,
+      limit_type: limit_type || 'unlimited',
+      limit_max: limit_max ? parseInt(limit_max) : 0,
+      valid_until
+    });
+
+    res.json({ code: 200, data: result, msg: '发布成功' });
+  } catch (err) {
+    console.error('quickPublish 错误:', err);
+    res.status(500).json({ code: 500, msg: '发布失败', error: err.message });
+  }
+};
+
+/**
+ * PUT /api/v2/admin/quick-update/:offerId
+ * 一键更新商品
+ */
+exports.quickUpdate = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const offerId = parseInt(req.params.offerId);
+    const body = req.body;
+
+    await marketplaceService.updateProduct(userId, offerId, {
+      ...body,
+      cost: parseInt(body.cost),
+      quantity: parseInt(body.quantity),
+      limit_max: parseInt(body.limit_max)
+    });
+
+    res.json({ code: 200, msg: '更新成功' });
+  } catch (err) {
+    console.error('quickUpdate 错误:', err);
+    res.status(500).json({ code: 500, msg: '更新失败', error: err.message });
+  }
+};
