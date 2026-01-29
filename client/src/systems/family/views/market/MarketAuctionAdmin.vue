@@ -22,17 +22,64 @@
           <div>标题</div>
           <div>时间</div>
           <div>状态</div>
+          <div>准备度</div>
+          <div>进度</div>
           <div>操作</div>
         </div>
         <div class="table-row" v-for="session in sessions" :key="session.id">
-          <div>{{ session.title }}</div>
+          <div class="session-title">{{ session.title }}</div>
           <div>{{ formatDate(session.scheduled_at) }}</div>
-          <div>{{ session.status }}</div>
+          <div>
+            <span class="status-badge" :class="session.status">
+              {{ getStatusLabel(session.status) }}
+            </span>
+          </div>
+          <div class="readiness">
+            <span>池子: {{ session.pool_count || 0 }}</span>
+            <span>拍品: {{ session.lot_count || 0 }}</span>
+            <span v-if="session.active_lot" class="active-lot-hint">
+              当前: {{ session.active_lot.title }}
+            </span>
+          </div>
+          <div class="progress">
+            <span>竞拍中: {{ session.open_count || 0 }}</span>
+            <span>已成交: {{ session.sold_count || 0 }}</span>
+            <span>流拍: {{ session.unsold_count || 0 }}</span>
+            <span>出价者: {{ session.bidder_count || 0 }}</span>
+          </div>
           <div class="actions">
-            <button class="link-btn" @click="openPoolModal(session)">设置池子</button>
-            <button class="link-btn" @click="openLotsModal(session)">抽选拍品</button>
-            <button class="link-btn" @click="startSession(session)">开始拍卖</button>
-            <button class="link-btn" @click="nextLot(session)">下一拍品</button>
+            <button class="action-btn" @click="goToManage(session.id)">进入导演台</button>
+            <button 
+              v-if="session.status === 'active'" 
+              class="action-btn primary" 
+              @click="goToAuction(session.id)"
+            >
+              进入拍卖台
+            </button>
+            <button 
+              v-if="['draft', 'scheduled'].includes(session.status)" 
+              class="action-btn" 
+              @click="startSession(session)"
+              :disabled="saving"
+            >
+              开始
+            </button>
+            <button 
+              v-if="session.status === 'active'" 
+              class="action-btn" 
+              @click="endSession(session)"
+              :disabled="saving"
+            >
+              结束
+            </button>
+            <button 
+              v-if="session.status === 'ended'" 
+              class="action-btn" 
+              @click="archiveSession(session)"
+              :disabled="saving"
+            >
+              归档
+            </button>
           </div>
         </div>
       </div>
@@ -117,7 +164,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import axios from 'axios';
+import { ElMessage, ElMessageBox } from 'element-plus';
+
+const router = useRouter();
 
 const loading = ref(false);
 const saving = ref(false);
@@ -146,7 +197,7 @@ const poolForm = ref({
 });
 
 const loadSessions = async () => {
-  const res = await axios.get('/api/v2/auction/sessions');
+  const res = await axios.get('/api/v2/auction/sessions-admin');
   if (res.data?.code === 200) {
     sessions.value = res.data.data?.sessions || [];
   }
@@ -207,6 +258,7 @@ const submitLots = async () => {
       ur: lotsForm.value.ur,
     });
     closeLotsModal();
+    await refresh(); // ✅ 修复：提交后刷新
   } finally {
     saving.value = false;
   }
@@ -242,29 +294,75 @@ const submitPool = async () => {
       sku_ids: poolForm.value.sku_ids,
     });
     closePoolModal();
+    await refresh(); // ✅ 修复：提交后刷新
   } finally {
     saving.value = false;
   }
 };
 
+// 进入导演台
+const goToManage = (sessionId) => {
+  router.push(`/family/market/admin/auction/${sessionId}`);
+};
+
+// 进入拍卖台
+const goToAuction = (sessionId) => {
+  router.push(`/family/auction/${sessionId}`);
+};
+
+// 开始拍卖
 const startSession = async (session) => {
   saving.value = true;
   try {
     await axios.post(`/api/v2/auction/sessions/${session.id}/start`);
+    ElMessage.success('拍卖已开始');
     await refresh();
+  } catch (err) {
+    ElMessage.error(err.response?.data?.msg || '开始拍卖失败');
   } finally {
     saving.value = false;
   }
 };
 
-const nextLot = async (session) => {
-  saving.value = true;
+// 结束拍卖
+const endSession = async (session) => {
   try {
-    await axios.post(`/api/v2/auction/sessions/${session.id}/next`);
-    await refresh();
-  } finally {
-    saving.value = false;
+    await ElMessageBox.confirm('确认结束该拍卖场次？', '确认结束', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning',
+    });
+    saving.value = true;
+    try {
+      // TODO: 需要后端提供结束接口，暂时使用 settle
+      await axios.post(`/api/v2/auction/sessions/${session.id}/settle`);
+      ElMessage.success('拍卖已结束');
+      await refresh();
+    } catch (err) {
+      ElMessage.error(err.response?.data?.msg || '结束拍卖失败');
+    } finally {
+      saving.value = false;
+    }
+  } catch {
+    // 用户取消
   }
+};
+
+// 归档拍卖
+const archiveSession = async (session) => {
+  ElMessage.info('归档功能待实现');
+};
+
+// 获取状态标签
+const getStatusLabel = (status) => {
+  const labels = {
+    draft: '草稿',
+    scheduled: '已排期',
+    active: '竞拍中',
+    ended: '已结束',
+    cancelled: '已取消',
+  };
+  return labels[status] || status;
 };
 
 const formatDate = (dateStr) => {
@@ -286,12 +384,25 @@ onMounted(() => {
 .page-header p { margin:0; color: rgba(255,255,255,0.6); }
 .primary-btn { padding:8px 14px; border:none; border-radius:8px; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; cursor:pointer; }
 .table { border:1px solid rgba(255,255,255,0.1); border-radius:12px; overflow:hidden; }
-.table-row { display:grid; grid-template-columns:1.5fr 1.2fr 0.8fr 1fr; gap:10px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.08); }
+.table-row { display:grid; grid-template-columns:1.5fr 1fr 0.8fr 1.2fr 1.5fr 2fr; gap:10px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.08); }
 .table-row.header { font-weight:600; background:rgba(255,255,255,0.06); }
 .actions { display:flex; gap:8px; }
 .pool-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
 .pool-item { display:flex; gap:6px; align-items:center; color: rgba(255,255,255,0.8); font-size: 13px; }
 .link-btn { background:none; border:none; color:#8ab4f8; cursor:pointer; }
+.action-btn { padding:6px 12px; border:1px solid rgba(255,255,255,0.2); border-radius:6px; background:rgba(255,255,255,0.05); color:#fff; cursor:pointer; font-size:12px; }
+.action-btn:hover { background:rgba(255,255,255,0.1); }
+.action-btn.primary { background:linear-gradient(135deg,#667eea,#764ba2); border:none; }
+.action-btn:disabled { opacity:0.5; cursor:not-allowed; }
+.status-badge { padding:4px 8px; border-radius:6px; font-size:12px; font-weight:600; }
+.status-badge.draft { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.6); }
+.status-badge.scheduled { background:rgba(255,193,7,0.2); color:#ffc107; }
+.status-badge.active { background:rgba(79,172,254,0.2); color:#4facfe; }
+.status-badge.ended { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.5); }
+.readiness, .progress { display:flex; flex-direction:column; gap:4px; font-size:12px; color:rgba(255,255,255,0.7); }
+.readiness span, .progress span { display:inline-block; }
+.active-lot-hint { color:#4facfe; font-weight:600; }
+.session-title { font-weight:600; }
 .empty { padding:16px; color: rgba(255,255,255,0.5); }
 .loading-state { text-align:center; padding: 20px; color: rgba(255,255,255,0.5); }
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:1000; }

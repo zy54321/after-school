@@ -339,6 +339,11 @@ const routes = [
         name: 'FamilyMarketAuctionAdmin',
         component: () => import('../systems/family/views/market/MarketAuctionAdmin.vue'),
       },
+      {
+        path: 'market/admin/auction/:id',
+        name: 'FamilyMarketAuctionSessionManage',
+        component: () => import('../systems/family/views/market/MarketAuctionSessionManage.vue'),
+      },
 
       // ========== ✅ 成员资产层（嵌套路由使用 MemberLayout）==========
       {

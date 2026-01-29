@@ -36,8 +36,17 @@ router.get('/sessions/:id', controller.getSessionDetail);
 // GET /api/v2/auction/sessions/:id/overview - 会场详情聚合（拍卖台用）
 router.get('/sessions/:id/overview', controller.getSessionOverview);
 
-// POST /api/v2/auction/sessions/:id/generate-lots - 生成拍卖品
+// GET /api/v2/auction/sessions-admin - 管理员场次列表（聚合统计）
+router.get('/sessions-admin', controller.getSessionsAdmin);
+
+// POST /api/v2/auction/sessions/:id/generate-lots - 生成拍卖品（旧接口，保留兼容）
 router.post('/sessions/:id/generate-lots', controller.generateLots);
+
+// POST /api/v2/auction/sessions/:id/lots/preview-generate - 预览生成拍品（不落库）
+router.post('/sessions/:id/lots/preview-generate', controller.previewGenerateLots);
+
+// POST /api/v2/auction/sessions/:id/lots/commit-generate - 确认生成拍品（落库）
+router.post('/sessions/:id/lots/commit-generate', controller.commitGenerateLots);
 
 // POST /api/v2/auction/sessions/:id/pool - 设置拍卖品池子
 router.post('/sessions/:id/pool', controller.setSessionPool);
@@ -47,6 +56,12 @@ router.post('/sessions/:id/start', controller.startSession);
 
 // POST /api/v2/auction/sessions/:id/next - 进入下一拍品
 router.post('/sessions/:id/next', controller.advanceSessionLot);
+
+// POST /api/v2/auction/sessions/:id/activate-lot - 激活指定拍品
+router.post('/sessions/:id/activate-lot', controller.activateLot);
+
+// POST /api/v2/auction/sessions/:id/activate-next - 激活下一拍品
+router.post('/sessions/:id/activate-next', controller.activateNext);
 
 // POST /api/v2/auction/sessions/:id/settle - 结算场次
 router.post('/sessions/:id/settle', controller.settleSession);

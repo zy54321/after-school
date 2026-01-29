@@ -29,7 +29,7 @@
           <button 
             class="undo-bid-btn"
             @click="handleUndoLastBid"
-            :disabled="undoingBid || !currentLot.bids || currentLot.bids.length === 0"
+            :disabled="undoingBid || recentBidsForCurrentLot.length === 0"
           >
             {{ undoingBid ? '撤销中...' : '撤销最后出价' }}
           </button>
@@ -146,11 +146,12 @@ const undoingBid = ref(false);
 let pollTimer = null;
 const POLL_INTERVAL = 4000; // 4秒轮询
 
-// 计算成员的可用积分（wallet_balance - locked_total）
+// 计算成员的可用积分（实现A：净余额就是可用）
 const membersWithAvailable = computed(() => {
   return members.value.map(m => ({
     ...m,
-    available: (m.wallet_balance || 0) - (m.locked_total || 0),
+    available: (m.wallet_balance || 0),              // ✅ 实现A：净余额就是可用
+    total: (m.wallet_balance || 0) + (m.locked_total || 0), // 可选：用于展示"冻结前总额"
   }));
 });
 
@@ -248,9 +249,11 @@ const handleMemberSelect = (memberId) => {
 const handleCloseLot = async () => {
   if (!currentLot.value) return;
   
+  const lotName = currentLot.value.title || currentLot.value.sku_name || `#${currentLot.value.id}`;
+  
   try {
     await ElMessageBox.confirm(
-      `确认成交当前拍品「${currentLot.value.sku_name}」？`,
+      `确认成交当前拍品「${lotName}」？`,
       '确认成交',
       {
         confirmButtonText: '确认',

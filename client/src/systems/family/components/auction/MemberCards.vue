@@ -18,8 +18,8 @@
             <span class="balance-unit">可用</span>
           </div>
           <div class="member-total" v-if="member.wallet_balance !== undefined">
-            <span class="total-label">总余额:</span>
-            <span class="total-value">{{ member.wallet_balance || 0 }}</span>
+            <span class="total-label">当前余额:</span>
+            <span class="total-value">{{ member.total || member.wallet_balance || 0 }}</span>
             <span class="total-locked" v-if="member.locked_total > 0">
               (冻结: {{ member.locked_total }})
             </span>

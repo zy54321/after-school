@@ -16,6 +16,7 @@
 const auctionRepo = require('../repos/auctionRepo');
 const walletRepo = require('../repos/walletRepo');
 const marketplaceRepo = require('../repos/marketplaceRepo');
+const seedrandom = require('seedrandom');
 
 /**
  * 稀有度配置
@@ -35,26 +36,106 @@ const RARITY_CONFIG = {
 };
 
 /**
- * 从数组中随机抽取指定数量的元素
+ * 确定性随机数生成器（使用 seed）
+ * @param {string|number} seed - 随机种子
+ * @returns {Function} 随机数生成函数（0-1之间）
+ */
+const createSeededRandom = (seed) => {
+  if (seed === null || seed === undefined) {
+    // 如果没有 seed，使用当前时间戳
+    seed = Date.now().toString();
+  }
+  return seedrandom(String(seed));
+};
+
+/**
+ * 从数组中确定性随机抽取指定数量的元素（使用 seed）
  * @param {Array} array - 源数组
  * @param {number} count - 抽取数量
+ * @param {Function} rng - 随机数生成函数（0-1之间）
+ * @param {boolean} unique - 是否不允许重复 sku_id
  * @returns {Array} 抽取的元素
  */
-const randomPick = (array, count) => {
-  if (array.length <= count) return [...array];
+const deterministicPick = (array, count, rng, unique = false) => {
+  if (array.length <= count && !unique) {
+    return [...array];
+  }
   
   const result = [];
-  const used = new Set();
+  const usedIndices = new Set();
+  const usedSkuIds = unique ? new Set() : null;
   
   while (result.length < count && result.length < array.length) {
-    const index = Math.floor(Math.random() * array.length);
-    if (!used.has(index)) {
-      used.add(index);
-      result.push(array[index]);
+    const index = Math.floor(rng() * array.length);
+    if (!usedIndices.has(index)) {
+      const item = array[index];
+      // 如果 unique=true，检查 sku_id 是否已使用
+      if (unique && usedSkuIds && usedSkuIds.has(item.id)) {
+        continue;
+      }
+      usedIndices.add(index);
+      if (unique && usedSkuIds) {
+        usedSkuIds.add(item.id);
+      }
+      result.push(item);
     }
   }
   
   return result;
+};
+
+/**
+ * 按权重分配稀有度数量
+ * @param {number} totalCount - 总数量
+ * @param {object} rarityWeights - 稀有度权重 { r: 40, sr: 30, ssr: 20, ur: 10 }
+ * @param {Function} rng - 随机数生成函数
+ * @returns {object} 各稀有度分配的数量 { r: 2, sr: 1, ssr: 1, ur: 0 }
+ */
+const distributeByRarityWeights = (totalCount, rarityWeights, rng) => {
+  const weights = {
+    r: rarityWeights.r || 40,
+    sr: rarityWeights.sr || 30,
+    ssr: rarityWeights.ssr || 20,
+    ur: rarityWeights.ur || 10,
+  };
+  
+  const totalWeight = weights.r + weights.sr + weights.ssr + weights.ur;
+  if (totalWeight === 0) {
+    // 默认均分
+    const perRarity = Math.floor(totalCount / 4);
+    return {
+      r: perRarity,
+      sr: perRarity,
+      ssr: perRarity,
+      ur: totalCount - perRarity * 3,
+    };
+  }
+  
+  // 按权重分配
+  const counts = {
+    r: 0,
+    sr: 0,
+    ssr: 0,
+    ur: 0,
+  };
+  
+  // 使用加权随机分配
+  for (let i = 0; i < totalCount; i++) {
+    const rand = rng() * totalWeight;
+    let cumulative = 0;
+    
+    if (rand < (cumulative += weights.r)) {
+      counts.r++;
+    } else if (rand < (cumulative += weights.sr)) {
+      counts.sr++;
+    } else if (rand < (cumulative += weights.ssr)) {
+      counts.ssr++;
+    } else {
+      counts.ur++;
+    }
+  }
+  
+  return counts;
 };
 
 /**
@@ -478,6 +559,157 @@ exports.getSessionOverview = async (parentId, sessionId) => {
   }
 };
 
+/**
+ * 获取管理员场次列表（聚合统计）
+ * 返回：{ sessions: [...] }
+ */
+exports.getSessionsAdmin = async (parentId) => {
+  return await auctionRepo.getSessionsAdmin(parentId);
+};
+
+/**
+ * 激活指定拍品
+ * 事务：同一 session 下把所有 lot.status='active' -> 'pending'；把目标 lot -> 'active'
+ */
+exports.activateLot = async (actorUserId, sessionId, lotId) => {
+  const pool = auctionRepo.getPool();
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // 1) 锁定 session
+    const session = await auctionRepo.getSessionForUpdate(sessionId, client);
+    if (!session) throw new Error('拍卖场次不存在');
+    if (session.parent_id !== actorUserId) throw new Error('无权操作该场次');
+    
+    // 2) 验证 lot 属于该 session
+    const lot = await auctionRepo.getLotForUpdate(lotId, client);
+    if (!lot) throw new Error('拍品不存在');
+    if (lot.session_id !== sessionId) throw new Error('拍品不属于该场次');
+    
+    // 3) 同一 session 下把所有 lot.status='active' -> 'pending'
+    await auctionRepo.updateLotsStatusBySession(sessionId, 'active', 'pending', client);
+    
+    // 4) 把目标 lot -> 'active'
+    await auctionRepo.updateLotStatus(lotId, 'active', client);
+    
+    // 5) 写 event
+    await auctionRepo.createEvent({
+      actorUserId,
+      sessionId,
+      lotId,
+      eventType: 'activate_lot',
+      payload: { lot_id: lotId },
+    }, client);
+    
+    // 6) 获取激活后的 lot 信息
+    const activeLot = await auctionRepo.getLotById(lotId, client);
+    
+    await client.query('COMMIT');
+    
+    return {
+      active_lot: activeLot ? {
+        id: activeLot.id,
+        title: activeLot.sku_name,
+        status: activeLot.status,
+      } : null,
+      session: {
+        id: session.id,
+        title: session.title,
+        status: session.status,
+      },
+    };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * 激活下一拍品
+ * 规则：按 sort_order 找下一个 status='pending' 的 lot，调用激活逻辑
+ * 若没有 pending，session.status -> ended
+ */
+exports.activateNext = async (actorUserId, sessionId) => {
+  const pool = auctionRepo.getPool();
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // 1) 锁定 session
+    const session = await auctionRepo.getSessionForUpdate(sessionId, client);
+    if (!session) throw new Error('拍卖场次不存在');
+    if (session.parent_id !== actorUserId) throw new Error('无权操作该场次');
+    
+    // 2) 查找下一个待激活的拍品
+    const nextLot = await auctionRepo.getNextPendingLot(sessionId, client);
+    
+    if (!nextLot) {
+      // 没有待激活的拍品，结束场次
+      await auctionRepo.updateSessionStatus(sessionId, 'ended', client);
+      
+      await auctionRepo.createEvent({
+        actorUserId,
+        sessionId,
+        eventType: 'activate_next',
+        payload: { result: 'no_more_pending', session_status: 'ended' },
+      }, client);
+      
+      await client.query('COMMIT');
+      
+      return {
+        active_lot: null,
+        session: {
+          id: session.id,
+          title: session.title,
+          status: 'ended',
+        },
+        message: '没有更多待激活的拍品，场次已结束',
+      };
+    }
+    
+    // 3) 激活该拍品
+    await auctionRepo.updateLotsStatusBySession(sessionId, 'active', 'pending', client);
+    await auctionRepo.updateLotStatus(nextLot.id, 'active', client);
+    
+    // 4) 写 event
+    await auctionRepo.createEvent({
+      actorUserId,
+      sessionId,
+      lotId: nextLot.id,
+      eventType: 'activate_next',
+      payload: { lot_id: nextLot.id },
+    }, client);
+    
+    // 5) 获取激活后的 lot 信息
+    const activeLot = await auctionRepo.getLotById(nextLot.id, client);
+    
+    await client.query('COMMIT');
+    
+    return {
+      active_lot: activeLot ? {
+        id: activeLot.id,
+        title: activeLot.sku_name,
+        status: activeLot.status,
+      } : null,
+      session: {
+        id: session.id,
+        title: session.title,
+        status: session.status,
+      },
+    };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+};
+
 // ========== 拍卖台动作（逐 lot 成交 / 撤销最后一次出价）==========
 
 /**
@@ -809,13 +1041,11 @@ exports.submitBid = async (actorUserId, lotId, bidderId, bidPoints) => {
     // 6) delta 冻结增量
     const delta = bidPoints - oldHold;
 
-    // 7) 计算可用余额 = 钱包余额 - 活跃冻结总额（跨 lot）
-    //    注意：这里不要把本 lot 的 oldHold 再扣一次（它已经属于冻结总额里）
-    const walletBalance = await walletRepo.getBalance(bidderId, client); // 你的 v2 已有（余额=points_log 汇总）
-    const lockedTotal = await auctionRepo.sumActiveHoldsByMember(bidderId, client); // sum hold_points where status='active'
-    const available = walletBalance - lockedTotal;
+    // 7) 实现A 下 balance 已扣冻结：冻结已经写入 points_log（负数），walletBalance 已经是"净余额"
+    //    这里只需要校验净余额是否足够覆盖新增冻结 delta
+    const walletBalance = await walletRepo.getBalance(bidderId, client);
 
-    if (available < delta) throw new Error('可用积分不足（需要冻结增量）');
+    if (walletBalance < delta) throw new Error('可用积分不足（需要冻结增量）');
 
     // 8) 写/更新 hold（把 hold_points 提升到 bidPoints）
     await auctionRepo.upsertHold({
@@ -1126,3 +1356,296 @@ async function safeCreateEvent(client, evt) {
     throw e;
   }
 }
+
+/**
+ * 预览生成拍品（不落库）
+ * 
+ * @param {number} sessionId - 拍卖场次ID
+ * @param {object} options - 生成选项
+ * @param {number} options.count - 总数量（如果指定，则按 rarity_weights 分配）
+ * @param {string|number} options.seed - 随机种子（可选，不提供则自动生成）
+ * @param {boolean} options.unique - 是否不允许重复 sku_id
+ * @param {object} options.rarity_weights - 稀有度权重 { r: 40, sr: 30, ssr: 20, ur: 10 }
+ * @param {object} options.counts - 各稀有度数量（如果指定，则忽略 count 和 rarity_weights）{ r: 2, sr: 1, ssr: 1, ur: 0 }
+ * @param {object} options.filters - 过滤条件（暂未实现）
+ * @param {Array<number>} options.locked_sku_ids - 锁定必须包含的 SKU IDs
+ * @returns {object} 预览结果 { seed, preview_lots, pool_stats }
+ */
+exports.previewGenerateLots = async (sessionId, options = {}) => {
+  const pool = auctionRepo.getPool();
+  const client = await pool.connect();
+  
+  try {
+    // 1) 获取 session
+    const session = await auctionRepo.getSessionById(sessionId, client);
+    if (!session) {
+      throw new Error('拍卖场次不存在');
+    }
+    
+    // 2) 获取可拍卖的 SKU 池
+    let skuPool = await auctionRepo.getAuctionableSkus(session.parent_id, client);
+    const sessionConfig = parseSessionConfig(session.config);
+    if (Array.isArray(sessionConfig.pool_sku_ids) && sessionConfig.pool_sku_ids.length > 0) {
+      const poolSet = new Set(sessionConfig.pool_sku_ids.map((id) => parseInt(id)));
+      skuPool = skuPool.filter((sku) => poolSet.has(sku.id));
+    }
+    
+    // 应用 locked_sku_ids 过滤
+    if (Array.isArray(options.locked_sku_ids) && options.locked_sku_ids.length > 0) {
+      const lockedSet = new Set(options.locked_sku_ids.map(id => parseInt(id)));
+      skuPool = skuPool.filter((sku) => lockedSet.has(sku.id));
+    }
+    
+    if (skuPool.length === 0) {
+      throw new Error('没有可用的拍卖品，请先创建 SKU 或设置池子');
+    }
+    
+    // 3) 生成或使用 seed
+    let seed = options.seed;
+    if (!seed) {
+      seed = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+    const rng = createSeededRandom(seed);
+    
+    // 4) 确定各稀有度数量
+    let counts = options.counts;
+    if (!counts) {
+      if (options.count) {
+        // 按 count 和 rarity_weights 分配
+        counts = distributeByRarityWeights(
+          options.count,
+          options.rarity_weights || {},
+          rng
+        );
+      } else {
+        // 默认配置
+        counts = {
+          r: 0,
+          sr: 0,
+          ssr: 0,
+          ur: 0,
+        };
+      }
+    }
+    
+    const totalRequested = counts.r + counts.sr + counts.ssr + counts.ur;
+    if (totalRequested === 0) {
+      throw new Error('请至少指定一个稀有度的数量');
+    }
+    
+    // 5) 按稀有度分组 SKU（假设 SKU 有 rarity 字段，如果没有则随机分配）
+    const skuByRarity = {
+      r: [],
+      sr: [],
+      ssr: [],
+      ur: [],
+    };
+    
+    // 如果 SKU 没有 rarity 字段，按顺序循环分配
+    skuPool.forEach((sku, index) => {
+      const rarity = sku.rarity || ['r', 'sr', 'ssr', 'ur'][index % 4];
+      const normalized = normalizeRarity(rarity);
+      if (skuByRarity[normalized]) {
+        skuByRarity[normalized].push(sku);
+      }
+    });
+    
+    // 6) 生成预览 lots
+    const previewLots = [];
+    let sortOrder = 1;
+    const usedSkuIds = options.unique ? new Set() : null;
+    
+    // 按稀有度从高到低生成
+    const rarities = ['ur', 'ssr', 'sr', 'r'];
+    
+    for (const rarity of rarities) {
+      const count = counts[rarity] || 0;
+      if (count <= 0) continue;
+      
+      const availableSkus = skuByRarity[rarity] || [];
+      if (availableSkus.length === 0) continue;
+      
+      // 确定性抽取
+      const pickedSkus = deterministicPick(availableSkus, count, rng, options.unique);
+      
+      for (const sku of pickedSkus) {
+        if (options.unique && usedSkuIds && usedSkuIds.has(sku.id)) {
+          continue;
+        }
+        if (options.unique && usedSkuIds) {
+          usedSkuIds.add(sku.id);
+        }
+        
+        const baseCost = sku.default_cost || sku.base_cost || 10;
+        const startPrice = calculateStartPrice(baseCost, rarity);
+        
+        previewLots.push({
+          sku_id: sku.id,
+          sku_name: sku.name,
+          sku_icon: sku.icon || null,
+          rarity,
+          reserve_price: startPrice,
+          start_price: startPrice,
+          sort_order: sortOrder++,
+          status: 'pending',
+        });
+      }
+    }
+    
+    // 7) 统计池子信息
+    const poolStats = {
+      total_skus: skuPool.length,
+      by_rarity: {
+        r: skuByRarity.r.length,
+        sr: skuByRarity.sr.length,
+        ssr: skuByRarity.ssr.length,
+        ur: skuByRarity.ur.length,
+      },
+    };
+    
+    return {
+      seed: String(seed),
+      preview_lots: previewLots,
+      pool_stats: poolStats,
+      counts: {
+        r: previewLots.filter(l => l.rarity === 'r').length,
+        sr: previewLots.filter(l => l.rarity === 'sr').length,
+        ssr: previewLots.filter(l => l.rarity === 'ssr').length,
+        ur: previewLots.filter(l => l.rarity === 'ur').length,
+      },
+    };
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * 确认生成拍品（落库）
+ * 
+ * @param {number} sessionId - 拍卖场次ID
+ * @param {number} actorUserId - 操作者用户ID
+ * @param {object} options - 确认选项
+ * @param {string|number} options.seed - 随机种子（必须与预览时一致）
+ * @param {Array} options.preview_lots - 预览的 lots 数据（必须与预览时一致）
+ * @param {boolean} options.replace - 是否替换现有 lots（true: 清空 pending/active 且未成交的，false: 追加）
+ * @returns {object} 生成结果
+ */
+exports.commitGenerateLots = async (sessionId, actorUserId, options = {}) => {
+  const pool = auctionRepo.getPool();
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // 1) 锁定 session
+    const session = await auctionRepo.getSessionForUpdate(sessionId, client);
+    if (!session) {
+      throw new Error('拍卖场次不存在');
+    }
+    if (session.parent_id !== actorUserId) {
+      throw new Error('无权操作该场次');
+    }
+    
+    // 2) 验证 preview_lots
+    if (!Array.isArray(options.preview_lots) || options.preview_lots.length === 0) {
+      throw new Error('预览数据为空，请先生成预览');
+    }
+    
+    // 3) 如果 replace=true，清空现有 lots
+    if (options.replace) {
+      // 清空 status in (pending, active) 且未成交的 lot
+      await client.query(
+        `DELETE FROM auction_lot 
+         WHERE session_id = $1 
+         AND status IN ('pending', 'active')
+         AND id NOT IN (SELECT lot_id FROM auction_result WHERE lot_id IS NOT NULL)`,
+        [sessionId]
+      );
+    }
+    
+    // 4) 获取当前最大 sort_order（用于追加模式）
+    let maxSortOrder = 0;
+    if (!options.replace) {
+      const result = await client.query(
+        `SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM auction_lot WHERE session_id = $1`,
+        [sessionId]
+      );
+      maxSortOrder = result.rows[0]?.max_order || 0;
+    }
+    
+    // 5) 按 preview_lots 写入 auction_lot
+    const createdLots = [];
+    for (const previewLot of options.preview_lots) {
+      // 调整 sort_order（追加模式）
+      const sortOrder = options.replace ? previewLot.sort_order : (maxSortOrder + previewLot.sort_order);
+      
+      const lot = await auctionRepo.createLot({
+        sessionId,
+        skuId: previewLot.sku_id,
+        offerId: null, // 稍后创建
+        rarity: previewLot.rarity,
+        startPrice: previewLot.start_price || previewLot.reserve_price,
+        reservePrice: previewLot.reserve_price,
+        buyNowPrice: null,
+        quantity: 1,
+        status: 'pending',
+        sortOrder,
+        skuName: previewLot.sku_name,
+        skuIcon: previewLot.sku_icon,
+      }, client);
+      
+      // 为每个 lot 创建专用 offer
+      const baseCost = previewLot.start_price || previewLot.reserve_price || 10;
+      const offer = await marketplaceRepo.createOffer({
+        parentId: session.parent_id,
+        skuId: previewLot.sku_id,
+        cost: baseCost,
+        quantity: 1,
+        isActive: true,
+      }, client);
+      
+      // 更新 lot 的 offer_id
+      await client.query(
+        `UPDATE auction_lot SET offer_id = $1 WHERE id = $2`,
+        [offer.id, lot.id]
+      );
+      
+      createdLots.push({
+        ...lot,
+        offer_id: offer.id,
+      });
+    }
+    
+    // 6) 写 event
+    await auctionRepo.createEvent({
+      actorUserId,
+      sessionId,
+      eventType: 'generate_lots_commit',
+      payload: {
+        seed: String(options.seed || ''),
+        replace: options.replace || false,
+        total_lots: createdLots.length,
+        preview_lots: options.preview_lots.map(l => ({
+          sku_id: l.sku_id,
+          rarity: l.rarity,
+          sort_order: l.sort_order,
+        })),
+      },
+    }, client);
+    
+    await client.query('COMMIT');
+    
+    return {
+      success: true,
+      msg: `成功生成 ${createdLots.length} 个拍卖品`,
+      sessionId,
+      totalLots: createdLots.length,
+      lots: createdLots,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+};

@@ -1041,3 +1041,119 @@ exports.getSessionOverviewDTO = async (parentUserId, sessionId, client = pool) =
   
   return result.rows[0];
 };
+
+/**
+ * 获取管理员场次列表（聚合统计）
+ * 返回每个 session 的详细信息，包括拍品统计、当前拍品、出价者数量等
+ */
+exports.getSessionsAdmin = async (parentId, client = pool) => {
+  const result = await client.query(
+    `WITH s AS (
+      SELECT id, title, scheduled_at, status, config
+      FROM auction_session
+      WHERE parent_id = $1
+      ORDER BY id DESC
+      LIMIT 100
+    ),
+    pool_stats AS (
+      SELECT 
+        s.id AS session_id,
+        CASE 
+          WHEN s.config->>'pool_sku_ids' IS NOT NULL AND s.config->'pool_sku_ids' IS NOT NULL
+          THEN jsonb_array_length(s.config->'pool_sku_ids')
+          ELSE 0
+        END AS pool_count
+      FROM s
+    ),
+    lot_stats AS (
+      SELECT session_id,
+             COUNT(*) AS lot_count,
+             COUNT(*) FILTER (WHERE status='active') AS open_count,
+             COUNT(*) FILTER (WHERE status='sold') AS sold_count,
+             COUNT(*) FILTER (WHERE status='unsold') AS unsold_count
+      FROM auction_lot
+      WHERE session_id IN (SELECT id FROM s)
+      GROUP BY session_id
+    ),
+    active_lots AS (
+      SELECT DISTINCT ON (session_id)
+        session_id,
+        id AS lot_id,
+        sku_name AS lot_title,
+        status AS lot_status
+      FROM auction_lot
+      WHERE session_id IN (SELECT id FROM s) AND status = 'active'
+      ORDER BY session_id, sort_order, id
+    ),
+    bidder_stats AS (
+      SELECT l.session_id,
+             COUNT(DISTINCT b.bidder_member_id) AS bidder_count
+      FROM auction_lot l
+      JOIN auction_bid b ON b.lot_id = l.id AND (b.is_void IS NOT TRUE)
+      WHERE l.session_id IN (SELECT id FROM s)
+      GROUP BY l.session_id
+    ),
+    last_events AS (
+      SELECT DISTINCT ON (session_id)
+        session_id,
+        created_at AS last_event_at
+      FROM auction_event
+      WHERE session_id IN (SELECT id FROM s)
+      ORDER BY session_id, created_at DESC
+    )
+    SELECT json_agg(json_build_object(
+      'id', s.id,
+      'title', s.title,
+      'scheduled_at', s.scheduled_at,
+      'status', s.status,
+      'pool_count', COALESCE(ps.pool_count, 0),
+      'lot_count', COALESCE(ls.lot_count, 0),
+      'active_lot', CASE 
+        WHEN al.lot_id IS NULL THEN NULL 
+        ELSE json_build_object('id', al.lot_id, 'title', al.lot_title, 'status', al.lot_status)
+      END,
+      'open_count', COALESCE(ls.open_count, 0),
+      'sold_count', COALESCE(ls.sold_count, 0),
+      'unsold_count', COALESCE(ls.unsold_count, 0),
+      'bidder_count', COALESCE(bs.bidder_count, 0),
+      'last_event_at', le.last_event_at
+    ) ORDER BY s.id DESC) AS sessions
+    FROM s
+    LEFT JOIN pool_stats ps ON ps.session_id = s.id
+    LEFT JOIN lot_stats ls ON ls.session_id = s.id
+    LEFT JOIN active_lots al ON al.session_id = s.id
+    LEFT JOIN bidder_stats bs ON bs.session_id = s.id
+    LEFT JOIN last_events le ON le.session_id = s.id`,
+    [parentId]
+  );
+  
+  return result.rows[0]?.sessions || [];
+};
+
+/**
+ * 批量更新同一 session 下的 lot 状态
+ */
+exports.updateLotsStatusBySession = async (sessionId, fromStatus, toStatus, client = pool) => {
+  const result = await client.query(
+    `UPDATE auction_lot 
+     SET status = $1, updated_at = CURRENT_TIMESTAMP 
+     WHERE session_id = $2 AND status = $3
+     RETURNING id`,
+    [toStatus, sessionId, fromStatus]
+  );
+  return result.rows;
+};
+
+/**
+ * 获取下一个待激活的拍品（按 sort_order）
+ */
+exports.getNextPendingLot = async (sessionId, client = pool) => {
+  const result = await client.query(
+    `SELECT * FROM auction_lot 
+     WHERE session_id = $1 AND status = 'pending'
+     ORDER BY sort_order, id
+     LIMIT 1`,
+    [sessionId]
+  );
+  return result.rows[0] || null;
+};

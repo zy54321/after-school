@@ -117,8 +117,80 @@ exports.getSessionDetail = async (req, res) => {
 };
 
 /**
+ * POST /api/v2/auction/sessions/:id/lots/preview-generate
+ * 预览生成拍品（不落库）
+ */
+exports.previewGenerateLots = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const sessionId = parseInt(req.params.id);
+    
+    if (!sessionId) {
+      return res.status(400).json({ code: 400, msg: '无效的场次ID' });
+    }
+    
+    const {
+      count,
+      seed,
+      unique = false,
+      rarity_weights,
+      filters,
+      locked_sku_ids,
+      counts, // 直接指定各稀有度数量
+    } = req.body;
+    
+    const result = await auctionService.previewGenerateLots(sessionId, {
+      count,
+      seed,
+      unique,
+      rarity_weights,
+      filters,
+      locked_sku_ids,
+      counts,
+    });
+    
+    res.json({ code: 200, data: result, msg: '预览生成成功' });
+  } catch (err) {
+    console.error('previewGenerateLots 错误:', err);
+    res.status(500).json({ code: 500, msg: err.message || '预览生成失败' });
+  }
+};
+
+/**
+ * POST /api/v2/auction/sessions/:id/lots/commit-generate
+ * 确认生成拍品（落库）
+ */
+exports.commitGenerateLots = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const sessionId = parseInt(req.params.id);
+    
+    if (!sessionId) {
+      return res.status(400).json({ code: 400, msg: '无效的场次ID' });
+    }
+    
+    const { seed, preview_lots, replace = false } = req.body;
+    
+    if (!seed || !Array.isArray(preview_lots) || preview_lots.length === 0) {
+      return res.status(400).json({ code: 400, msg: '缺少必填参数: seed, preview_lots' });
+    }
+    
+    const result = await auctionService.commitGenerateLots(sessionId, userId, {
+      seed,
+      preview_lots,
+      replace,
+    });
+    
+    res.json({ code: 200, data: result, msg: result.msg || '拍品已生成' });
+  } catch (err) {
+    console.error('commitGenerateLots 错误:', err);
+    res.status(500).json({ code: 500, msg: err.message || '确认生成失败' });
+  }
+};
+
+/**
  * POST /api/v2/auction/sessions/:id/generate-lots
- * 生成拍卖品
+ * 生成拍卖品（旧接口，保留兼容）
  */
 exports.generateLots = async (req, res) => {
   try {
@@ -432,5 +504,55 @@ exports.undoLastBid = async (req, res) => {
   } catch (err) {
     console.error('undoLastBid 错误:', err);
     res.status(500).json({ code: 500, msg: '撤销出价失败', error: err.message });
+  }
+};
+
+/**
+ * GET /api/v2/auction/sessions-admin
+ * 获取管理员场次列表（聚合统计）
+ */
+exports.getSessionsAdmin = async (req, res) => {
+  try {
+    const sessions = await auctionService.getSessionsAdmin(req.session.user.id);
+    res.json({ code: 200, data: { sessions } });
+  } catch (err) {
+    console.error('getSessionsAdmin 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取场次列表失败', error: err.message });
+  }
+};
+
+/**
+ * POST /api/v2/auction/sessions/:id/activate-lot
+ * 激活指定拍品
+ */
+exports.activateLot = async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    const { lot_id: lotId } = req.body;
+    
+    if (!lotId) {
+      return res.status(400).json({ code: 400, msg: '缺少必填参数: lot_id' });
+    }
+    
+    const result = await auctionService.activateLot(req.session.user.id, sessionId, lotId);
+    res.json({ code: 200, data: result, msg: '拍品已激活' });
+  } catch (err) {
+    console.error('activateLot 错误:', err);
+    res.status(500).json({ code: 500, msg: err.message || '激活拍品失败' });
+  }
+};
+
+/**
+ * POST /api/v2/auction/sessions/:id/activate-next
+ * 激活下一拍品
+ */
+exports.activateNext = async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    const result = await auctionService.activateNext(req.session.user.id, sessionId);
+    res.json({ code: 200, data: result, msg: result.message || '已激活下一拍品' });
+  } catch (err) {
+    console.error('activateNext 错误:', err);
+    res.status(500).json({ code: 500, msg: err.message || '激活下一拍品失败' });
   }
 };
