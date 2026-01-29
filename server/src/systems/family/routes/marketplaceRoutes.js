@@ -54,6 +54,12 @@ router.get('/orders', controller.getOrders);
 // GET /api/v2/inventory - 获取库存列表
 router.get('/inventory', controller.getInventory);
 
+// GET /api/v2/inventory - 获取库存列表
+router.get('/inventory', controller.getInventory);
+
+// POST /api/v2/inventory/use - 使用库存道具
+router.post('/inventory/use', controller.useInventory);
+
 // ========== 钱包相关 ==========
 
 // GET /api/v2/wallet - 获取钱包信息

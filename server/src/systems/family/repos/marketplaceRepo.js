@@ -215,7 +215,7 @@ exports.getActiveOfferBySkuId = async (skuId, client = pool) => {
  */
 exports.getActiveOffers = async (parentId, options = {}, client = pool) => {
   const { offerType, skuId } = options;
-  
+
   // 直接使用 offer.parent_id 查询，不再需要通过 sku 反查
   let query = `
     SELECT 
@@ -246,21 +246,21 @@ exports.getActiveOffers = async (parentId, options = {}, client = pool) => {
   `;
   const params = [parentId];
   let paramIndex = 2;
-  
+
   if (offerType) {
     query += ` AND s.type = $${paramIndex}`;
     params.push(offerType);
     paramIndex++;
   }
-  
+
   if (skuId) {
     query += ` AND o.sku_id = $${paramIndex}`;
     params.push(skuId);
     paramIndex++;
   }
-  
+
   query += ' ORDER BY o.cost, o.created_at DESC';
-  
+
   const result = await client.query(query, params);
   return result.rows;
 };
@@ -516,6 +516,47 @@ exports.getInventoryByMemberId = async (memberId, status = null, client = pool) 
   const result = await client.query(query, params);
   return result.rows;
 };
+
+/**
+ * 锁定并获取库存（用于使用道具时防并发）
+ */
+exports.getInventoryItemByIdForUpdate = async (inventoryId, client = pool) => {
+  const result = await client.query(
+    `SELECT 
+       i.*,
+       m.parent_id,
+       s.name AS sku_name,
+       s.icon AS sku_icon,
+       s.type AS sku_type
+     FROM family_inventory i
+     JOIN family_members m ON i.member_id = m.id
+     LEFT JOIN family_sku s ON i.sku_id = s.id
+     WHERE i.id = $1
+     FOR UPDATE`,
+    [inventoryId]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 使用库存：quantity 递减；若减到 0 则标记 used 并写 used_at
+ */
+exports.useInventoryItem = async (inventoryId, useQty = 1, client = pool) => {
+  const result = await client.query(
+    `UPDATE family_inventory
+     SET 
+       quantity = quantity - $2,
+       status = CASE WHEN (quantity - $2) = 0 THEN 'used' ELSE status END,
+       used_at = CASE WHEN (quantity - $2) = 0 THEN COALESCE(used_at, CURRENT_TIMESTAMP) ELSE used_at END,
+       updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1 AND status = 'unused' AND quantity >= $2
+     RETURNING *`,
+    [inventoryId, useQty]
+  );
+  if (!result.rows[0]) throw new Error('使用失败（可能已被使用或数量不足）');
+  return result.rows[0];
+};
+
 
 // ========== 限制次数统计 ==========
 

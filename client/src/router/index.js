@@ -297,7 +297,7 @@ const routes = [
       {
         path: 'auction/:id',
         name: 'FamilyAuctionDetail',
-        component: () => import('../systems/family/views/market/AuctionDetail.vue'),
+        component: () => import('../systems/family/views/market/AuctionSession.vue'),
       },
       {
         path: 'market/draw',

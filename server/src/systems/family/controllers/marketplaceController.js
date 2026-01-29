@@ -20,14 +20,14 @@ exports.getSkus = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { type } = req.query;
-    
+
     let skus = await marketplaceService.getActiveSkus(userId);
-    
+
     // 按类型筛选
     if (type) {
       skus = skus.filter(s => s.type === type);
     }
-    
+
     res.json({
       code: 200,
       data: {
@@ -37,8 +37,8 @@ exports.getSkus = async (req, res) => {
     });
   } catch (err) {
     console.error('getSkus 错误:', err);
-    res.status(500).json({ 
-      code: 500, 
+    res.status(500).json({
+      code: 500,
       msg: '获取商品列表失败',
       error: err.message,
     });
@@ -57,20 +57,20 @@ exports.getCatalog = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { type, include_offers: includeOffers = 'true' } = req.query;
-    
+
     const catalog = await marketplaceService.getMarketCatalog(userId, {
       type,
       includeOffers: includeOffers !== 'false',
     });
-    
+
     res.json({
       code: 200,
       data: catalog,
     });
   } catch (err) {
     console.error('getCatalog 错误:', err);
-    res.status(500).json({ 
-      code: 500, 
+    res.status(500).json({
+      code: 500,
       msg: '获取市场目录失败',
       error: err.message,
     });
@@ -89,12 +89,12 @@ exports.getOffers = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { offer_type: offerType, sku_id: skuId } = req.query;
-    
+
     const offers = await marketplaceRepo.getActiveOffers(userId, {
       offerType,
       skuId: skuId ? parseInt(skuId) : undefined,
     });
-    
+
     res.json({
       code: 200,
       data: {
@@ -104,8 +104,8 @@ exports.getOffers = async (req, res) => {
     });
   } catch (err) {
     console.error('getOffers 错误:', err);
-    res.status(500).json({ 
-      code: 500, 
+    res.status(500).json({
+      code: 500,
       msg: '获取报价列表失败',
       error: err.message,
     });
@@ -447,75 +447,75 @@ exports.getMembers = async (req, res) => {
 exports.createOrder = async (req, res) => {
   try {
     const userId = req.session.user.id;
-    const { 
-      offer_id: offerId, 
-      buyer_member_id: buyerMemberId, 
+    const {
+      offer_id: offerId,
+      buyer_member_id: buyerMemberId,
       idempotency_key: idempotencyKey,
       quantity = 1,
       extra,
     } = req.body;
-    
+
     // ========== 参数校验 ==========
     if (!offerId) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: '缺少必填参数: offer_id',
       });
     }
-    
+
     if (!buyerMemberId) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: '缺少必填参数: buyer_member_id',
       });
     }
-    
+
     if (!idempotencyKey) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: '缺少必填参数: idempotency_key',
       });
     }
-    
+
     if (typeof idempotencyKey !== 'string' || idempotencyKey.length > 100) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: 'idempotency_key 必须是字符串且不超过100字符',
       });
     }
-    
+
     if (quantity < 1 || quantity > 100) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: 'quantity 必须在 1-100 之间',
       });
     }
-    
+
     // ========== 校验成员归属 ==========
     const member = await walletService.getMemberById(buyerMemberId);
     if (!member) {
-      return res.status(404).json({ 
-        code: 404, 
+      return res.status(404).json({
+        code: 404,
         msg: '成员不存在',
       });
     }
-    
+
     if (member.parent_id !== userId) {
-      return res.status(403).json({ 
-        code: 403, 
+      return res.status(403).json({
+        code: 403,
         msg: '无权操作该成员',
       });
     }
-    
+
     // ========== 演示模式检查 ==========
     const user = req.session.user;
     if (user.username === 'visitor') {
-      return res.status(403).json({ 
-        code: 403, 
+      return res.status(403).json({
+        code: 403,
         msg: '演示模式：游客账号仅供查看，禁止修改数据',
       });
     }
-    
+
     // ========== 调用服务层 ==========
     const result = await marketplaceService.createOrderAndFulfill({
       memberId: buyerMemberId,
@@ -523,7 +523,7 @@ exports.createOrder = async (req, res) => {
       quantity: parseInt(quantity),
       idempotencyKey,
     });
-    
+
     // ========== 返回结果 ==========
     res.json({
       code: 200,
@@ -533,49 +533,49 @@ exports.createOrder = async (req, res) => {
       },
       msg: result.msg,
     });
-    
+
   } catch (err) {
     console.error('createOrder 错误:', err);
-    
+
     // 余额不足 - 返回明确错误
     if (err.message.includes('积分不足')) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: err.message,
         error_code: 'INSUFFICIENT_BALANCE',
       });
     }
-    
+
     // 购买限制
     if (err.message.includes('购买上限')) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: err.message,
         error_code: 'LIMIT_EXCEEDED',
       });
     }
-    
+
     // Offer 不存在
     if (err.message.includes('Offer 不存在') || err.message.includes('已失效')) {
-      return res.status(404).json({ 
-        code: 404, 
+      return res.status(404).json({
+        code: 404,
         msg: err.message,
         error_code: 'OFFER_NOT_FOUND',
       });
     }
-    
+
     // 目标成员限制
     if (err.message.includes('不对此成员开放')) {
-      return res.status(403).json({ 
-        code: 403, 
+      return res.status(403).json({
+        code: 403,
         msg: err.message,
         error_code: 'MEMBER_NOT_ALLOWED',
       });
     }
-    
+
     // 其他错误
-    res.status(500).json({ 
-      code: 500, 
+    res.status(500).json({
+      code: 500,
       msg: '下单失败',
       error: err.message,
     });
@@ -594,28 +594,28 @@ exports.getOrders = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { member_id: memberId, limit = 50 } = req.query;
-    
+
     if (!memberId) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: '缺少必填参数: member_id',
       });
     }
-    
+
     // 校验成员归属
     const member = await walletService.getMemberById(parseInt(memberId));
     if (!member || member.parent_id !== userId) {
-      return res.status(403).json({ 
-        code: 403, 
+      return res.status(403).json({
+        code: 403,
         msg: '无权查看该成员的订单',
       });
     }
-    
+
     const orders = await marketplaceService.getOrdersByMemberId(
-      parseInt(memberId), 
+      parseInt(memberId),
       parseInt(limit)
     );
-    
+
     res.json({
       code: 200,
       data: {
@@ -625,8 +625,8 @@ exports.getOrders = async (req, res) => {
     });
   } catch (err) {
     console.error('getOrders 错误:', err);
-    res.status(500).json({ 
-      code: 500, 
+    res.status(500).json({
+      code: 500,
       msg: '获取订单列表失败',
       error: err.message,
     });
@@ -645,44 +645,93 @@ exports.getInventory = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { member_id: memberId, status } = req.query;
-    
+
     if (!memberId) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: '缺少必填参数: member_id',
       });
     }
-    
+
     // 校验成员归属
     const member = await walletService.getMemberById(parseInt(memberId));
     if (!member || member.parent_id !== userId) {
-      return res.status(403).json({ 
-        code: 403, 
+      return res.status(403).json({
+        code: 403,
         msg: '无权查看该成员的库存',
       });
     }
-    
+
     const inventory = await marketplaceService.getInventoryByMemberId(
       parseInt(memberId),
       status
     );
-    
+
+    const { limit } = req.query;
+    const total = inventory.length;
+    const items = limit ? inventory.slice(0, parseInt(limit)) : inventory;
+
     res.json({
       code: 200,
       data: {
-        inventory,
-        total: inventory.length,
+        items,              // ✅ 给 MemberInventory 用
+        inventory: items,   // ✅ 老字段也保留
+        total,              // ✅ 给 FamilyDashboard 用
       },
     });
+
   } catch (err) {
     console.error('getInventory 错误:', err);
-    res.status(500).json({ 
-      code: 500, 
+    res.status(500).json({
+      code: 500,
       msg: '获取库存列表失败',
       error: err.message,
     });
   }
 };
+
+/**
+ * POST /api/v2/inventory/use
+ * 使用库存道具
+ *
+ * Body:
+ * - inventory_id: number (必填)
+ * - quantity: number (可选，默认 1)
+ */
+exports.useInventory = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { inventory_id: inventoryId, quantity = 1 } = req.body;
+
+    if (!inventoryId) return res.status(400).json({ code: 400, msg: '缺少必填参数: inventory_id' });
+    const useQty = parseInt(quantity);
+    if (!useQty || useQty <= 0) return res.status(400).json({ code: 400, msg: 'quantity 必须大于 0' });
+
+    // 演示模式检查（保持你其它模块的风格）
+    if (req.session.user.username === 'visitor') {
+      return res.status(403).json({ code: 403, msg: '演示模式：游客账号仅供查看，禁止修改数据' });
+    }
+
+    const result = await marketplaceService.useInventoryItem({
+      userId,
+      inventoryId: parseInt(inventoryId),
+      quantity: useQty,
+    });
+
+    res.json({
+      code: 200,
+      data: result,
+      msg: '使用成功',
+    });
+  } catch (err) {
+    console.error('useInventory 错误:', err);
+    res.status(400).json({
+      code: 400,
+      msg: err.message || '使用失败',
+    });
+  }
+};
+
 
 /**
  * GET /api/v2/wallet
@@ -695,28 +744,28 @@ exports.getWallet = async (req, res) => {
   try {
     const userId = req.session.user.id;
     const { member_id: memberId } = req.query;
-    
+
     if (!memberId) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: '缺少必填参数: member_id',
       });
     }
-    
+
     // 校验成员归属
     const member = await walletService.getMemberById(parseInt(memberId));
     if (!member || member.parent_id !== userId) {
-      return res.status(403).json({ 
-        code: 403, 
+      return res.status(403).json({
+        code: 403,
         msg: '无权查看该成员的钱包',
       });
     }
-    
+
     const [wallet, memberInfo] = await Promise.all([
       walletService.getWalletOverview(parseInt(memberId)),
       walletService.getMemberById(parseInt(memberId))
     ]);
-    
+
     res.json({
       code: 200,
       data: {
@@ -726,8 +775,8 @@ exports.getWallet = async (req, res) => {
     });
   } catch (err) {
     console.error('getWallet 错误:', err);
-    res.status(500).json({ 
-      code: 500, 
+    res.status(500).json({
+      code: 500,
       msg: '获取钱包信息失败',
       error: err.message,
     });
@@ -747,43 +796,43 @@ exports.getWallet = async (req, res) => {
 exports.getWalletLogs = async (req, res) => {
   try {
     const userId = req.session.user.id;
-    const { 
-      member_id: memberId, 
-      limit = 50, 
+    const {
+      member_id: memberId,
+      limit = 50,
       offset = 0,
       reason_code: reasonCode,
     } = req.query;
-    
+
     if (!memberId) {
-      return res.status(400).json({ 
-        code: 400, 
+      return res.status(400).json({
+        code: 400,
         msg: '缺少必填参数: member_id',
       });
     }
-    
+
     // 校验成员归属
     const member = await walletService.getMemberById(parseInt(memberId));
     if (!member || member.parent_id !== userId) {
-      return res.status(403).json({ 
-        code: 403, 
+      return res.status(403).json({
+        code: 403,
         msg: '无权查看该成员的流水',
       });
     }
-    
+
     const result = await walletService.listLogs(parseInt(memberId), {
       limit: parseInt(limit),
       offset: parseInt(offset),
       reasonCode,
     });
-    
+
     res.json({
       code: 200,
       data: result,
     });
   } catch (err) {
     console.error('getWalletLogs 错误:', err);
-    res.status(500).json({ 
-      code: 500, 
+    res.status(500).json({
+      code: 500,
       msg: '获取流水列表失败',
       error: err.message,
     });
@@ -809,12 +858,12 @@ const mysteryShopService = require('../services/mysteryShopService');
 exports.refreshMysteryShop = async (req, res) => {
   try {
     const userId = req.session.user.id;
-    const { 
+    const {
       member_id: memberId,  // 兼容旧字段
       payer_member_id: payerMemberId,  // 新字段
-      is_free: isFree = true 
+      is_free: isFree = true
     } = req.body;
-    
+
     // 优先使用新字段
     const actualPayerId = payerMemberId || memberId;
 
@@ -848,11 +897,11 @@ exports.refreshMysteryShop = async (req, res) => {
     });
   } catch (err) {
     console.error('refreshMysteryShop 错误:', err);
-    
+
     if (err.message.includes('积分不足') || err.message.includes('免费刷新次数')) {
       return res.status(400).json({ code: 400, msg: err.message });
     }
-    
+
     res.status(500).json({
       code: 500,
       msg: '刷新神秘商店失败',
@@ -872,7 +921,7 @@ exports.refreshMysteryShop = async (req, res) => {
 exports.getMysteryShop = async (req, res) => {
   try {
     const userId = req.session.user.id;
-    
+
     const offers = await mysteryShopService.getShopOffers(userId);
     const config = await mysteryShopService.getShopConfig(userId);
     const rotation = await mysteryShopService.getCurrentRotation(userId);
@@ -916,7 +965,7 @@ exports.getMysteryShop = async (req, res) => {
 exports.getMysteryShopOverview = async (req, res) => {
   try {
     const userId = req.session.user.id;
-    
+
     const overview = await mysteryShopService.getShopOverview(userId);
 
     res.json({
@@ -940,11 +989,11 @@ exports.getMysteryShopOverview = async (req, res) => {
 exports.quickPublish = async (req, res) => {
   try {
     const userId = req.session.user.id;
-    const { 
-      name, icon, description, 
-      cost, quantity, 
+    const {
+      name, icon, description,
+      cost, quantity,
       limit_type, limit_max,
-      valid_until 
+      valid_until
     } = req.body;
 
     if (!name || !cost) {

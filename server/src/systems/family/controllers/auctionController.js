@@ -272,9 +272,10 @@ exports.submitBid = async (req, res) => {
     }
 
     const result = await auctionService.submitBid(
+      userId, // actorUserId
       lotId,
-      parseInt(memberId),
-      parseInt(bidPoints)
+      parseInt(memberId), // bidderId
+      parseInt(bidPoints) // bidPoints
     );
 
     res.json({
@@ -369,5 +370,67 @@ exports.getAuctionableSkus = async (req, res) => {
   } catch (err) {
     console.error('getAuctionableSkus 错误:', err);
     res.status(500).json({ code: 500, msg: '获取SKU列表失败', error: err.message });
+  }
+};
+
+/**
+ * GET /api/v2/auction/hall
+ * 大厅聚合（拍卖台用）
+ */
+exports.getHall = async (req, res) => {
+  try {
+    const data = await auctionService.getHall(req.session.user.id);
+    res.json({ code: 200, data });
+  } catch (err) {
+    console.error('getHall 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取大厅数据失败', error: err.message });
+  }
+};
+
+/**
+ * GET /api/v2/auction/sessions/:id/overview
+ * 会场详情聚合（拍卖台用）
+ */
+exports.getSessionOverview = async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    if (!sessionId) return res.status(400).json({ code: 400, msg: '无效的场次ID' });
+    const data = await auctionService.getSessionOverview(req.session.user.id, sessionId);
+    res.json({ code: 200, data });
+  } catch (err) {
+    console.error('getSessionOverview 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取会场聚合失败', error: err.message });
+  }
+};
+
+/**
+ * POST /api/v2/auction/lots/:id/close
+ * 逐 lot 成交（线下拍完一个就点成交）
+ */
+exports.closeLot = async (req, res) => {
+  try {
+    const lotId = parseInt(req.params.id);
+    if (!lotId) return res.status(400).json({ code: 400, msg: '无效的拍品ID' });
+    const data = await auctionService.closeLot(req.session.user.id, lotId);
+    res.json({ code: 200, data, msg: '已成交/已流拍' });
+  } catch (err) {
+    console.error('closeLot 错误:', err);
+    res.status(500).json({ code: 500, msg: '拍品成交失败', error: err.message });
+  }
+};
+
+/**
+ * POST /api/v2/auction/lots/:id/undo-last-bid
+ * 撤销最后一次出价（仅允许撤销该 lot 最新一条 bid）
+ */
+exports.undoLastBid = async (req, res) => {
+  try {
+    const lotId = parseInt(req.params.id);
+    if (!lotId) return res.status(400).json({ code: 400, msg: '无效的拍品ID' });
+    const data = await auctionService.undoLastBid(req.session.user.id, lotId);
+    res.json({ code: 200, data, msg: '已撤销最后一次出价' });
+  } catch (err) {
+    console.error('undoLastBid 错误:', err);
+    res.status(500).json({ code: 500, msg: '撤销出价失败', error: err.message });
   }
 };

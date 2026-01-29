@@ -51,8 +51,8 @@ exports.spin = async (req, res) => {
     console.error('spin 错误:', err);
 
     if (err.message.includes('不存在') || err.message.includes('已关闭') ||
-        err.message.includes('未配置') || err.message.includes('为空') ||
-        err.message.includes('不足') || err.message.includes('上限')) {
+      err.message.includes('未配置') || err.message.includes('为空') ||
+      err.message.includes('不足') || err.message.includes('上限')) {
       return res.status(400).json({ code: 400, msg: err.message });
     }
 
@@ -78,7 +78,7 @@ exports.getPools = async (req, res) => {
 
     let pools;
     let viewMode;
-    
+
     if (memberId) {
       // Member-level 视角：含成员券数量
       pools = await lotteryService.getPoolsForMember(userId, parseInt(memberId));
@@ -92,8 +92,8 @@ exports.getPools = async (req, res) => {
 
     res.json({
       code: 200,
-      data: { 
-        pools, 
+      data: {
+        pools,
         total: pools.length,
         viewMode,  // 标记当前视角
       },
@@ -262,9 +262,9 @@ exports.createPoolVersion = async (req, res) => {
 exports.getOverview = async (req, res) => {
   try {
     const userId = req.session.user.id;
-    
+
     const overview = await lotteryService.getDrawOverview(userId);
-    
+
     res.json({
       code: 200,
       data: overview,
@@ -325,15 +325,20 @@ exports.getHistory = async (req, res) => {
     }
 
     const history = await lotteryService.getDrawHistory(
-      parseInt(memberId), 
-      poolId ? parseInt(poolId) : null, 
+      parseInt(memberId),
+      poolId ? parseInt(poolId) : null,
       parseInt(limit)
     );
 
     res.json({
       code: 200,
-      data: { history, total: history.length },
+      data: {
+        history,
+        logs: history,           // ✅ 兼容旧字段
+        total: history.length,
+      },
     });
+
   } catch (err) {
     console.error('getHistory 错误:', err);
     res.status(500).json({ code: 500, msg: '获取抽奖历史失败', error: err.message });

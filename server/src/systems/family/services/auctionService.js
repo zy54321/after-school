@@ -445,6 +445,294 @@ exports.getAuctionOverview = async (parentId, options = {}) => {
   };
 };
 
+// ========== 拍卖台（大厅/会场聚合）==========
+
+/**
+ * 大厅聚合（拍卖台用）
+ * - 返回 active/scheduled 场次的当前拍品信息
+ */
+/**
+ * 获取拍卖大厅聚合数据
+ * 返回：{ sessions: [...] }
+ */
+exports.getHall = async (parentId) => {
+  return await auctionRepo.getHallSessions(parentId);
+};
+
+/**
+ * 会场详情聚合（拍卖台用）
+ * 返回：{ session, lots, members, recent_bids }
+ */
+exports.getSessionOverview = async (parentId, sessionId) => {
+  const pool = auctionRepo.getPool();
+  const client = await pool.connect();
+  
+  try {
+    const result = await auctionRepo.getSessionOverviewDTO(parentId, sessionId, client);
+    if (!result) {
+      throw new Error('拍卖场次不存在或无权限');
+    }
+    return result;
+  } finally {
+    client.release();
+  }
+};
+
+// ========== 拍卖台动作（逐 lot 成交 / 撤销最后一次出价）==========
+
+/**
+ * 逐 lot 成交（实现A：最高价成交，冻结已扣）
+ * 
+ * @param {number} actorUserId - 操作者用户ID（parent_id）
+ * @param {number} lotId - 拍品ID
+ * @returns {object} 成交结果 { status, finalPrice, winnerId, result, order }
+ * 
+ * 严格事务顺序：
+ * 1) 锁定 lot + session
+ * 2) 校验 lot=open
+ * 3) 取最高 bid
+ * 4) 若无出价：流拍
+ * 5) 幂等检查：result 已存在就返回
+ * 6) 赢家：标记 hold 为 converted（不再扣分）
+ * 7) 输家：释放 hold，写正数 points_log
+ * 8) 生成订单+入库
+ * 9) 写 result
+ * 10) 更新 lot 状态为 sold
+ * 11) 写 event
+ */
+exports.closeLot = async (actorUserId, lotId) => {
+  const pool = auctionRepo.getPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const lot = await auctionRepo.getLotForUpdate(lotId, client);
+    if (!lot) throw new Error('lot 不存在');
+
+    const session = await auctionRepo.getSessionForUpdate(lot.session_id, client);
+    if (!session) throw new Error('session 不存在');
+    if (!['pending', 'active'].includes(lot.status)) throw new Error('该拍品已成交/已流拍/已关闭');
+
+    // 1) 取最高 bid（只取有效 bid）
+    const top = await auctionRepo.getTopBid(lotId, client);
+
+    // 2) 若无出价：流拍
+    if (!top) {
+      await auctionRepo.insertResultIfAbsent({
+        sessionId: lot.session_id,
+        lotId,
+        winnerBidderId: null,
+        finalPrice: 0,
+        status: 'unsold',
+      }, client);
+
+      await auctionRepo.updateLotStatus(lotId, 'unsold', client);
+      await auctionRepo.createEvent({
+        actorUserId,
+        sessionId: lot.session_id,
+        lotId,
+        bidderId: null,
+        eventType: 'close_lot',
+        payload: { status: 'unsold' },
+      }, client);
+
+      await client.query('COMMIT');
+      return { status: 'unsold' };
+    }
+
+    const winnerId = top.bidder_member_id || top.bidder_id;
+    const finalPrice = top.bid_points; // ✅ 最高价成交
+
+    // 3) 幂等：result 已存在就直接返回（unique(session_id, lot_id) 保护）
+    const existed = await auctionRepo.getResultBySessionLot(lot.session_id, lotId, client);
+    if (existed) {
+      await client.query('COMMIT');
+      return { status: existed.settlement_status || existed.status, result: existed };
+    }
+
+    // 4) 赢家冻结（实现A：赢家冻结通常=finalPrice，不需要额外扣分）
+    //    但仍建议把 winner hold 标记 converted
+    await auctionRepo.markHoldConverted(lotId, winnerId, client);
+
+    // 5) 输家释放：释放所有非赢家 hold
+    //    返回：[{ bidder_id, hold_points }, ...]
+    const losersHolds = await auctionRepo.listLoserHoldsForUpdate(lotId, winnerId, client);
+
+    for (const h of losersHolds) {
+      if (h.hold_points > 0) {
+        await walletRepo.createPointsLog({
+          memberId: h.bidder_id,
+          parentId: actorUserId,
+          description: `拍卖释放(${lot.sku_name || lotId})`,
+          pointsChange: +h.hold_points,
+          reasonCode: 'auction_release',
+          idempotencyKey: `auction_release_${lotId}_${h.bidder_id}_close`,
+        }, client);
+      }
+      await auctionRepo.markHoldReleased(lotId, h.bidder_id, client);
+    }
+
+    // 6) 生成订单 + 入库（用你现有 marketplace 的 fulfill 逻辑）
+    //    这里你有两种资产类型：
+    //    - lot 关联 offer/sku：用 marketplaceService 的 "创建订单+入库"复用
+    //    - lot 只是一个文本拍品：只写 result，不入库
+    //
+    // 建议：lot 表上存 offer_id 或 sku_id（你已有 family_market 体系）
+    const idempotencyKey = `auction_lot_${lotId}`;
+    let order = null;
+    
+    if (lot.sku_id || lot.offer_id) {
+      // 使用现有的 createOrderAndFulfill，但需要修改为不扣分（实现A下已扣）
+      // 或者创建一个新的方法 createAuctionOrderAndFulfill
+      // 这里先使用 createOrderAndFulfill，但跳过扣分步骤
+      const existingOrder = await marketplaceRepo.getOrderByIdempotencyKey(actorUserId, idempotencyKey, client);
+      if (!existingOrder) {
+        // 创建订单（不扣分，因为实现A下已扣）
+        order = await marketplaceRepo.createOrder({
+          parentId: actorUserId,
+          memberId: winnerId,
+          offerId: lot.offer_id,
+          skuId: lot.sku_id,
+          skuName: lot.sku_name,
+          cost: finalPrice,
+          quantity: lot.quantity || 1,
+          status: 'paid',
+          idempotencyKey,
+        }, client);
+
+        // 创建库存
+        const existingInventory = await marketplaceRepo.findUnusedInventoryItem(winnerId, lot.sku_id, client);
+        if (existingInventory) {
+          await marketplaceRepo.incrementInventoryQuantity(existingInventory.id, lot.quantity || 1, client);
+        } else {
+          await marketplaceRepo.createInventoryItem({
+            memberId: winnerId,
+            skuId: lot.sku_id,
+            orderId: order.id,
+            quantity: lot.quantity || 1,
+            status: 'unused',
+          }, client);
+        }
+      } else {
+        order = existingOrder;
+      }
+    }
+
+    // 7) 写 result（unique 保证不重复）
+    const result = await auctionRepo.insertResultIfAbsent({
+      sessionId: lot.session_id,
+      lotId,
+      winnerBidderId: winnerId,
+      finalPrice,
+      status: 'sold',
+      orderId: order ? order.id : null,
+    }, client);
+
+    // 8) lot 状态 -> sold
+    await auctionRepo.updateLotStatus(lotId, 'sold', client);
+
+    // 9) event
+    await auctionRepo.createEvent({
+      actorUserId,
+      sessionId: lot.session_id,
+      lotId,
+      bidderId: winnerId,
+      eventType: 'close_lot',
+      payload: { status: 'sold', finalPrice },
+    }, client);
+
+    await client.query('COMMIT');
+    return { status: 'sold', finalPrice, winnerId, result, order };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * 撤销最后一次出价（仅允许撤销该 lot 最新一条 bid）
+ * 
+ * 约束：只能撤销该 lot 最新一条 bid 且 lot=open
+ */
+exports.undoLastBid = async (actorUserId, lotId) => {
+  const pool = auctionRepo.getPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const lot = await auctionRepo.getLotForUpdate(lotId, client);
+    if (!lot) throw new Error('lot 不存在');
+    if (!['pending', 'active'].includes(lot.status)) throw new Error('该拍品已关闭，无法撤销出价');
+
+    // 1) 最新 bid（有效且未 void）
+    const lastBid = await auctionRepo.getLastBidForUpdate(lotId, client);
+    if (!lastBid) throw new Error('没有可撤销的出价');
+
+    // 2) 将 last bid 标记 void
+    await auctionRepo.voidBid(lastBid.id, client);
+
+    const bidderId = lastBid.bidder_member_id || lastBid.bidder_id;
+
+    // 3) 重算该 bidder 在该 lot 的最大有效出价
+    const newMaxBid = await auctionRepo.getMaxBidByBidder(lotId, bidderId, client); // { bid_points } or null
+    const newMax = newMaxBid ? parseInt(newMaxBid.bid_points) : 0;
+
+    // 4) 读 hold（FOR UPDATE）
+    const hold = await auctionRepo.getHoldForUpdate(lotId, bidderId, client);
+    const oldHold = hold ? hold.hold_points : 0;
+
+    // 5) 释放差额
+    const release = oldHold - newMax;
+    if (release < 0) throw new Error('内部错误：释放差额为负');
+
+    if (release > 0) {
+      await walletRepo.createPointsLog({
+        memberId: bidderId,
+        parentId: actorUserId,
+        description: `撤销出价释放(${lot.sku_name || lotId})`,
+        pointsChange: +release,
+        reasonCode: 'auction_release',
+        idempotencyKey: `auction_release_${lotId}_${bidderId}_undo_${lastBid.id}`,
+      }, client);
+    }
+
+    // 6) 更新 hold 为 newMax（若 newMax=0 则可直接标记 released）
+    if (newMax === 0) {
+      await auctionRepo.markHoldReleased(lotId, bidderId, client);
+    } else {
+      await auctionRepo.upsertHold({
+        sessionId: lot.session_id,
+        lotId,
+        bidderId,
+        holdPoints: newMax,
+        status: 'active',
+      }, client);
+    }
+
+    // 7) event
+    await auctionRepo.createEvent({
+      actorUserId,
+      sessionId: lot.session_id,
+      lotId,
+      bidderId,
+      eventType: 'undo_bid',
+      payload: { voidBidId: lastBid.id, oldHold, newMax, release },
+    }, client);
+
+    await client.query('COMMIT');
+    return { voidBidId: lastBid.id, bidderId, oldHold, newMax, release };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
 // ========== 密封出价（Member-level）==========
 
 /**
@@ -462,85 +750,121 @@ exports.getAuctionOverview = async (parentId, options = {}) => {
  * @param {number} bidPoints - 出价积分
  * @returns {object} 出价结果
  */
-exports.submitBid = async (lotId, bidderId, bidPoints) => {
+/**
+ * 提交出价（实现A：冻结增量）
+ * 
+ * 严格事务顺序：
+ * 1) 锁定 lot + session（避免结算/关标并发）
+ * 2) 状态校验
+ * 3) 归属校验
+ * 4) 当前最高价校验
+ * 5) 查询该 bidder 该 lot 当前冻结（FOR UPDATE）
+ * 6) delta 冻结增量
+ * 7) 计算可用余额
+ * 8) 写/更新 hold
+ * 9) 写 bid（先写，获取 bidId）
+ * 10) 写冻结流水（负数 delta，幂等键使用 bidId）
+ * 11) 写 event
+ */
+exports.submitBid = async (actorUserId, lotId, bidderId, bidPoints) => {
   const pool = auctionRepo.getPool();
   const client = await pool.connect();
   
   try {
     await client.query('BEGIN');
+
+    // 1) 锁定 lot + session（避免结算/关标并发）
+    const lot = await auctionRepo.getLotForUpdate(lotId, client);
+    if (!lot) throw new Error('lot 不存在');
+
+    const session = await auctionRepo.getSessionForUpdate(lot.session_id, client);
+    if (!session) throw new Error('session 不存在');
+
+    // 2) 状态校验
+    if (session.status !== 'active') throw new Error('拍卖场未开始或已结束');
+    if (!['pending', 'active'].includes(lot.status)) throw new Error('该拍品当前不可出价');
+    if (session.ends_at && new Date() > new Date(session.ends_at)) throw new Error('拍卖已到截止时间');
     
-    // ========== 1. 获取拍品信息 ==========
-    const lot = await auctionRepo.getLotById(lotId, client);
-    if (!lot) {
-      throw new Error('拍品不存在');
-    }
-    
-    // ========== 2. 校验拍品状态 ==========
-    if (!['pending', 'active'].includes(lot.status)) {
-      throw new Error(`拍品状态不允许出价 (当前: ${lot.status})`);
-    }
-    
-    // ========== 3. 获取并校验场次状态 ==========
-    const session = await auctionRepo.getSessionById(lot.session_id, client);
-    if (!session) {
-      throw new Error('拍卖场次不存在');
-    }
-    
-    if (!['scheduled', 'active'].includes(session.status)) {
-      throw new Error(`拍卖场次状态不允许出价 (当前: ${session.status})`);
-    }
-    
-    // ========== 4. 校验出价金额 ==========
-    if (bidPoints < lot.start_price) {
-      throw new Error(`出价不能低于起拍价 (${lot.start_price})`);
-    }
-    
-    // ========== 5. 校验成员余额 ==========
-    const member = await walletRepo.getMemberById(bidderId, client);
-    if (!member) {
-      throw new Error('成员不存在');
-    }
-    
-    // 校验成员是否属于场次创建者
-    if (member.parent_id !== session.parent_id) {
-      throw new Error('成员不属于此拍卖场次');
-    }
-    
-    const balance = await walletRepo.getBalance(bidderId, client);
-    if (balance < bidPoints) {
-      throw new Error(`积分不足，当前余额: ${balance}，出价: ${bidPoints}`);
-    }
-    
-    // ========== 6. 检查是否已有更高出价（同一成员） ==========
-    const existingBid = await auctionRepo.getMemberHighestBid(lotId, bidderId, client);
-    if (existingBid && existingBid.bid_points >= bidPoints) {
-      throw new Error(`您已有更高的出价 (${existingBid.bid_points})，无需重复出价`);
-    }
-    
-    // ========== 7. 创建出价记录 ==========
-    const bid = await auctionRepo.createBid({
+    // 检查是否已成交/流拍
+    const existingResult = await auctionRepo.getResultByLotId(lotId, client);
+    if (existingResult) throw new Error('拍品已成交/流拍，禁止出价');
+
+    // 3) 归属校验：bidder 必须属于当前 parent（你的系统：parent_id = userId）
+    const bidder = await walletRepo.getMemberById(bidderId, client);
+    if (!bidder) throw new Error('成员不存在');
+    if (bidder.parent_id !== actorUserId) throw new Error('无权为该成员出价');
+
+    // 4) 当前最高价（只考虑有效 bid）
+    const top = await auctionRepo.getTopBid(lotId, client); // { bid_points, bidder_id, created_at } or null
+    const currentTop = top ? top.bid_points : (lot.reserve_price || lot.start_price || 0);
+
+    if (bidPoints <= currentTop) throw new Error(`出价必须大于当前最高价：${currentTop}`);
+
+    // 5) 查询该 bidder 该 lot 当前冻结/最高出价（FOR UPDATE）
+    const hold = await auctionRepo.getHoldForUpdate(lotId, bidderId, client); // { hold_points } or null
+    const oldHold = hold ? hold.hold_points : 0;
+
+    if (bidPoints <= oldHold) throw new Error(`出价必须大于该成员当前最高出价：${oldHold}`);
+
+    // 6) delta 冻结增量
+    const delta = bidPoints - oldHold;
+
+    // 7) 计算可用余额 = 钱包余额 - 活跃冻结总额（跨 lot）
+    //    注意：这里不要把本 lot 的 oldHold 再扣一次（它已经属于冻结总额里）
+    const walletBalance = await walletRepo.getBalance(bidderId, client); // 你的 v2 已有（余额=points_log 汇总）
+    const lockedTotal = await auctionRepo.sumActiveHoldsByMember(bidderId, client); // sum hold_points where status='active'
+    const available = walletBalance - lockedTotal;
+
+    if (available < delta) throw new Error('可用积分不足（需要冻结增量）');
+
+    // 8) 写/更新 hold（把 hold_points 提升到 bidPoints）
+    await auctionRepo.upsertHold({
+      sessionId: lot.session_id,
+      lotId,
+      bidderId,
+      holdPoints: bidPoints,
+      status: 'active',
+    }, client);
+
+    // 9) 写 bid（建议不要 delete，用 status/is_void）
+    const bidRow = await auctionRepo.createBid({
       lotId,
       bidderMemberId: bidderId,
       bidPoints,
       isAutoBid: false,
     }, client);
-    
-    // ========== 8. 更新拍品状态为 active（如果是 pending） ==========
+
+    // 10) 写冻结流水（负数 delta）
+    // idempotency_key 使用 bidRow.id
+    await walletRepo.createPointsLog({
+      memberId: bidderId,
+      parentId: actorUserId,
+      description: `拍卖冻结(${lot.sku_name || lotId})`,
+      pointsChange: -delta,
+      reasonCode: 'auction_hold',
+      idempotencyKey: `auction_hold_${lotId}_${bidderId}_${bidRow.id}`,
+    }, client);
+
+    // 11) 写 event（便于回放/调试）
+    await auctionRepo.createEvent({
+      actorUserId,
+      sessionId: lot.session_id,
+      lotId,
+      bidderId,
+      eventType: 'bid',
+      payload: { bidPoints, delta, currentTop },
+    }, client);
+
+    // 兼容：首次出价将拍品置为 active
     if (lot.status === 'pending') {
       await auctionRepo.updateLotStatus(lotId, 'active', client);
     }
-    
+
     await client.query('COMMIT');
-    
-    return {
-      success: true,
-      bid,
-      msg: `出价成功！您的出价: ${bidPoints} 积分`,
-    };
-    
-  } catch (err) {
+    return { bid: bidRow };
+  } catch (e) {
     await client.query('ROLLBACK');
-    throw err;
+    throw e;
   } finally {
     client.release();
   }
@@ -789,3 +1113,16 @@ exports.getBidsByLotId = async (lotId, limit = 50) => {
 exports.getHighestBid = async (lotId) => {
   return await auctionRepo.getHighestBid(lotId);
 };
+
+// ========== 内部：事件写入（可选）==========
+async function safeCreateEvent(client, evt) {
+  try {
+    return await auctionRepo.createEvent(evt, client);
+  } catch (e) {
+    // 如果迁移未执行/表不存在，不阻塞主流程
+    if ((e?.message || '').includes('auction_event') || e?.code === '42P01') {
+      return null;
+    }
+    throw e;
+  }
+}

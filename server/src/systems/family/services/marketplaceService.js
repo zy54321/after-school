@@ -51,25 +51,25 @@ exports.createOrderAndFulfill = async ({
 }) => {
   const pool = marketplaceRepo.getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     // ========== 1. 获取成员信息 ==========
     const member = await walletRepo.getMemberById(memberId, client);
     if (!member) {
       throw new Error('成员不存在');
     }
     const parentId = member.parent_id;
-    
+
     // ========== 2. 幂等性检查 ==========
     if (idempotencyKey) {
       const existingOrder = await marketplaceRepo.getOrderByIdempotencyKey(
-        parentId, 
-        idempotencyKey, 
+        parentId,
+        idempotencyKey,
         client
       );
-      
+
       if (existingOrder) {
         // 已存在相同订单，直接返回成功（不重复扣分）
         await client.query('COMMIT');
@@ -81,10 +81,10 @@ exports.createOrderAndFulfill = async ({
         };
       }
     }
-    
+
     // ========== 3. 获取 Offer 和 SKU 信息 ==========
     let offer, sku;
-    
+
     if (offerId) {
       // 优先使用 offerId
       offer = await marketplaceRepo.getActiveOfferById(offerId, client);
@@ -105,20 +105,20 @@ exports.createOrderAndFulfill = async ({
     } else {
       throw new Error('必须提供 offerId 或 skuId');
     }
-    
+
     if (!sku) {
       throw new Error('SKU 不存在');
     }
-    
+
     // ========== 4. 计算总费用 ==========
     const totalCost = offer.cost * quantity;
-    
+
     // ========== 5. 校验余额 ==========
     const balance = await walletRepo.getBalance(memberId, client);
     if (balance < totalCost) {
       throw new Error(`积分不足，当前余额: ${balance}，需要: ${totalCost}`);
     }
-    
+
     // ========== 6. 检查购买限制 ==========
     if (sku.limit_type && sku.limit_type !== 'unlimited') {
       const startTime = getLimitStartTime(sku.limit_type);
@@ -128,7 +128,7 @@ exports.createOrderAndFulfill = async ({
         startTime,
         client
       );
-      
+
       if (orderCount + quantity > sku.limit_max) {
         const limitTypeText = {
           daily: '今日',
@@ -140,14 +140,14 @@ exports.createOrderAndFulfill = async ({
         );
       }
     }
-    
+
     // ========== 7. 检查目标成员限制 ==========
     if (sku.target_members && sku.target_members.length > 0) {
       if (!sku.target_members.includes(memberId)) {
         throw new Error('该商品不对此成员开放');
       }
     }
-    
+
     // ========== 8. 创建订单 ==========
     const order = await marketplaceRepo.createOrder({
       parentId,
@@ -160,7 +160,7 @@ exports.createOrderAndFulfill = async ({
       status: 'paid',
       idempotencyKey,
     }, client);
-    
+
     // ========== 9. 创建积分流水（扣分） ==========
     const pointsLog = await walletRepo.createPointsLog({
       memberId,
@@ -171,7 +171,7 @@ exports.createOrderAndFulfill = async ({
       reasonCode: sku.type === 'auction' ? 'auction' : 'reward',
       idempotencyKey: idempotencyKey ? `points_${idempotencyKey}` : null,
     }, client);
-    
+
     // ========== 10. 创建库存 ==========
     // 检查是否有未使用的相同 SKU
     const existingInventory = await marketplaceRepo.findUnusedInventoryItem(
@@ -179,7 +179,7 @@ exports.createOrderAndFulfill = async ({
       sku.id,
       client
     );
-    
+
     if (existingInventory) {
       // 合并到现有库存
       await marketplaceRepo.incrementInventoryQuantity(
@@ -197,10 +197,10 @@ exports.createOrderAndFulfill = async ({
         status: 'unused',
       }, client);
     }
-    
+
     // ========== 11. 提交事务 ==========
     await client.query('COMMIT');
-    
+
     return {
       success: true,
       order,
@@ -208,7 +208,7 @@ exports.createOrderAndFulfill = async ({
       msg: `兑换成功！${sku.name} 已存入背包 🎒`,
       idempotent: false,
     };
-    
+
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -229,6 +229,35 @@ exports.getOrdersByMemberId = async (memberId, limit = 50) => {
  */
 exports.getInventoryByMemberId = async (memberId, status = null) => {
   return await marketplaceRepo.getInventoryByMemberId(memberId, status);
+};
+
+exports.useInventoryItem = async ({ userId, inventoryId, quantity }) => {
+  const pool = marketplaceRepo.getPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1) 锁定库存行 + 校验归属
+    const inv = await marketplaceRepo.getInventoryItemByIdForUpdate(inventoryId, client);
+    if (!inv) throw new Error('库存记录不存在');
+    if (inv.parent_id !== userId) throw new Error('无权操作该库存记录');
+    if (inv.status !== 'unused') throw new Error('该道具不可用（已使用/已过期）');
+    if (inv.quantity < quantity) throw new Error('库存数量不足');
+
+    // 2) 执行扣减/置为 used
+    const updated = await marketplaceRepo.useInventoryItem(inventoryId, quantity, client);
+
+    await client.query('COMMIT');
+    return {
+      item: updated,
+    };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 };
 
 /**
@@ -254,34 +283,34 @@ exports.getActiveSkus = async (parentId) => {
  */
 exports.getMarketCatalog = async (parentId, options = {}) => {
   const { type, includeOffers = true } = options;
-  
+
   // 获取 SKU 列表
   const skus = await marketplaceRepo.getActiveSkus(parentId);
-  
+
   // 按类型筛选
   let filteredSkus = skus;
   if (type) {
     filteredSkus = skus.filter(s => s.type === type);
   }
-  
+
   // 获取 Offers（如果需要）
   let offers = [];
   if (includeOffers) {
     offers = await marketplaceRepo.getActiveOffers(parentId, { offerType: type });
   }
-  
+
   // 组装目录
   const catalog = filteredSkus.map(sku => {
     const skuOffers = offers.filter(o => o.sku_id === sku.id);
     return {
       ...sku,
       offers: skuOffers,
-      lowestPrice: skuOffers.length > 0 
+      lowestPrice: skuOffers.length > 0
         ? Math.min(...skuOffers.map(o => o.cost))
         : sku.base_cost,
     };
   });
-  
+
   return {
     parentId,
     skus: catalog,
@@ -308,7 +337,7 @@ exports.getActiveOffers = async (parentId, options = {}) => {
 exports.publishProduct = async (userId, data) => {
   const pool = marketplaceRepo.getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
 
@@ -337,7 +366,7 @@ exports.publishProduct = async (userId, data) => {
     }, client);
 
     await client.query('COMMIT');
-    
+
     return { sku, offer };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -353,7 +382,7 @@ exports.publishProduct = async (userId, data) => {
 exports.updateProduct = async (userId, offerId, data) => {
   const pool = marketplaceRepo.getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
 

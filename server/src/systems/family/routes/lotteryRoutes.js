@@ -43,6 +43,9 @@ router.get('/pools/:id', controller.getPoolDetail);
 // GET /api/v2/draw/history - 获取抽奖历史
 router.get('/history', controller.getHistory);
 
+// ✅ 兼容旧接口：GET /api/v2/draw/logs -> 走同一套历史
+router.get('/logs', controller.getHistory);
+
 // ========== 抽奖券 ==========
 
 // GET /api/v2/draw/tickets - 获取抽奖券统计

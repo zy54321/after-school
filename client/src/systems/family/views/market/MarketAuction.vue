@@ -75,13 +75,13 @@
         </div>
 
         <div class="lots-preview">
-          <div v-for="lot in session.lots?.slice(0, 3)" :key="lot.id" class="lot-preview">
+          <div v-for="lot in (session.lots || []).slice(0, 3)" :key="lot.id" class="lot-preview">
             <span class="lot-icon">{{ lot.sku_icon || '🎁' }}</span>
             <span class="lot-name">{{ lot.sku_name }}</span>
-            <span class="lot-price">{{ lot.current_bid || lot.start_price }} 积分</span>
+            <span class="lot-price">{{ lot.current_price || lot.start_price }} 积分</span>
           </div>
-          <div v-if="session.lots?.length > 3" class="more-lots">
-            +{{ session.lots.length - 3 }} 件更多
+          <div v-if="(session.lots || []).length > 3" class="more-lots">
+            +{{ (session.lots || []).length - 3 }} 件更多
           </div>
         </div>
 
@@ -122,38 +122,27 @@ const statusTabs = [
   { label: '已结束', value: 'ended' },
 ];
 
-// 加载拍卖场次
-const loadSessions = async () => {
+// 加载拍卖大厅数据（使用新的 hall API）
+const loadHall = async () => {
   loading.value = true;
   try {
-    const res = await axios.get('/api/v2/auction/sessions', {
-      params: { status: filter.value.status || undefined }
-    });
+    const res = await axios.get('/api/v2/auction/hall');
     
     if (res.data?.code === 200) {
-      sessions.value = res.data.data?.sessions || [];
-    }
-  } catch (err) {
-    console.error('加载拍卖场次失败:', err);
-  } finally {
-    loading.value = false;
-  }
-};
-
-// 加载统计
-const loadStats = async () => {
-  try {
-    const res = await axios.get('/api/v2/auction/overview');
-    
-    if (res.data?.code === 200) {
-      stats.value = res.data.data?.stats || {
-        active: 0,
-        pending: 0,
-        settled: 0,
+      const hallData = res.data.data;
+      sessions.value = hallData?.sessions || [];
+      
+      // 计算统计
+      stats.value = {
+        active: sessions.value.filter(s => s.status === 'active').length,
+        pending: sessions.value.filter(s => s.status === 'scheduled').length,
+        settled: 0, // hall 只返回 active/scheduled
       };
     }
   } catch (err) {
-    console.error('加载拍卖统计失败:', err);
+    console.error('加载拍卖大厅失败:', err);
+  } finally {
+    loading.value = false;
   }
 };
 
@@ -182,8 +171,7 @@ const getStatusLabel = (status) => {
 };
 
 onMounted(() => {
-  loadSessions();
-  loadStats();
+  loadHall();
 });
 </script>
 
