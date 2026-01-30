@@ -133,6 +133,12 @@
                 class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white text-sm focus:border-blue-500 outline-none resize-none"
                 placeholder="简短描述这个奖励..."></textarea>
             </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">权重 (0-100)</label>
+              <input type="number" v-model.number="form.weight_score" min="0" max="100"
+                class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white focus:border-blue-500 outline-none"
+                placeholder="0" />
+            </div>
           </div>
 
           <div class="space-y-3 pt-2 border-t border-white/5">
@@ -208,6 +214,7 @@ const form = ref({
   name: '', // SKU Name
   icon: '🎁', // SKU Icon
   description: '', // SKU Desc
+  weight_score: 0, // SKU Weight Score (0-100)
   cost: 100, // Offer Cost
   quantity: 999, // Offer Qty
   limit_type: 'unlimited', // SKU Limit
@@ -239,6 +246,7 @@ const openModal = (item = null) => {
       // 如果后端没返回 icon，这里会是 undefined，前端模板里有 fallback
       icon: item.sku_icon || '🎁',
       description: item.sku_description || '',
+      weight_score: item.sku_weight_score ?? 0,
       cost: item.cost,
       quantity: item.quantity,
       limit_type: item.limit_type || 'unlimited',
@@ -252,6 +260,7 @@ const openModal = (item = null) => {
       name: '',
       icon: '🎁',
       description: '',
+      weight_score: 0,
       cost: 100,
       quantity: 999,
       limit_type: 'unlimited',
@@ -267,6 +276,9 @@ const closeModal = () => showModal.value = false;
 const submit = async () => {
   if (!form.value.name) return ElMessage.warning('请输入商品名称');
   if (form.value.cost < 0) return ElMessage.warning('价格不能为负');
+  if (form.value.weight_score < 0 || form.value.weight_score > 100) {
+    return ElMessage.warning('权重必须在 0-100 之间');
+  }
 
   submitting.value = true;
   try {

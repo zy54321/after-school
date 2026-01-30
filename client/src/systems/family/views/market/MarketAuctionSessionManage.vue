@@ -79,10 +79,18 @@
               <span>已选 SKU: {{ poolForm.sku_ids.length }} 个</span>
             </div>
             <div class="pool-list">
-              <label v-for="sku in auctionableSkus" :key="sku.id" class="pool-item">
-                <input type="checkbox" :value="sku.id" v-model="poolForm.sku_ids" />
-                <span>{{ sku.name }}</span>
-              </label>
+              <div v-for="sku in auctionableSkus" :key="sku.id" class="pool-item">
+                <label class="pool-item-label">
+                  <input type="checkbox" :value="sku.id" v-model="poolForm.sku_ids" />
+                  <span class="sku-name">{{ sku.name }}</span>
+                </label>
+                <div class="pool-item-meta">
+                  <span class="rarity-badge" :class="rarityFromWeight(sku.weight_score)">
+                    {{ rarityFromWeight(sku.weight_score).toUpperCase() }}
+                  </span>
+                  <span class="weight-score">{{ sku.weight_score ?? 0 }}</span>
+                </div>
+              </div>
             </div>
             <div class="pool-actions">
               <button class="save-btn" @click="submitPool" :disabled="saving">
@@ -101,6 +109,31 @@
             <div class="generate-panel">
               <h4>生成拍品</h4>
               <div class="generate-form">
+                <div class="pool-preview">
+                  <div class="pool-preview__title">
+                    已勾选池子（{{ selectedPoolSkus.length }}）
+                  </div>
+
+                  <div v-if="selectedPoolSkus.length === 0" class="pool-preview__empty">
+                    未选择任何商品，请先到「池子」Tab 勾选商品
+                  </div>
+
+                  <div v-else class="pool-preview__tags">
+                    <el-tag
+                      v-for="sku in selectedPoolSkus.slice(0, 20)"
+                      :key="sku.id"
+                      size="small"
+                      style="margin: 4px 6px 0 0;"
+                    >
+                      {{ sku.name }}
+                    </el-tag>
+
+                    <span v-if="selectedPoolSkus.length > 20" class="pool-preview__more">
+                      …还有 {{ selectedPoolSkus.length - 20 }} 个
+                    </span>
+                  </div>
+                </div>
+
                 <div class="form-row">
                   <label>总数量</label>
                   <input 
@@ -116,27 +149,6 @@
                     <input type="checkbox" v-model="generateForm.unique" />
                     不允许重复 SKU
                   </label>
-                </div>
-                <div class="form-row">
-                  <label>稀有度权重</label>
-                  <div class="rarity-weights">
-                    <div class="weight-item">
-                      <span>R:</span>
-                      <input type="number" v-model.number="generateForm.rarity_weights.r" min="0" class="weight-input" />
-                    </div>
-                    <div class="weight-item">
-                      <span>SR:</span>
-                      <input type="number" v-model.number="generateForm.rarity_weights.sr" min="0" class="weight-input" />
-                    </div>
-                    <div class="weight-item">
-                      <span>SSR:</span>
-                      <input type="number" v-model.number="generateForm.rarity_weights.ssr" min="0" class="weight-input" />
-                    </div>
-                    <div class="weight-item">
-                      <span>UR:</span>
-                      <input type="number" v-model.number="generateForm.rarity_weights.ur" min="0" class="weight-input" />
-                    </div>
-                  </div>
                 </div>
                 <div class="form-actions">
                   <button 
@@ -172,7 +184,7 @@
             </div>
 
             <!-- 预览结果区 -->
-            <div class="preview-section" v-if="previewData">
+            <div class="preview-section" v-if="previewData" v-loading="previewLoading">
               <h4>预览结果</h4>
               <div class="preview-info">
                 <span>Seed: {{ previewData.seed }}</span>
@@ -216,41 +228,92 @@
             </div>
 
             <!-- 现有拍品列表 -->
-            <div class="existing-lots-section">
-              <h4>现有拍品</h4>
-              <div class="lots-table" v-if="lots.length > 0">
-                <div class="lots-header">
-                  <div>排序</div>
-                  <div>标题</div>
-                  <div>稀有度</div>
-                  <div>保留价</div>
-                  <div>状态</div>
-                  <div>操作</div>
-                </div>
-                <div class="lots-row" v-for="lot in lots" :key="lot.id">
-                  <div>{{ lot.sort_order || 0 }}</div>
-                  <div>{{ lot.sku_name || lot.title || `拍品#${lot.id}` }}</div>
-                  <div>{{ lot.rarity || 'common' }}</div>
-                  <div>{{ lot.reserve_price || lot.start_price || 0 }} 积分</div>
-                  <div>
-                    <span class="lot-status" :class="lot.status">
-                      {{ getLotStatusLabel(lot.status) }}
-                    </span>
+            <div class="existing-lots-section" v-loading="lotsLoading">
+              <!-- 可排序拍品 -->
+              <div v-if="reorderableLots.length > 0">
+                <h4>可排序拍品</h4>
+                <div class="lots-table">
+                  <div class="lots-header">
+                    <div>拖拽</div>
+                    <div>排序</div>
+                    <div>标题</div>
+                    <div>稀有度</div>
+                    <div>保留价</div>
+                    <div>状态</div>
+                    <div>操作</div>
                   </div>
-                  <div class="lot-actions">
-                    <button 
-                      v-if="lot.status === 'pending' && session.status === 'active'"
-                      class="activate-btn"
-                      @click="activateLot(lot.id)"
-                      :disabled="activating"
+                  <div class="lots-body" ref="lotsBodyRef">
+                    <div 
+                      class="lots-row" 
+                      v-for="(lot, idx) in reorderableLots" 
+                      :key="lot.id" 
+                      :data-id="lot.id"
                     >
-                      {{ activating === lot.id ? '激活中...' : '激活此拍品' }}
-                    </button>
-                    <span v-else class="no-action">-</span>
+                      <div class="drag-handle">☰</div>
+                      <div class="order-col">{{ idx + 1 }}</div>
+                      <div>{{ lot.sku_name || lot.title || `拍品#${lot.id}` }}</div>
+                      <div>{{ lot.rarity || 'common' }}</div>
+                      <div>{{ lot.reserve_price || lot.start_price || 0 }} 积分</div>
+                      <div>
+                        <span class="lot-status" :class="lot.status">
+                          {{ getLotStatusLabel(lot.status) }}
+                        </span>
+                      </div>
+                      <div class="lot-actions">
+                        <button 
+                          v-if="lot.status === 'pending' && session.status === 'active'"
+                          class="activate-btn"
+                          @click="activateLot(lot.id)"
+                          :disabled="activating"
+                        >
+                          {{ activating === lot.id ? '激活中...' : '激活此拍品' }}
+                        </button>
+                        <span v-else class="no-action">-</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div class="empty" v-else>暂无拍品</div>
+
+              <!-- 已完成拍品 -->
+              <div v-if="finishedLots.length > 0" class="finished-lots-section">
+                <h4>已完成（不可排序）</h4>
+                <div class="lots-table">
+                  <div class="lots-header">
+                    <div>-</div>
+                    <div>排序</div>
+                    <div>标题</div>
+                    <div>稀有度</div>
+                    <div>保留价</div>
+                    <div>状态</div>
+                    <div>操作</div>
+                  </div>
+                  <div class="lots-body">
+                    <div 
+                      class="lots-row finished" 
+                      v-for="(lot, idx) in finishedLots" 
+                      :key="lot.id" 
+                      :data-id="lot.id"
+                    >
+                      <div>-</div>
+                      <div class="order-col">{{ idx + 1 }}</div>
+                      <div>{{ lot.sku_name || lot.title || `拍品#${lot.id}` }}</div>
+                      <div>{{ lot.rarity || 'common' }}</div>
+                      <div>{{ lot.reserve_price || lot.start_price || 0 }} 积分</div>
+                      <div>
+                        <span class="lot-status" :class="lot.status">
+                          {{ getLotStatusLabel(lot.status) }}
+                        </span>
+                      </div>
+                      <div class="lot-actions">
+                        <span class="no-action">-</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="empty" v-if="lots.length === 0">暂无拍品</div>
             </div>
           </div>
         </div>
@@ -322,21 +385,34 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, nextTick, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage, ElMessageBox, ElTag } from 'element-plus';
+import Sortable from 'sortablejs';
 
 const route = useRoute();
 const router = useRouter();
 
 const loading = ref(false);
+const lotsLoading = ref(false);      // 现有拍品 loading
+const previewLoading = ref(false);   // 预览生成 loading
 const saving = ref(false);
 const activating = ref(null);
 const session = ref(null);
 const lots = ref([]);
 const auctionableSkus = ref([]);
 const activeTab = ref('info');
+
+// 拆分可排序和已完成的拍品
+const reorderableLots = computed(() => lots.value.filter(l => ['pending', 'active'].includes(l.status)));
+const finishedLots = computed(() => lots.value.filter(l => ['sold', 'unsold'].includes(l.status)));
+
+// 根据当前勾选的池子 SKU IDs 找到 SKU 名称
+const selectedPoolSkus = computed(() => {
+  const ids = new Set((poolForm.value.sku_ids || []).map(Number));
+  return auctionableSkus.value.filter(s => ids.has(Number(s.id)));
+});
 
 const poolForm = ref({
   sku_ids: [],
@@ -346,12 +422,6 @@ const poolForm = ref({
 const generateForm = ref({
   count: 10,
   unique: false,
-  rarity_weights: {
-    r: 40,
-    sr: 30,
-    ssr: 20,
-    ur: 10,
-  },
 });
 
 const previewData = ref(null);
@@ -359,6 +429,10 @@ const previewing = ref(false);
 const committing = ref(false);
 const drawing = ref(false);
 const lockedSkuIds = ref(new Set());
+
+// 拖拽排序相关
+const lotsBodyRef = ref(null);
+let sortableInst = null;
 
 const tabs = [
   { label: '基本信息', value: 'info' },
@@ -398,6 +472,7 @@ const loadSession = async () => {
 // 加载拍品列表
 const loadLots = async () => {
   const sessionId = route.params.id;
+  lotsLoading.value = true;
   try {
     const res = await axios.get(`/api/v2/auction/sessions/${sessionId}`);
     if (res.data?.code === 200) {
@@ -406,6 +481,8 @@ const loadLots = async () => {
     }
   } catch (err) {
     console.error('加载拍品列表失败:', err);
+  } finally {
+    lotsLoading.value = false;
   }
 };
 
@@ -447,10 +524,28 @@ const submitPool = async () => {
   }
   saving.value = true;
   try {
-    await axios.post(`/api/v2/auction/sessions/${sessionId}/pool`, {
+    const resp = await axios.post(`/api/v2/auction/sessions/${sessionId}/pool`, {
       sku_ids: poolForm.value.sku_ids,
     });
+    
+    // ✅ 兼容回填：从接口返回值读取池子ID（兼容多种字段名）
+    const serverPoolIds =
+      resp?.data?.data?.config?.pool_sku_ids ??
+      resp?.data?.data?.pool_sku_ids ??
+      resp?.data?.data?.sku_ids ??
+      null;
+
+    if (Array.isArray(serverPoolIds)) {
+      poolForm.value.sku_ids = serverPoolIds.map(Number); // ✅ 回填勾选
+    }
+    
     ElMessage.success('池子已保存');
+    
+    // ✅ 本地同步：保证其他依赖 session.config 的地方立即正确
+    session.value = session.value || {};
+    session.value.config = session.value.config || {};
+    session.value.config.pool_sku_ids = [...(poolForm.value.sku_ids || [])].map(Number);
+    
     await loadSession(); // 刷新数据
   } catch (err) {
     ElMessage.error(err.response?.data?.msg || '保存池子失败');
@@ -530,6 +625,7 @@ const previewGenerate = async () => {
     return;
   }
   
+  previewLoading.value = true;
   previewing.value = true;
   drawing.value = true;
   
@@ -541,7 +637,6 @@ const previewGenerate = async () => {
     const res = await axios.post(`/api/v2/auction/sessions/${sessionId}/lots/preview-generate`, {
       count: generateForm.value.count,
       unique: generateForm.value.unique,
-      rarity_weights: generateForm.value.rarity_weights,
       locked_sku_ids: Array.from(lockedSkuIds.value),
     });
     
@@ -562,6 +657,7 @@ const previewGenerate = async () => {
     console.error('预览生成失败:', err);
     ElMessage.error(err.response?.data?.msg || '预览生成失败');
   } finally {
+    previewLoading.value = false;
     previewing.value = false;
     drawing.value = false;
   }
@@ -637,6 +733,71 @@ const toggleLock = (skuId) => {
 const isLocked = (skuId) => {
   return lockedSkuIds.value.has(skuId);
 };
+
+// 根据 weight_score 映射稀有度
+const rarityFromWeight = (score) => {
+  const s = Number(score) || 0;
+  if (s >= 90) return 'ur';
+  if (s >= 75) return 'ssr';
+  if (s >= 50) return 'sr';
+  return 'r';
+};
+
+// 初始化拖拽排序
+const initSortable = async () => {
+  await nextTick();
+  if (!lotsBodyRef.value) return;
+
+  if (sortableInst) {
+    sortableInst.destroy();
+    sortableInst = null;
+  }
+
+  sortableInst = new Sortable(lotsBodyRef.value, {
+    animation: 150,
+    handle: '.drag-handle',
+    ghostClass: 'drag-ghost',
+    filter: '.non-draggable', // 过滤掉已成交/流拍的拍品
+    onEnd: async () => {
+      // 只从 reorderable 容器收集 ids
+      const ids = Array.from(lotsBodyRef.value.children)
+        .map(el => parseInt(el.dataset.id))
+        .filter(Boolean);
+
+      // 同步本地顺序（只更新 reorderableLots 的顺序）
+      const reorderableMap = new Map(reorderableLots.value.map(l => [l.id, l]));
+      const finishedMap = new Map(finishedLots.value.map(l => [l.id, l]));
+      
+      // 重新组合：先 reorderable（按新顺序），后 finished（保持原顺序）
+      const reorderedReorderable = ids.map(id => reorderableMap.get(id)).filter(Boolean).map((l, idx) => ({
+        ...l,
+        sort_order: (idx + 1) * 10
+      }));
+      
+      lots.value = [...reorderedReorderable, ...finishedLots.value];
+
+      // 落库
+      try {
+        await axios.post(`/api/v2/auction/sessions/${route.params.id}/lots/reorder`, {
+          ordered_lot_ids: ids
+        });
+        ElMessage.success('排序已保存');
+      } catch (err) {
+        ElMessage.error(err.response?.data?.msg || '排序保存失败，已刷新恢复');
+        await loadLots();
+      }
+    },
+  });
+};
+
+// 监听切 tab / loads 后自动 init
+watch(activeTab, (v) => {
+  if (v === 'lots') initSortable();
+});
+
+watch(lots, () => {
+  if (activeTab.value === 'lots') initSortable();
+});
 
 onMounted(() => {
   loadSession();
@@ -823,20 +984,19 @@ onMounted(() => {
 
 .pool-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }
 
 .pool-item {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  cursor: pointer;
   transition: all 0.3s ease;
 }
 
@@ -844,8 +1004,32 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.pool-item input[type="checkbox"] {
+.pool-item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
+}
+
+.pool-item-label input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.sku-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.pool-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.weight-score {
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 30px;
 }
 
 .pool-actions {
@@ -876,7 +1060,7 @@ onMounted(() => {
 
 .lots-header {
   display: grid;
-  grid-template-columns: 0.5fr 2fr 0.8fr 1fr 0.8fr 1.2fr;
+  grid-template-columns: 0.5fr 0.5fr 2fr 0.8fr 1fr 0.8fr 1.2fr;
   gap: 12px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.05);
@@ -885,15 +1069,49 @@ onMounted(() => {
   font-size: 14px;
 }
 
+.lots-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .lots-row {
   display: grid;
-  grid-template-columns: 0.5fr 2fr 0.8fr 1fr 0.8fr 1.2fr;
+  grid-template-columns: 0.5fr 0.5fr 2fr 0.8fr 1fr 0.8fr 1.2fr;
   gap: 12px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   align-items: center;
+  cursor: move;
+  transition: all 0.3s ease;
+}
+
+.lots-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.lots-row.non-draggable {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.drag-handle {
+  cursor: grab;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.5);
+  user-select: none;
+  text-align: center;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-ghost {
+  opacity: 0.5;
+  background: rgba(79, 172, 254, 0.2);
 }
 
 .lot-status {
@@ -1089,6 +1307,27 @@ onMounted(() => {
   gap: 16px;
 }
 
+.pool-preview {
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px dashed #ddd;
+  border-radius: 8px;
+}
+
+.pool-preview__title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.pool-preview__empty {
+  color: #999;
+}
+
+.pool-preview__more {
+  margin-left: 8px;
+  color: #999;
+}
+
 .form-row {
   display: flex;
   align-items: center;
@@ -1108,34 +1347,6 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  color: #fff;
-  font-size: 14px;
-}
-
-.rarity-weights {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.weight-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.weight-item span {
-  min-width: 40px;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 14px;
-}
-
-.weight-input {
-  width: 80px;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
   color: #fff;
   font-size: 14px;
 }
@@ -1332,6 +1543,24 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   color: #4facfe;
+}
+
+/* 现有拍品区域 */
+.existing-lots-section > div:first-child {
+  margin-bottom: 32px;
+}
+
+.finished-lots-section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0.7;
+}
+
+.finished-lots-section h4 {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  margin-bottom: 12px;
 }
 
 /* 现有拍品区域 */

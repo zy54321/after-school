@@ -556,3 +556,26 @@ exports.activateNext = async (req, res) => {
     res.status(500).json({ code: 500, msg: err.message || '激活下一拍品失败' });
   }
 };
+
+/**
+ * POST /api/v2/auction/sessions/:id/lots/reorder
+ * 拍品拖拽排序
+ */
+exports.reorderSessionLots = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const sessionId = parseInt(req.params.id);
+    const { ordered_lot_ids } = req.body;
+
+    // 确保 ordered_lot_ids 是数字数组
+    const orderedLotIds = Array.isArray(ordered_lot_ids) 
+      ? ordered_lot_ids.map(id => Number(id)).filter(id => Number.isInteger(id))
+      : [];
+
+    const result = await auctionService.reorderSessionLots(userId, sessionId, orderedLotIds);
+    res.json({ code: 200, data: result, msg: '排序已保存' });
+  } catch (err) {
+    console.error('reorderSessionLots 错误:', err);
+    res.status(500).json({ code: 500, msg: err.message || '排序保存失败' });
+  }
+};

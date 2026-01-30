@@ -154,11 +154,17 @@ exports.createSku = async (req, res) => {
       source_type: sourceType,
       source_id: sourceId,
       source_meta: sourceMeta,
-      ticket_type_id: ticketTypeId
+      ticket_type_id: ticketTypeId,
+      weight_score: weightScore
     } = req.body;
 
     if (!name) {
       return res.status(400).json({ code: 400, msg: 'SKU 名称不能为空' });
+    }
+
+    // 校验 weight_score
+    if (weightScore !== undefined && (weightScore < 0 || weightScore > 100)) {
+      return res.status(400).json({ code: 400, msg: 'weight_score 必须在 0~100 范围内' });
     }
 
     const sku = await marketplaceRepo.createSku({
@@ -175,6 +181,7 @@ exports.createSku = async (req, res) => {
       sourceType,
       sourceId,
       sourceMeta,
+      weightScore: weightScore !== undefined ? weightScore : 0,
     });
 
     if (ticketTypeId) {
@@ -213,12 +220,18 @@ exports.updateSku = async (req, res) => {
       source_type: sourceType,
       source_id: sourceId,
       source_meta: sourceMeta,
-      ticket_type_id: ticketTypeId
+      ticket_type_id: ticketTypeId,
+      weight_score: weightScore
     } = req.body;
 
     const sku = await marketplaceRepo.getSkuByIdRaw(skuId);
     if (!sku || sku.parent_id !== userId) {
       return res.status(404).json({ code: 404, msg: 'SKU 不存在或无权限' });
+    }
+
+    // 校验 weight_score
+    if (weightScore !== undefined && (weightScore < 0 || weightScore > 100)) {
+      return res.status(400).json({ code: 400, msg: 'weight_score 必须在 0~100 范围内' });
     }
 
     const updated = await marketplaceRepo.updateSku({
@@ -235,6 +248,7 @@ exports.updateSku = async (req, res) => {
       sourceType: sourceType !== undefined ? sourceType : sku.source_type,
       sourceId: sourceId !== undefined ? sourceId : sku.source_id,
       sourceMeta: sourceMeta !== undefined ? sourceMeta : sku.source_meta,
+      weightScore: weightScore !== undefined ? weightScore : sku.weight_score,
     });
 
     if (ticketTypeId) {
@@ -991,6 +1005,7 @@ exports.quickPublish = async (req, res) => {
     const userId = req.session.user.id;
     const {
       name, icon, description,
+      weight_score,
       cost, quantity,
       limit_type, limit_max,
       valid_until
@@ -1000,8 +1015,14 @@ exports.quickPublish = async (req, res) => {
       return res.status(400).json({ code: 400, msg: '商品名称和价格必填' });
     }
 
+    // 校验 weight_score
+    if (weight_score !== undefined && (weight_score < 0 || weight_score > 100)) {
+      return res.status(400).json({ code: 400, msg: '权重必须在 0-100 之间' });
+    }
+
     const result = await marketplaceService.publishProduct(userId, {
       name, icon, description,
+      weight_score: weight_score !== undefined ? parseInt(weight_score) : 0,
       cost: parseInt(cost),
       quantity: quantity ? parseInt(quantity) : 999,
       limit_type: limit_type || 'unlimited',
@@ -1026,11 +1047,17 @@ exports.quickUpdate = async (req, res) => {
     const offerId = parseInt(req.params.offerId);
     const body = req.body;
 
+    // 校验 weight_score
+    if (body.weight_score !== undefined && (body.weight_score < 0 || body.weight_score > 100)) {
+      return res.status(400).json({ code: 400, msg: '权重必须在 0-100 之间' });
+    }
+
     await marketplaceService.updateProduct(userId, offerId, {
       ...body,
       cost: parseInt(body.cost),
       quantity: parseInt(body.quantity),
-      limit_max: parseInt(body.limit_max)
+      limit_max: parseInt(body.limit_max),
+      weight_score: body.weight_score !== undefined ? parseInt(body.weight_score) : undefined
     });
 
     res.json({ code: 200, msg: '更新成功' });

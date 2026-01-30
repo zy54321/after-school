@@ -63,6 +63,9 @@ router.post('/sessions/:id/activate-lot', controller.activateLot);
 // POST /api/v2/auction/sessions/:id/activate-next - 激活下一拍品
 router.post('/sessions/:id/activate-next', controller.activateNext);
 
+// POST /api/v2/auction/sessions/:id/lots/reorder - 拍品拖拽排序
+router.post('/sessions/:id/lots/reorder', controller.reorderSessionLots);
+
 // POST /api/v2/auction/sessions/:id/settle - 结算场次
 router.post('/sessions/:id/settle', controller.settleSession);
 

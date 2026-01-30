@@ -349,6 +349,7 @@ exports.publishProduct = async (userId, data) => {
       icon: data.icon,
       type: 'reward', // 默认为奖励商品
       baseCost: data.cost, // SKU 基价 = 初始售价
+      weightScore: data.weight_score !== undefined ? data.weight_score : 0,
       limitType: data.limit_type,
       limitMax: data.limit_max,
       isActive: true
@@ -401,12 +402,13 @@ exports.updateProduct = async (userId, offerId, data) => {
       isActive: data.is_active // 支持上下架
     }, client);
 
-    // 3. 更新关联 SKU 信息 (名称、图标、描述、限购)
+    // 3. 更新关联 SKU 信息 (名称、图标、描述、限购、权重)
     await marketplaceRepo.updateSku({
       skuId: oldOffer.sku_id,
       name: data.name,
       icon: data.icon,
       description: data.description,
+      weightScore: data.weight_score !== undefined ? data.weight_score : undefined,
       limitType: data.limit_type,
       limitMax: data.limit_max,
       baseCost: data.cost, // 同步基价

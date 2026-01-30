@@ -75,12 +75,13 @@ exports.createSku = async ({
   isActive,
   sourceType,
   sourceId,
-  sourceMeta
+  sourceMeta,
+  weightScore
 }, client = pool) => {
   const result = await client.query(
     `INSERT INTO family_sku
-     (parent_id, name, description, icon, type, base_cost, limit_type, limit_max, target_members, is_active, source_type, source_id, source_meta)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     (parent_id, name, description, icon, type, base_cost, limit_type, limit_max, target_members, is_active, source_type, source_id, source_meta, weight_score)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING *`,
     [
       parentId,
@@ -95,7 +96,8 @@ exports.createSku = async ({
       isActive !== false,
       sourceType || 'custom',
       sourceId || null,
-      sourceMeta ? JSON.stringify(sourceMeta) : JSON.stringify({})
+      sourceMeta ? JSON.stringify(sourceMeta) : JSON.stringify({}),
+      weightScore ?? 0
     ]
   );
   return result.rows[0];
@@ -117,7 +119,8 @@ exports.updateSku = async ({
   isActive,
   sourceType,
   sourceId,
-  sourceMeta
+  sourceMeta,
+  weightScore
 }, client = pool) => {
   const result = await client.query(
     `UPDATE family_sku
@@ -133,8 +136,9 @@ exports.updateSku = async ({
          source_type = $10,
          source_id = $11,
          source_meta = $12,
+         weight_score = $13,
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = $13
+     WHERE id = $14
      RETURNING *`,
     [
       name,
@@ -149,6 +153,7 @@ exports.updateSku = async ({
       sourceType || 'custom',
       sourceId || null,
       sourceMeta ? JSON.stringify(sourceMeta) : JSON.stringify({}),
+      weightScore ?? 0,
       skuId
     ]
   );
@@ -270,7 +275,14 @@ exports.getActiveOffers = async (parentId, options = {}, client = pool) => {
  */
 exports.getOffersByParentId = async (parentId, client = pool) => {
   const result = await client.query(
-    `SELECT o.*, s.name as sku_name, s.type as sku_type
+    `SELECT o.*, 
+            s.name as sku_name, 
+            s.type as sku_type,
+            s.icon as sku_icon,
+            s.description as sku_description,
+            s.limit_type,
+            s.limit_max,
+            s.weight_score as sku_weight_score
      FROM family_offer o
      JOIN family_sku s ON o.sku_id = s.id
      WHERE o.parent_id = $1

@@ -1157,3 +1157,42 @@ exports.getNextPendingLot = async (sessionId, client = pool) => {
   );
   return result.rows[0] || null;
 };
+
+/**
+ * 获取可重排序的拍品 ID 列表（只包含 pending/active 状态）
+ */
+exports.getReorderableLotIds = async (sessionId, client = pool) => {
+  const r = await client.query(
+    `SELECT id FROM auction_lot 
+     WHERE session_id = $1 AND status IN ('pending','active')
+     ORDER BY sort_order ASC, id ASC`,
+    [sessionId]
+  );
+  return r.rows.map(x => x.id);
+};
+
+/**
+ * 批量更新拍品排序
+ * @param {number} sessionId - 拍卖场次ID
+ * @param {Array<number>} orderedIds - 排序后的 lot ID 数组
+ * @param {object} client - 数据库客户端
+ */
+exports.updateLotSortOrders = async (sessionId, orderedIds, client = pool) => {
+  // orderedIds 必须是 int[]
+  const ids = orderedIds.map((x) => Number(x)).filter((x) => Number.isInteger(x));
+
+  const sql = `
+    WITH ord AS (
+      SELECT id, (ord_idx * 10) AS sort_order
+      FROM unnest($2::int[]) WITH ORDINALITY AS t(id, ord_idx)
+    )
+    UPDATE auction_lot AS l
+    SET sort_order = ord.sort_order,
+        updated_at = CURRENT_TIMESTAMP
+    FROM ord
+    WHERE l.session_id = $1
+      AND l.id = ord.id
+      AND l.status IN ('pending', 'active');
+  `;
+  await client.query(sql, [sessionId, ids]);
+};
