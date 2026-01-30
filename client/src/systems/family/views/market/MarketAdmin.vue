@@ -78,14 +78,36 @@
                 {{ getLimitLabel(item.limit_type, item.limit_max) }}
               </span>
             </div>
+
+            <div class="mt-2 pt-2 border-t border-white/5">
+              <div class="text-[10px] text-gray-500">
+                <span v-if="item.source === 'system'">系统默认</span>
+                <span v-else-if="item.source === 'overridden'">
+                  {{ item.is_active ? '已覆盖(自定义)' : '已覆盖(禁用)' }}
+                </span>
+                <span v-else-if="item.source === 'family'">自定义商品</span>
+              </div>
+            </div>
           </div>
 
           <div
             class="absolute inset-0 bg-black/60 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-            <button @click="openModal(item)" class="action-icon-btn" title="编辑">
+            <button v-if="item.source === 'family'" @click="openModal(item)" class="action-icon-btn" title="编辑">
               ✏️
             </button>
-            <button @click="toggleStatus(item)" class="action-icon-btn"
+            <button v-if="(item.source === 'system' || item.source === 'overridden') && item.is_active" 
+              @click="disableDefaultOffer(item)" 
+              class="action-icon-btn action-icon-btn-danger" 
+              title="下架">
+              🚫
+            </button>
+            <button v-if="(item.source === 'system' || item.source === 'overridden') && !item.is_active" 
+              @click="enableDefaultOffer(item)" 
+              class="action-icon-btn action-icon-btn-success" 
+              title="恢复">
+              ✅
+            </button>
+            <button v-if="item.source === 'family'" @click="toggleStatus(item)" class="action-icon-btn"
               :class="item.is_active ? 'action-icon-btn-danger' : 'action-icon-btn-success'"
               :title="item.is_active ? '下架' : '上架'">
               {{ item.is_active ? '🚫' : '✅' }}
@@ -319,6 +341,33 @@ const toggleStatus = async (item) => {
   } catch (err) {
     ElMessage.error('操作失败');
     loadProducts(); // 失败还原
+  }
+};
+
+const disableDefaultOffer = async (item) => {
+  try {
+    await ElMessageBox.confirm('确定要下架这个系统默认商品吗？下架后该商品将不会在商城中显示。', '确认下架', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    });
+    await axios.post(`/api/v2/admin/offers/${item.id}/disable_default`);
+    ElMessage.success('已下架');
+    loadProducts();
+  } catch (err) {
+    if (err !== 'cancel') {
+      ElMessage.error(err.response?.data?.msg || '下架失败');
+    }
+  }
+};
+
+const enableDefaultOffer = async (item) => {
+  try {
+    await axios.post(`/api/v2/admin/offers/${item.id}/enable_default`);
+    ElMessage.success('已恢复');
+    loadProducts();
+  } catch (err) {
+    ElMessage.error(err.response?.data?.msg || '恢复失败');
   }
 };
 

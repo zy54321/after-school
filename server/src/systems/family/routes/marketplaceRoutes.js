@@ -84,4 +84,9 @@ router.post('/admin/quick-publish', controller.quickPublish);
 // PUT /api/v2/admin/quick-update/:offerId - 快速更新商品
 router.put('/admin/quick-update/:offerId', controller.quickUpdate);
 
+// POST /api/v2/admin/offers/:offerId/disable_default - 下架系统默认商品
+router.post('/admin/offers/:offerId/disable_default', controller.disableDefaultOffer);
+// POST /api/v2/admin/offers/:offerId/enable_default - 恢复系统默认商品
+router.post('/admin/offers/:offerId/enable_default', controller.enableDefaultOffer);
+
 module.exports = router;

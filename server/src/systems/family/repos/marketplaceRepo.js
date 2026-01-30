@@ -221,50 +221,79 @@ exports.getActiveOfferBySkuId = async (skuId, client = pool) => {
 exports.getActiveOffers = async (parentId, options = {}, client = pool) => {
   const { offerType, skuId } = options;
 
-  // 直接使用 offer.parent_id 查询，不再需要通过 sku 反查
+  // 使用 DISTINCT ON 选择每个 SKU 的有效 offer
+  // 优先级：家庭 offer (parent_id > 0) > 系统 offer (parent_id = 0)
+  // 对于相同 parent_id，按 created_at DESC 选择最新的
   let query = `
+    WITH all_offers AS (
+      SELECT 
+        o.id,
+        o.sku_id,
+        o.cost,
+        o.quantity,
+        o.valid_from,
+        o.valid_until,
+        o.is_active,
+        o.created_at,
+        o.parent_id,
+        s.name as sku_name,
+        s.description as sku_description,
+        s.icon as sku_icon,
+        s.type as sku_type,
+        s.base_cost as sku_base_cost,
+        s.limit_type,
+        s.limit_max,
+        s.target_members
+      FROM family_offer o
+      JOIN family_sku s ON o.sku_id = s.id
+      WHERE s.is_active = TRUE
+        AND o.valid_from <= CURRENT_TIMESTAMP
+        AND (o.valid_until IS NULL OR o.valid_until >= CURRENT_TIMESTAMP)
+        AND o.parent_id IN (0, $1)
+    ),
+    effective_offers AS (
+      SELECT DISTINCT ON (sku_id)
+        *
+      FROM all_offers
+      ORDER BY sku_id, parent_id DESC, created_at DESC
+    )
     SELECT 
-      o.id,
-      o.sku_id,
-      o.cost,
-      o.quantity,
-      o.valid_from,
-      o.valid_until,
-      o.is_active,
-      o.created_at,
-      o.parent_id,
-      s.name as sku_name,
-      s.description as sku_description,
-      s.icon as sku_icon,
-      s.type as sku_type,
-      s.base_cost as sku_base_cost,
-      s.limit_type,
-      s.limit_max,
-      s.target_members
-    FROM family_offer o
-    JOIN family_sku s ON o.sku_id = s.id
-    WHERE o.is_active = TRUE 
-      AND s.is_active = TRUE
-      AND o.valid_from <= CURRENT_TIMESTAMP
-      AND (o.valid_until IS NULL OR o.valid_until >= CURRENT_TIMESTAMP)
-      AND o.parent_id = $1
+      e.id,
+      e.sku_id,
+      e.cost,
+      e.quantity,
+      e.valid_from,
+      e.valid_until,
+      e.is_active,
+      e.created_at,
+      e.parent_id,
+      e.sku_name,
+      e.sku_description,
+      e.sku_icon,
+      e.sku_type,
+      e.sku_base_cost,
+      e.limit_type,
+      e.limit_max,
+      e.target_members
+    FROM effective_offers e
+    WHERE e.is_active = TRUE
   `;
   const params = [parentId];
   let paramIndex = 2;
 
   if (offerType) {
-    query += ` AND s.type = $${paramIndex}`;
+    query += ` AND sku_type = $${paramIndex}`;
     params.push(offerType);
     paramIndex++;
   }
 
   if (skuId) {
-    query += ` AND o.sku_id = $${paramIndex}`;
+    query += ` AND sku_id = $${paramIndex}`;
     params.push(skuId);
     paramIndex++;
   }
 
-  query += ' ORDER BY o.cost, o.created_at DESC';
+  query += ' ORDER BY cost, created_at DESC';
 
   const result = await client.query(query, params);
   return result.rows;
@@ -272,21 +301,63 @@ exports.getActiveOffers = async (parentId, options = {}, client = pool) => {
 
 /**
  * 获取家庭 Offer 列表（管理后台）
+ * 包含：家庭自定义offer + 系统默认offer（如果未被家庭override）
+ * 注意：不过滤 is_active，管理端需要看到所有状态（包括已禁用的）
  */
 exports.getOffersByParentId = async (parentId, client = pool) => {
   const result = await client.query(
-    `SELECT o.*, 
-            s.name as sku_name, 
-            s.type as sku_type,
-            s.icon as sku_icon,
-            s.description as sku_description,
-            s.limit_type,
-            s.limit_max,
-            s.weight_score as sku_weight_score
-     FROM family_offer o
-     JOIN family_sku s ON o.sku_id = s.id
-     WHERE o.parent_id = $1
-     ORDER BY o.is_active DESC, o.created_at DESC`,
+    `WITH family_offers AS (
+       SELECT o.*, 
+              s.name as sku_name, 
+              s.type as sku_type,
+              s.icon as sku_icon,
+              s.description as sku_description,
+              s.limit_type,
+              s.limit_max,
+              s.weight_score as sku_weight_score,
+              'family' as source
+       FROM family_offer o
+       JOIN family_sku s ON o.sku_id = s.id
+       WHERE o.parent_id = $1
+     ),
+     system_offers AS (
+       SELECT o.*,
+              s.name as sku_name,
+              s.type as sku_type,
+              s.icon as sku_icon,
+              s.description as sku_description,
+              s.limit_type,
+              s.limit_max,
+              s.weight_score as sku_weight_score,
+              CASE 
+                WHEN EXISTS (
+                  SELECT 1 FROM family_offer fo 
+                  WHERE fo.parent_id = $1 AND fo.sku_id = o.sku_id
+                ) THEN 'overridden'
+                ELSE 'system'
+              END as source,
+              COALESCE((
+                SELECT fo.is_active FROM family_offer fo 
+                WHERE fo.parent_id = $1 AND fo.sku_id = o.sku_id
+              ), o.is_active) as effective_is_active
+       FROM family_offer o
+       JOIN family_sku s ON o.sku_id = s.id
+       WHERE o.parent_id = 0
+     )
+     SELECT 
+       f.id, f.sku_id, f.cost, f.quantity, f.valid_from, f.valid_until, 
+       f.is_active,
+       f.created_at, f.parent_id, f.sku_name, f.sku_type, f.sku_icon, f.sku_description,
+       f.limit_type, f.limit_max, f.sku_weight_score, f.source
+     FROM family_offers f
+     UNION ALL
+     SELECT 
+       s.id, s.sku_id, s.cost, s.quantity, s.valid_from, s.valid_until,
+       s.effective_is_active as is_active,
+       s.created_at, s.parent_id, s.sku_name, s.sku_type, s.sku_icon, s.sku_description,
+       s.limit_type, s.limit_max, s.sku_weight_score, s.source
+     FROM system_offers s
+     ORDER BY source DESC, is_active DESC, created_at DESC`,
     [parentId]
   );
   return result.rows;
@@ -375,6 +446,38 @@ exports.deactivateOffer = async (offerId, client = pool) => {
      WHERE id = $1
      RETURNING *`,
     [offerId]
+  );
+  return result.rows[0];
+};
+
+/**
+ * Upsert 家庭级 Offer Override（用于下架/恢复系统默认SKU）
+ * @param {object} params - 参数对象
+ * @param {number} params.parentId - 家庭ID
+ * @param {number} params.skuId - SKU ID
+ * @param {boolean} params.isActive - 是否激活（false表示下架）
+ * @param {number} params.cost - 价格（可选，从系统offer复制）
+ * @param {number} params.quantity - 库存（可选）
+ * @param {object} client - 数据库连接
+ */
+exports.upsertOfferOverride = async ({
+  parentId,
+  skuId,
+  isActive,
+  cost,
+  quantity
+}, client = pool) => {
+  const result = await client.query(
+    `INSERT INTO family_offer (parent_id, sku_id, cost, quantity, is_active, valid_from)
+     VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+     ON CONFLICT (parent_id, sku_id) 
+     DO UPDATE SET 
+       is_active = EXCLUDED.is_active,
+       cost = COALESCE(EXCLUDED.cost, family_offer.cost),
+       quantity = COALESCE(EXCLUDED.quantity, family_offer.quantity),
+       updated_at = CURRENT_TIMESTAMP
+     RETURNING *`,
+    [parentId, skuId, cost || null, quantity || null, isActive]
   );
   return result.rows[0];
 };

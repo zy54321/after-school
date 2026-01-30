@@ -261,6 +261,102 @@ exports.useInventoryItem = async ({ userId, inventoryId, quantity }) => {
 };
 
 /**
+ * 下架系统默认SKU（为家庭创建 override offer，设置 is_active=false）
+ * @param {number} parentId - 家庭ID
+ * @param {number} offerId - 系统offer ID（parent_id=0）
+ * @returns {object} 最新有效状态
+ */
+exports.disableSystemOfferForParent = async (parentId, offerId) => {
+  const pool = marketplaceRepo.getPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1) 查询系统offer，获取 sku_id
+    const systemOffer = await marketplaceRepo.getOfferByIdRaw(offerId, client);
+    if (!systemOffer) {
+      throw new Error('Offer 不存在');
+    }
+    if (systemOffer.parent_id !== 0) {
+      throw new Error('只能下架系统默认商品');
+    }
+
+    // 2) 创建或更新家庭override offer，设置 is_active=false
+    const overrideOffer = await marketplaceRepo.upsertOfferOverride({
+      parentId,
+      skuId: systemOffer.sku_id,
+      isActive: false,
+      cost: systemOffer.cost,
+      quantity: systemOffer.quantity
+    }, client);
+
+    // 3) 查询最新有效状态（使用 getActiveOffers 逻辑）
+    const effectiveOffers = await marketplaceRepo.getActiveOffers(parentId, { skuId: systemOffer.sku_id }, client);
+
+    await client.query('COMMIT');
+
+    return {
+      success: true,
+      overrideOffer,
+      effectiveOffer: effectiveOffers.length > 0 ? effectiveOffers[0] : null,
+      msg: '系统默认商品已下架'
+    };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * 恢复系统默认SKU（删除家庭override offer，回退到系统默认）
+ * @param {number} parentId - 家庭ID
+ * @param {number} offerId - 系统offer ID（parent_id=0）
+ * @returns {object} 最新有效状态
+ */
+exports.enableSystemOfferForParent = async (parentId, offerId) => {
+  const pool = marketplaceRepo.getPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1) 查询系统offer，获取 sku_id
+    const systemOffer = await marketplaceRepo.getOfferByIdRaw(offerId, client);
+    if (!systemOffer) {
+      throw new Error('Offer 不存在');
+    }
+    if (systemOffer.parent_id !== 0) {
+      throw new Error('只能恢复系统默认商品');
+    }
+
+    // 2) 删除家庭override offer（如果存在）
+    await client.query(
+      'DELETE FROM family_offer WHERE parent_id = $1 AND sku_id = $2',
+      [parentId, systemOffer.sku_id]
+    );
+
+    // 3) 查询最新有效状态（应该回退到系统默认）
+    const effectiveOffers = await marketplaceRepo.getActiveOffers(parentId, { skuId: systemOffer.sku_id }, client);
+
+    await client.query('COMMIT');
+
+    return {
+      success: true,
+      effectiveOffer: effectiveOffers.length > 0 ? effectiveOffers[0] : null,
+      msg: '已恢复系统默认商品'
+    };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+};
+
+/**
  * 获取可用的 SKU 列表
  */
 exports.getActiveSkus = async (parentId) => {

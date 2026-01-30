@@ -1066,3 +1066,41 @@ exports.quickUpdate = async (req, res) => {
     res.status(500).json({ code: 500, msg: '更新失败', error: err.message });
   }
 };
+
+/**
+ * POST /api/v2/admin/offers/:offerId/disable_default
+ * 下架系统默认商品（为家庭创建 override offer）
+ */
+exports.disableDefaultOffer = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const offerId = parseInt(req.params.offerId);
+
+    // 权限校验：只能操作自己家庭的商品
+    const result = await marketplaceService.disableSystemOfferForParent(userId, offerId);
+
+    res.json({ code: 200, data: result, msg: result.msg });
+  } catch (err) {
+    console.error('disableDefaultOffer 错误:', err);
+    res.status(500).json({ code: 500, msg: '下架失败', error: err.message });
+  }
+};
+
+/**
+ * POST /api/v2/admin/offers/:offerId/enable_default
+ * 恢复系统默认商品（删除家庭 override offer）
+ */
+exports.enableDefaultOffer = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const offerId = parseInt(req.params.offerId);
+
+    // 权限校验：只能操作自己家庭的商品
+    const result = await marketplaceService.enableSystemOfferForParent(userId, offerId);
+
+    res.json({ code: 200, data: result, msg: result.msg });
+  } catch (err) {
+    console.error('enableDefaultOffer 错误:', err);
+    res.status(500).json({ code: 500, msg: '恢复失败', error: err.message });
+  }
+};
