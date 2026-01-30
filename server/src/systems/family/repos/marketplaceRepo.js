@@ -456,28 +456,21 @@ exports.deactivateOffer = async (offerId, client = pool) => {
  * @param {number} params.parentId - 家庭ID
  * @param {number} params.skuId - SKU ID
  * @param {boolean} params.isActive - 是否激活（false表示下架）
- * @param {number} params.cost - 价格（可选，从系统offer复制）
- * @param {number} params.quantity - 库存（可选）
  * @param {object} client - 数据库连接
  */
 exports.upsertOfferOverride = async ({
   parentId,
   skuId,
-  isActive,
-  cost,
-  quantity
+  isActive
 }, client = pool) => {
   const result = await client.query(
-    `INSERT INTO family_offer (parent_id, sku_id, cost, quantity, is_active, valid_from)
-     VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+    `INSERT INTO family_offer (parent_id, sku_id, is_active, created_at)
+     VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
      ON CONFLICT (parent_id, sku_id) 
      DO UPDATE SET 
-       is_active = EXCLUDED.is_active,
-       cost = COALESCE(EXCLUDED.cost, family_offer.cost),
-       quantity = COALESCE(EXCLUDED.quantity, family_offer.quantity),
-       updated_at = CURRENT_TIMESTAMP
+       is_active = EXCLUDED.is_active
      RETURNING *`,
-    [parentId, skuId, cost || null, quantity || null, isActive]
+    [parentId, skuId, isActive]
   );
   return result.rows[0];
 };

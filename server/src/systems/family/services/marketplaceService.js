@@ -286,9 +286,7 @@ exports.disableSystemOfferForParent = async (parentId, offerId) => {
     const overrideOffer = await marketplaceRepo.upsertOfferOverride({
       parentId,
       skuId: systemOffer.sku_id,
-      isActive: false,
-      cost: systemOffer.cost,
-      quantity: systemOffer.quantity
+      isActive: false
     }, client);
 
     // 3) 查询最新有效状态（使用 getActiveOffers 逻辑）
