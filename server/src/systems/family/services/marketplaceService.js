@@ -283,10 +283,13 @@ exports.disableSystemOfferForParent = async (parentId, offerId) => {
     }
 
     // 2) 创建或更新家庭override offer，设置 is_active=false
+    // 从系统offer复制 cost 和 quantity（因为 cost 是 NOT NULL）
     const overrideOffer = await marketplaceRepo.upsertOfferOverride({
       parentId,
       skuId: systemOffer.sku_id,
-      isActive: false
+      isActive: false,
+      cost: systemOffer.cost,
+      quantity: systemOffer.quantity || 1
     }, client);
 
     // 3) 查询最新有效状态（使用 getActiveOffers 逻辑）
