@@ -553,7 +553,12 @@ exports.activateNext = async (req, res) => {
     res.json({ code: 200, data: result, msg: result.message || '已激活下一拍品' });
   } catch (err) {
     console.error('activateNext 错误:', err);
-    res.status(500).json({ code: 500, msg: err.message || '激活下一拍品失败' });
+    // 如果没有下一拍品，返回400
+    if (err.statusCode === 400 || err.message === '没有下一拍品') {
+      res.status(400).json({ code: 400, msg: '没有下一拍品' });
+    } else {
+      res.status(500).json({ code: 500, msg: err.message || '激活下一拍品失败' });
+    }
   }
 };
 
@@ -577,5 +582,38 @@ exports.reorderSessionLots = async (req, res) => {
   } catch (err) {
     console.error('reorderSessionLots 错误:', err);
     res.status(500).json({ code: 500, msg: err.message || '排序保存失败' });
+  }
+};
+
+/**
+ * GET /api/v2/auction/lots/:id/record
+ * 获取拍品交易记录
+ */
+exports.getLotRecord = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const lotId = parseInt(req.params.id);
+    const data = await auctionService.getLotRecord(userId, lotId);
+    res.json({ code: 200, data });
+  } catch (err) {
+    console.error('[getLotRecord]', err);
+    res.status(500).json({ code: 500, msg: '加载交易记录失败', error: err.message });
+  }
+};
+
+/**
+ * GET /api/v2/auction/bids
+ * 获取成员竞拍记录
+ */
+exports.getMemberBids = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const memberId = parseInt(req.query.member_id);
+    const limit = parseInt(req.query.limit || '10');
+    const bids = await auctionService.getMemberBids(userId, memberId, limit);
+    res.json({ code: 200, data: { bids } });
+  } catch (e) {
+    console.error('[getMemberBids]', e);
+    res.status(500).json({ code: 500, msg: '加载竞拍记录失败', error: e.message });
   }
 };

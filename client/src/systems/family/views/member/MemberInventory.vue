@@ -1,50 +1,69 @@
 <template>
-  <div class="member-inventory-view h-full flex flex-col">
-    <div class="filter-bar mb-4 flex-none">
-      <div class="flex gap-2">
-        <button v-for="tab in filterTabs" :key="tab.value" class="px-4 py-1.5 rounded-lg text-sm transition-all"
-          :class="filter.status === tab.value ? 'bg-blue-500/30 text-white font-bold border border-blue-500/50' : 'bg-white/5 text-gray-400 hover:bg-white/10'"
-          @click="filter.status = tab.value; loadInventory()">
-          {{ tab.label }}
-        </button>
-      </div>
-    </div>
+  <div class="member-wallet-view h-full flex flex-col p-6 pt-4 box-border">
+    <section
+      class="wallet-section flex-1 flex flex-col min-h-0 bg-[#151520] rounded-2xl border border-white/5 overflow-hidden">
 
-    <div class="inventory-grid grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto pb-4"
-      v-if="items.length > 0">
-      <div v-for="item in items" :key="item.id"
-        class="inventory-item relative bg-white/5 rounded-xl p-4 flex flex-col items-center gap-3 border border-white/5 hover:border-white/20 transition-all"
-        :class="{ 'opacity-60': item.status !== 'unused' }">
-        <div class="text-4xl">{{ item.sku_icon || '🎁' }}</div>
-        <div class="text-center">
-          <div class="font-bold text-sm mb-1">{{ item.sku_name }}</div>
-          <div class="text-xs text-gray-500">x{{ item.quantity }}</div>
+      <div class="flex justify-between items-center p-3 border-b border-white/5 bg-[#1a1a2e] flex-none">
+        <h2 class="text-base font-bold flex items-center gap-2 text-white">
+          <span>🎒</span> 我的背包
+        </h2>
+        <div class="relative">
+          <select v-model="filter.status" @change="loadInventory"
+            class="filter-select appearance-none pl-3 pr-8 py-1 bg-[#252538] border border-white/10 rounded-lg text-xs text-gray-300 focus:border-blue-500 focus:outline-none transition-colors cursor-pointer hover:bg-[#2a2a40]">
+            <option value="">全部</option>
+            <option value="unused">可用</option>
+            <option value="used">已用</option>
+            <option value="expired">过期</option>
+          </select>
+          <div class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 text-xs">▼</div>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-scroll p-3">
+        <div class="text-center py-10 text-gray-500" v-if="loading">加载中...</div>
+
+        <div v-if="!loading && items.length > 0">
+          <div v-for="item in items" :key="item.id"
+            class="log-item mb-1.5 flex items-center gap-3 px-3 py-2.5 bg-[#252538] rounded-xl border border-white/5 group overflow-hidden transition-all hover:bg-[#2a2a40] hover:border-white/10 hover:shadow-md"
+            :class="{ 'opacity-60': item.status !== 'unused' }">
+
+            <div class="log-icon w-8 h-8 rounded-full flex-none flex items-center justify-center text-sm shadow-inner bg-white/5 text-gray-200">
+              {{ item.sku_icon || '🎁' }}
+            </div>
+
+            <div class="log-content flex-1 min-w-0 flex flex-col justify-center">
+              <div class="text-[14px] font-bold text-gray-100 truncate pr-2 leading-tight">{{ item.sku_name }}</div>
+              <div class="flex gap-2 mt-0.5 items-center">
+                <span class="text-[10px] text-gray-500 font-mono">x{{ item.quantity }}</span>
+                <span v-if="item.created_at || item.updated_at" class="text-[10px] text-gray-500 font-mono">
+                  {{ formatTime(item.updated_at || item.created_at) }}
+                </span>
+                <span class="text-[9px] px-1.5 py-0 rounded-full bg-white/5 text-gray-400 border border-white/5">
+                  {{ getStatusLabel(item.status) }}
+                </span>
+              </div>
+            </div>
+
+            <div class="flex flex-col items-end gap-1 flex-none justify-center">
+              <button v-if="item.status === 'unused' && item.quantity > 0"
+                class="modern-btn small primary-blue"
+                @click="useItem(item)">
+                使用
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div class="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded" :class="{
-          'bg-green-500/20 text-green-400': item.status === 'unused',
-          'bg-white/10 text-gray-500': item.status === 'used',
-          'bg-red-500/20 text-red-400': item.status === 'expired'
-        }">
-          {{ getStatusLabel(item.status) }}
+        <div class="h-full flex flex-col items-center justify-center text-gray-500 pb-10" v-else-if="!loading && items.length === 0">
+          <div class="text-4xl mb-3 opacity-30">🎒</div>
+          <div class="text-sm mb-3">背包空空如也</div>
+          <router-link to="/family/market/shop"
+            class="w-auto px-4 py-2 bg-white/5 border border-white/5 rounded-lg text-xs text-gray-400 hover:bg-white/10 hover:text-white transition-all">
+            去商城逛逛
+          </router-link>
         </div>
-
-        <button v-if="item.status === 'unused' && item.quantity > 0"
-          class="w-full py-1.5 bg-blue-600/80 hover:bg-blue-600 rounded text-xs text-white mt-auto"
-          @click="useItem(item)">
-          使用
-        </button>
       </div>
-    </div>
-
-    <div class="empty-state py-20 text-center text-gray-500" v-else-if="!loading">
-      <div class="text-5xl mb-4">🎒</div>
-      <p class="mb-4">背包空空如也</p>
-      <router-link to="/family/market/shop"
-        class="inline-block px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg text-white text-sm">去商城逛逛</router-link>
-    </div>
-
-    <div class="text-center py-10 text-gray-500" v-if="loading">加载中...</div>
+    </section>
   </div>
 </template>
 
@@ -57,13 +76,6 @@ const route = useRoute();
 const items = ref([]);
 const loading = ref(false);
 const filter = ref({ status: '' });
-
-const filterTabs = [
-  { label: '全部', value: '' },
-  { label: '未使用', value: 'unused' },
-  { label: '已使用', value: 'used' },
-  { label: '已过期', value: 'expired' },
-];
 
 const currentMemberId = computed(() => parseInt(route.params.id));
 
@@ -102,7 +114,75 @@ const useItem = async (item) => {
 
 const getStatusLabel = (s) => ({ unused: '可用', used: '已用', expired: '过期' }[s] || s);
 
+const formatTime = (t) => {
+  if (!t) return '';
+  return new Date(t).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
 watch(() => route.params.id, (newId) => {
   if (newId) loadInventory();
 }, { immediate: true });
 </script>
+
+<style scoped>
+.modern-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  outline: none;
+}
+
+.modern-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+
+.modern-btn:active {
+  transform: translateY(0);
+}
+
+.modern-btn.primary-blue {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+}
+
+.modern-btn.small {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+.filter-select {
+  outline: none;
+}
+
+.custom-scroll {
+  overflow-x: hidden;
+}
+
+.custom-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+</style>

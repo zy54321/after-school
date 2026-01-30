@@ -17,6 +17,7 @@ const auctionRepo = require('../repos/auctionRepo');
 const walletRepo = require('../repos/walletRepo');
 const marketplaceRepo = require('../repos/marketplaceRepo');
 const seedrandom = require('seedrandom');
+const familyRepo = require('../repos/familyRepo');
 
 /**
  * 稀有度配置
@@ -679,27 +680,11 @@ exports.activateNext = async (actorUserId, sessionId) => {
     const nextLot = await auctionRepo.getNextPendingLot(sessionId, client);
     
     if (!nextLot) {
-      // 没有待激活的拍品，结束场次
-      await auctionRepo.updateSessionStatus(sessionId, 'ended', client);
-      
-      await auctionRepo.createEvent({
-        actorUserId,
-        sessionId,
-        eventType: 'activate_next',
-        payload: { result: 'no_more_pending', session_status: 'ended' },
-      }, client);
-      
-      await client.query('COMMIT');
-      
-      return {
-        active_lot: null,
-        session: {
-          id: session.id,
-          title: session.title,
-          status: 'ended',
-        },
-        message: '没有更多待激活的拍品，场次已结束',
-      };
+      await client.query('ROLLBACK');
+      // 没有待激活的拍品，抛出错误让controller返回400
+      const error = new Error('没有下一拍品');
+      error.statusCode = 400;
+      throw error;
     }
     
     // 3) 激活该拍品
@@ -798,6 +783,18 @@ exports.closeLot = async (actorUserId, lotId) => {
         eventType: 'close_lot',
         payload: { status: 'unsold' },
       }, client);
+
+      // 检查是否还有未完成的拍品，如果没有则自动结束场次
+      const unfinishedCount = await auctionRepo.countUnfinishedLots(lot.session_id, client);
+      if (unfinishedCount === 0) {
+        await auctionRepo.updateSessionStatus(lot.session_id, 'ended', client);
+        await auctionRepo.createEvent({
+          actorUserId,
+          sessionId: lot.session_id,
+          eventType: 'auto_end_session',
+          payload: { reason: 'all_lots_finished' },
+        }, client);
+      }
 
       await client.query('COMMIT');
       return { status: 'unsold' };
@@ -903,6 +900,18 @@ exports.closeLot = async (actorUserId, lotId) => {
       eventType: 'close_lot',
       payload: { status: 'sold', finalPrice },
     }, client);
+
+    // 10) 检查是否还有未完成的拍品，如果没有则自动结束场次
+    const unfinishedCount = await auctionRepo.countUnfinishedLots(lot.session_id, client);
+    if (unfinishedCount === 0) {
+      await auctionRepo.updateSessionStatus(lot.session_id, 'ended', client);
+      await auctionRepo.createEvent({
+        actorUserId,
+        sessionId: lot.session_id,
+        eventType: 'auto_end_session',
+        payload: { reason: 'all_lots_finished' },
+      }, client);
+    }
 
     await client.query('COMMIT');
     return { status: 'sold', finalPrice, winnerId, result, order };
@@ -1712,4 +1721,71 @@ exports.reorderSessionLots = async (userId, sessionId, orderedLotIds) => {
   } finally {
     client.release();
   }
+};
+
+/**
+ * 获取拍品交易记录
+ * @param {number} userId - 用户ID
+ * @param {number} lotId - 拍品ID
+ * @returns {object} 交易记录 {lot, result, order, bids}
+ */
+exports.getLotRecord = async (userId, lotId) => {
+  const pool = auctionRepo.getPool();
+  const client = await pool.connect();
+  
+  try {
+    // 1) 先查 lot（拿到 session_id）
+    const lot = await auctionRepo.getLotById(lotId, client);
+    if (!lot) {
+      throw new Error('拍品不存在');
+    }
+    
+    // 2) 查 session（校验 parent_id==userId）
+    const session = await auctionRepo.getSessionById(lot.session_id, client);
+    if (!session) {
+      throw new Error('拍卖场次不存在');
+    }
+    if (session.parent_id !== userId) {
+      throw new Error('无权限查看该拍品记录');
+    }
+    
+    // 3) 再查 result（可能为空）和 bids
+    const record = await auctionRepo.getLotRecord(lotId, client);
+    
+    // 4) 返回 {lot, result: resultRow||null, bids: bidsRows||[]}
+    return {
+      lot: record.lot ? {
+        id: record.lot.id,
+        sku_name: record.lot.sku_name,
+        status: record.lot.status,
+      } : null,
+      result: record.result || null,
+      order: record.order || null,
+      bids: record.bids || [],
+    };
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * 获取成员竞拍记录
+ * @param {number} userId - 用户ID（用于权限校验）
+ * @param {number} memberId - 成员ID
+ * @param {number} limit - 限制数量
+ */
+exports.getMemberBids = async (userId, memberId, limit = 10) => {
+  // 1) 校验成员归属
+  const member = await walletRepo.getMemberById(memberId);
+  if (!member) {
+    throw new Error('成员不存在');
+  }
+  if (member.parent_id !== userId) {
+    throw new Error('无权限查看该成员的竞拍记录');
+  }
+  
+  // 2) 查询竞拍记录
+  const bids = await auctionRepo.getBidsByMemberId(memberId, limit);
+  
+  return bids;
 };

@@ -71,6 +71,9 @@ router.post('/sessions/:id/settle', controller.settleSession);
 
 // ========== 拍品相关 ==========
 
+// GET /api/v2/auction/bids - 获取成员竞拍记录
+router.get('/bids', controller.getMemberBids);
+
 // POST /api/v2/auction/lots/:id/bids - 提交出价
 router.post('/lots/:id/bids', controller.submitBid);
 
@@ -85,5 +88,8 @@ router.post('/lots/:id/undo-last-bid', controller.undoLastBid);
 
 // GET /api/v2/auction/lots/:id/bids - 获取出价列表
 router.get('/lots/:id/bids', controller.getBids);
+
+// GET /api/v2/auction/lots/:id/record - 获取拍品交易记录
+router.get('/lots/:id/record', controller.getLotRecord);
 
 module.exports = router;

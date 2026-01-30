@@ -559,7 +559,7 @@ exports.deleteBidById = async (bidId, client = pool) => {
 exports.markBidVoid = async (bidId, client = pool) => {
   const result = await client.query(
     `UPDATE auction_bid
-     SET is_void = TRUE, updated_at = CURRENT_TIMESTAMP
+     SET is_void = TRUE
      WHERE id = $1
      RETURNING *`,
     [bidId]
@@ -1010,7 +1010,7 @@ exports.getSessionOverviewDTO = async (parentUserId, sessionId, client = pool) =
       (SELECT json_agg(json_build_object(
         'id', l.id,
         'title', l.sku_name,
-        'status', CASE WHEN l.status='active' THEN 'open' ELSE l.status END,
+        'status', l.status,
         'reserve_price', l.reserve_price,
         'current_highest_bid', COALESCE(tb.bid_points, l.reserve_price, l.start_price, 0),
         'leading_bidder', CASE WHEN tb.bidder_id IS NULL THEN NULL ELSE json_build_object('id', tb.bidder_id, 'name', m.name) END,
@@ -1195,4 +1195,135 @@ exports.updateLotSortOrders = async (sessionId, orderedIds, client = pool) => {
       AND l.status IN ('pending', 'active');
   `;
   await client.query(sql, [sessionId, ids]);
+};
+
+/**
+ * 获取拍品交易记录（result+order+winner+bids）
+ * @param {number} lotId - 拍品ID
+ * @param {object} client - 数据库客户端
+ * @returns {object} {result, order, bids}
+ */
+/**
+ * 统计剩余可拍拍品数量
+ * @param {number} sessionId - 场次ID
+ * @param {object} client - 数据库客户端
+ * @returns {number} 剩余可拍拍品数量
+ */
+exports.countUnfinishedLots = async (sessionId, client = pool) => {
+  const result = await client.query(
+    `SELECT COUNT(*)::int AS c FROM auction_lot WHERE session_id = $1 AND status IN ('pending', 'active')`,
+    [sessionId]
+  );
+  return result.rows[0]?.c || 0;
+};
+
+/**
+ * 获取拍品交易记录（result+order+winner+bids）
+ * @param {number} lotId - 拍品ID
+ * @param {object} client - 数据库客户端
+ * @returns {object} {lot, result, order, bids}
+ */
+exports.getLotRecord = async (lotId, client = pool) => {
+  // A) lot 基本信息（auction_lot）
+  const lotResult = await client.query(
+    'SELECT id, session_id, sku_id, sku_name, rarity, status, reserve_price, sort_order, created_at FROM auction_lot WHERE id = $1',
+    [lotId]
+  );
+  const lot = lotResult.rows[0];
+  
+  if (!lot) {
+    return { lot: null, result: null, order: null, bids: [] };
+  }
+  
+  // B) result+winner+order
+  const resultQuery = await client.query(
+    `SELECT r.id, r.lot_id, r.session_id, r.winner_member_id, m.name AS winner_name, r.pay_points AS final_price, r.second_price, r.winning_bid_id, r.settled_order_id AS order_id, r.settlement_status, r.settled_at, o.cost AS order_cost, o.quantity AS order_quantity, o.status AS order_status, o.created_at AS order_created_at
+     FROM auction_result r
+     LEFT JOIN family_members m ON m.id = r.winner_member_id
+     LEFT JOIN family_market_order o ON o.id = r.settled_order_id
+     WHERE r.lot_id = $1`,
+    [lotId]
+  );
+  const resultRow = resultQuery.rows[0];
+  
+  // C) bids 列表
+  const bidsQuery = await client.query(
+    `SELECT b.id, b.bidder_member_id AS bidder_id, m.name AS bidder_name, b.bid_points, b.created_at
+     FROM auction_bid b
+     LEFT JOIN family_members m ON m.id = b.bidder_member_id
+     WHERE b.lot_id = $1 AND COALESCE(b.is_void, FALSE) = FALSE
+     ORDER BY b.created_at DESC
+     LIMIT 100`,
+    [lotId]
+  );
+  
+  const bids = bidsQuery.rows.map(row => ({
+    id: row.id,
+    bidder_id: row.bidder_id,
+    bidder_name: row.bidder_name,
+    bid_points: row.bid_points,
+    created_at: row.created_at,
+  }));
+  
+  // 如果 result 为空且 lot.status in ('sold','unsold')，从 bids 推导 result
+  let derivedResult = null;
+  if (!resultRow && lot && ['sold', 'unsold'].includes(lot.status) && bids.length > 0) {
+    // 按出价从高到低排序
+    const sortedBids = [...bids].sort((a, b) => b.bid_points - a.bid_points);
+    const topBid = sortedBids[0];
+    const secondBid = sortedBids[1] || null;
+    
+    derivedResult = {
+      result_derived: true,
+      winner_member_id: topBid.bidder_id,
+      winner_name: topBid.bidder_name,
+      final_price: topBid.bid_points,
+      second_price: secondBid ? secondBid.bid_points : null,
+    };
+  }
+  
+  return {
+    lot: lot,
+    result: resultRow ? {
+      id: resultRow.id,
+      lot_id: resultRow.lot_id,
+      session_id: resultRow.session_id,
+      winner_member_id: resultRow.winner_member_id,
+      winner_name: resultRow.winner_name,
+      final_price: resultRow.final_price,
+      second_price: resultRow.second_price,
+      winning_bid_id: resultRow.winning_bid_id,
+      settlement_status: resultRow.settlement_status,
+      settled_at: resultRow.settled_at,
+    } : derivedResult,
+    order: resultRow && resultRow.order_id ? {
+      order_id: resultRow.order_id,
+      order_cost: resultRow.order_cost,
+      order_quantity: resultRow.order_quantity,
+      order_status: resultRow.order_status,
+      order_created_at: resultRow.order_created_at,
+    } : null,
+    bids: bids,
+  };
+};
+
+/**
+ * 获取成员的竞拍记录（带拍品名称和是否中标）
+ * @param {number} memberId - 成员ID
+ * @param {number} limit - 限制数量
+ * @param {object} client - 数据库连接
+ */
+exports.getBidsByMemberId = async (memberId, limit = 10, client = pool) => {
+  const result = await client.query(
+    `SELECT b.id, b.lot_id, l.sku_name AS lot_name, b.bid_points, b.created_at,
+            CASE WHEN r.winning_bid_id = b.id THEN TRUE ELSE FALSE END AS is_winner
+       FROM auction_bid b
+       JOIN auction_lot l ON l.id = b.lot_id
+       LEFT JOIN auction_result r ON r.lot_id = b.lot_id
+      WHERE b.bidder_member_id = $1 AND COALESCE(b.is_void, FALSE) = FALSE
+      ORDER BY b.created_at DESC
+      LIMIT $2`,
+    [memberId, limit]
+  );
+  return result.rows;
 };

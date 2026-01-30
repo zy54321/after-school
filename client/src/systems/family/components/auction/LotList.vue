@@ -1,6 +1,16 @@
 <template>
   <div class="lot-list">
-    <div class="lot-item" v-for="lot in lots" :key="lot.id" :class="{ active: lot.id === currentLotId }">
+    <div 
+      class="lot-item" 
+      v-for="lot in lots" 
+      :key="lot.id" 
+      :class="{ 
+        active: lot.id === currentLotId,
+        'lot-sold': lot.status === 'sold',
+        'lot-unsold': lot.status === 'unsold'
+      }"
+      @click="$emit('select', lot)"
+    >
       <div class="lot-icon">{{ lot.sku_icon || '🎁' }}</div>
       <div class="lot-info">
         <div class="lot-name">{{ lot.sku_name }}</div>
@@ -26,6 +36,8 @@ defineProps({
     default: null,
   },
 });
+
+defineEmits(['select']);
 
 const getStatusLabel = (status) => {
   const labels = {
@@ -61,9 +73,19 @@ const getStatusLabel = (status) => {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.lot-item {
+  cursor: pointer;
+}
+
 .lot-item.active {
   border-color: rgba(79, 172, 254, 0.5);
   background: rgba(79, 172, 254, 0.1);
+}
+
+.lot-item.lot-sold,
+.lot-item.lot-unsold {
+  opacity: 0.7;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .lot-icon {

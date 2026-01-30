@@ -239,7 +239,7 @@ const handleMemberConfirm = async ({ memberId }) => {
   purchasing.value = true;
   try {
     const res = await axios.post('/api/v2/orders', {
-      member_id: memberId,
+      buyer_member_id: memberId,
       offer_id: selectedOffer.value.id,
       quantity: 1,
       idempotency_key: `mystery_${selectedOffer.value.id}_${memberId}_${Date.now()}`,

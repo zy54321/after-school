@@ -38,16 +38,16 @@
         :key="tab.value"
         class="filter-tab"
         :class="{ active: filter.status === tab.value }"
-        @click="filter.status = tab.value; loadSessions()"
+        @click="filter.status = tab.value"
       >
         {{ tab.label }}
       </button>
     </div>
 
     <!-- 场次列表 -->
-    <div class="sessions-list" v-if="sessions.length > 0">
+    <div class="sessions-list" v-if="filteredSessions.length > 0">
       <div 
-        v-for="session in sessions" 
+        v-for="session in filteredSessions" 
         :key="session.id" 
         class="session-card"
         :class="session.status"
@@ -103,7 +103,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 
 const loading = ref(false);
@@ -116,11 +116,18 @@ const filter = ref({
 
 const statusTabs = [
   { label: '全部', value: '' },
-  { label: '草稿', value: 'draft' },
   { label: '已排期', value: 'scheduled' },
   { label: '进行中', value: 'active' },
   { label: '已结束', value: 'ended' },
 ];
+
+// 根据 filter.status 过滤 sessions
+const filteredSessions = computed(() => {
+  if (!filter.value.status) {
+    return sessions.value;
+  }
+  return sessions.value.filter(s => s.status === filter.value.status);
+});
 
 // 加载拍卖大厅数据（使用新的 hall API）
 const loadHall = async () => {
@@ -135,8 +142,8 @@ const loadHall = async () => {
       // 计算统计
       stats.value = {
         active: sessions.value.filter(s => s.status === 'active').length,
-        pending: sessions.value.filter(s => s.status === 'scheduled').length,
-        settled: 0, // hall 只返回 active/scheduled
+        pending: sessions.value.filter(s => ['scheduled', 'draft'].includes(s.status)).length,
+        settled: sessions.value.filter(s => s.status === 'ended').length,
       };
     }
   } catch (err) {

@@ -43,6 +43,7 @@
           <LotList 
             :lots="lots" 
             :current-lot-id="currentLot?.id"
+            @select="handleSelectLot"
           />
         </div>
 
@@ -55,7 +56,16 @@
                 <span class="lot-icon">{{ currentLot.sku_icon || '🎁' }}</span>
               </div>
               <div class="lot-detail-info">
-                <h2 class="lot-name">{{ currentLot.title || currentLot.sku_name }}</h2>
+                <div class="lot-header-row">
+                  <h2 class="lot-name">{{ currentLot.title || currentLot.sku_name }}</h2>
+                  <button 
+                    v-if="currentLot.status === 'sold' || currentLot.status === 'unsold' || session.status !== 'active'"
+                    class="view-detail-btn"
+                    @click="lotRecordVisible = true"
+                  >
+                    查看交易详情
+                  </button>
+                </div>
                 <p class="lot-description" v-if="currentLot.description">
                   {{ currentLot.description }}
                 </p>
@@ -64,7 +74,7 @@
                     <span class="price-label">起拍价</span>
                     <span class="price-value start">{{ currentLot.reserve_price || currentLot.start_price || 0 }} 积分</span>
                   </div>
-                  <div class="price-row current" v-if="currentLot.status === 'open'">
+                  <div class="price-row current" v-if="currentLot.status === 'active'">
                     <span class="price-label">当前最高</span>
                     <span class="price-value">{{ currentLot.current_highest_bid || currentLot.reserve_price || currentLot.start_price || 0 }} 积分</span>
                     <span v-if="currentLot.leading_bidder" class="leading-bidder">
@@ -83,9 +93,9 @@
               </div>
             </div>
 
-            <!-- 出价面板（仅当拍品状态为 open 时显示） -->
+            <!-- 出价面板（仅当拍品状态为 active 时显示） -->
             <BidPanel
-              v-if="currentLot.status === 'open' && session.status === 'active'"
+              v-if="currentLot.status === 'active' && session.status === 'active'"
               :members="membersWithAvailable"
               :current-highest-bid="currentLot.current_highest_bid || 0"
               :leading-bidder="currentLot.leading_bidder"
@@ -98,7 +108,7 @@
 
             <!-- 出价历史 -->
             <BidHistory 
-              :bids="recentBidsForCurrentLot" 
+              :bids="currentLotBids" 
               :members="members"
             />
           </div>
@@ -119,6 +129,95 @@
       <p>拍卖场次不存在</p>
       <router-link to="/family/market/auction" class="back-btn">返回拍卖大厅</router-link>
     </div>
+
+    <!-- 交易记录抽屉 -->
+    <el-drawer v-model="lotRecordVisible" title="交易记录" size="40%">
+      <div v-loading="lotRecordLoading" v-if="lotRecord">
+        <!-- 拍品信息 -->
+        <div class="record-section">
+          <h3>拍品信息</h3>
+          <div class="record-item">
+            <span class="record-label">名称：</span>
+            <span class="record-value">{{ lotRecord.lot?.sku_name || lotRecord.lot?.title || '-' }}</span>
+          </div>
+          <div class="record-item">
+            <span class="record-label">状态：</span>
+            <span class="record-value">{{ lotRecord.lot?.status === 'sold' ? '已成交' : lotRecord.lot?.status === 'unsold' ? '流拍' : lotRecord.lot?.status || '-' }}</span>
+          </div>
+        </div>
+
+        <!-- 结果区 -->
+        <div class="record-section">
+          <h3>成交结果</h3>
+          <div v-if="lotRecord.result">
+            <div v-if="lotRecord.result.result_derived" class="record-notice">
+              <span style="color: #ffc107; font-size: 12px;">⚠️ 未生成结算结果（历史兼容）/按出价记录推导的结果</span>
+            </div>
+            <div class="record-item">
+              <span class="record-label">成交人：</span>
+              <span class="record-value">{{ lotRecord.result.winner_name || '-' }}</span>
+            </div>
+            <div class="record-item">
+              <span class="record-label">成交价：</span>
+              <span class="record-value">{{ lotRecord.result.final_price || 0 }} 积分</span>
+            </div>
+            <div class="record-item" v-if="lotRecord.result.second_price">
+              <span class="record-label">第二高价：</span>
+              <span class="record-value">{{ lotRecord.result.second_price }} 积分</span>
+            </div>
+            <div class="record-item" v-if="lotRecord.order && lotRecord.order.order_id">
+              <span class="record-label">订单号：</span>
+              <span class="record-value">{{ lotRecord.order.order_id }}</span>
+            </div>
+            <div class="record-item" v-if="lotRecord.order && lotRecord.order.order_created_at">
+              <span class="record-label">订单时间：</span>
+              <span class="record-value">{{ new Date(lotRecord.order.order_created_at).toLocaleString('zh-CN') }}</span>
+            </div>
+          </div>
+          <div v-else-if="lotRecord.bids && lotRecord.bids.length > 0" class="record-empty">
+            <div style="margin-bottom: 8px;">未生成结算结果（历史兼容）</div>
+            <div>按出价记录推导：</div>
+            <div class="record-item" style="margin-top: 8px;">
+              <span class="record-label">最高出价人：</span>
+              <span class="record-value">{{ lotRecord.bids[0].bidder_name || `成员#${lotRecord.bids[0].bidder_id}` }}</span>
+            </div>
+            <div class="record-item">
+              <span class="record-label">最高出价：</span>
+              <span class="record-value">{{ lotRecord.bids[0].bid_points }} 积分</span>
+            </div>
+          </div>
+          <div v-else class="record-empty">
+            暂无交易记录
+          </div>
+        </div>
+
+        <!-- 出价记录表 -->
+        <div class="record-section">
+          <h3>出价记录</h3>
+          <div v-if="lotRecord.bids && lotRecord.bids.length > 0">
+            <table class="bids-table">
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>成员</th>
+                  <th>出价</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="bid in lotRecord.bids" :key="bid.id || bid.created_at">
+                  <td>{{ new Date(bid.created_at).toLocaleString('zh-CN') }}</td>
+                  <td>{{ bid.bidder_name || `成员#${bid.bidder_id}` }}</td>
+                  <td>{{ bid.bid_points }} 积分</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="record-empty">
+            暂无出价记录
+          </div>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -126,7 +225,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage, ElMessageBox, ElDrawer } from 'element-plus';
 import LotList from '../../components/auction/LotList.vue';
 import BidPanel from '../../components/auction/BidPanel.vue';
 import BidHistory from '../../components/auction/BidHistory.vue';
@@ -142,6 +241,9 @@ const recentBids = ref([]);
 const bidding = ref(false);
 const closingLot = ref(false);
 const undoingBid = ref(false);
+const lotRecordVisible = ref(false);
+const lotRecord = ref(null);
+const lotRecordLoading = ref(false);
 
 let pollTimer = null;
 const POLL_INTERVAL = 4000; // 4秒轮询
@@ -161,6 +263,17 @@ const recentBidsForCurrentLot = computed(() => {
   return recentBids.value.filter(b => b.lot_id === currentLot.value.id);
 });
 
+// 当前拍品的出价记录（优先使用交易记录的bids，否则使用recentBids）
+const currentLotBids = computed(() => {
+  if (!currentLot.value) return [];
+  // 优先使用 lotRecord 的 bids（如果已加载且是当前拍品）
+  if (lotRecord.value && lotRecord.value.lot?.id === currentLot.value.id && lotRecord.value.bids) {
+    return lotRecord.value.bids;
+  }
+  // 否则使用 recentBids
+  return recentBids.value.filter(b => b.lot_id === currentLot.value.id);
+});
+
 // 加载会场详情
 const loadSessionOverview = async () => {
   const sessionId = route.params.id;
@@ -176,8 +289,8 @@ const loadSessionOverview = async () => {
     session.value = overview.session ?? null;
     lots.value = overview.lots ?? [];
     
-    // 设置当前拍品（取第一个 open 状态的，或第一个）
-    currentLot.value = overview.lots?.find(l => l.status === 'open') || overview.lots?.[0] || null;
+    // 设置当前拍品（取第一个 active 状态的，或第一个）
+    currentLot.value = overview.lots?.find(l => l.status === 'active') || overview.lots?.[0] || null;
     
     // 使用 overview API 返回的 members（包含 wallet_balance 和 locked_total）
     members.value = (overview.members ?? []).map(m => ({
@@ -189,6 +302,16 @@ const loadSessionOverview = async () => {
     
     // 保存最近的出价记录（兼容多种字段名）
     recentBids.value = overview.recent_bids ?? overview.recentBids ?? overview.recent_bids ?? [];
+    
+    // 兜底判断：如果 session.status==='active' 但 lots 里没有任何 status in ['pending','active']，停止轮询
+    if (session.value?.status === 'active' && lots.value.length > 0) {
+      const hasUnfinishedLots = lots.value.some(l => ['pending', 'active'].includes(l.status));
+      if (!hasUnfinishedLots) {
+        stopPolling();
+        // 本地视为 ended 用于UI显示
+        session.value.status = 'ended';
+      }
+    }
   } catch (err) {
     console.error('加载会场详情失败:', err);
     ElMessage.error(err.response?.data?.msg || '加载会场详情失败');
@@ -245,6 +368,32 @@ const handleMemberSelect = (memberId) => {
   // 可以在这里做一些额外处理，比如记录选中的成员
 };
 
+// 处理选择拍品
+const handleSelectLot = (lot) => {
+  // 无论 lot.status 是什么，都只切换当前拍品
+  currentLot.value = lot;
+  
+  // 如果是已成交/流拍，静默加载交易记录（不弹窗）
+  if (lot.status === 'sold' || lot.status === 'unsold' || session.value?.status !== 'active') {
+    loadLotRecord(lot.id);
+  }
+};
+
+// 加载拍品交易记录（静默加载，不弹窗）
+const loadLotRecord = async (lotId) => {
+  lotRecordLoading.value = true;
+  try {
+    const resp = await axios.get(`/api/v2/auction/lots/${lotId}/record`);
+    lotRecord.value = resp.data.data;
+    // 不设置 lotRecordVisible.value = true，不自动弹窗
+  } catch (err) {
+    console.error('lotRecord error:', err.response?.data || err);
+    // 静默失败，不显示错误提示（避免干扰用户体验）
+  } finally {
+    lotRecordLoading.value = false;
+  }
+};
+
 // 处理成交拍品
 const handleCloseLot = async () => {
   if (!currentLot.value) return;
@@ -268,6 +417,17 @@ const handleCloseLot = async () => {
       
       if (res.data?.code === 200) {
         ElMessage.success(res.data.msg || '拍品已成交');
+        
+        // 成交后自动激活下一件
+        try {
+          await axios.post(`/api/v2/auction/sessions/${session.value.id}/activate-next`);
+        } catch (err) {
+          // 如果返回400或没有下一件，忽略并提示
+          if (err.response?.status === 400 || err.response?.data?.code === 400) {
+            ElMessage.info('本场已无下一拍品');
+          }
+        }
+        
         // 立即刷新数据（不等轮询）
         await loadSessionOverview();
       }
@@ -306,6 +466,7 @@ const handleUndoLastBid = async () => {
         await loadSessionOverview();
       }
     } catch (err) {
+      console.error('撤销出价失败:', err.response?.data);
       ElMessage.error(err.response?.data?.msg || '撤销失败');
     } finally {
       undoingBid.value = false;
@@ -513,10 +674,17 @@ onUnmounted(() => {
   flex: 1;
 }
 
+.lot-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .lot-name {
   font-size: 24px;
   font-weight: 700;
-  margin: 0 0 12px;
+  margin: 0;
   color: #fff;
 }
 
@@ -599,6 +767,90 @@ onUnmounted(() => {
 }
 
 .back-btn:hover {
+  background: rgba(79, 172, 254, 0.3);
+  border-color: rgba(79, 172, 254, 0.5);
+}
+
+/* 交易记录样式 */
+.record-section {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.record-section:last-child {
+  border-bottom: none;
+}
+
+.record-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: #fff;
+}
+
+.record-item {
+  display: flex;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.record-label {
+  min-width: 80px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.record-value {
+  color: #fff;
+  font-weight: 500;
+}
+
+.record-empty {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.bids-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.bids-table thead {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.bids-table th {
+  padding: 10px;
+  text-align: left;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bids-table td {
+  padding: 10px;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bids-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.view-detail-btn {
+  padding: 6px 16px;
+  background: rgba(79, 172, 254, 0.2);
+  border: 1px solid rgba(79, 172, 254, 0.3);
+  border-radius: 8px;
+  color: #4facfe;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.view-detail-btn:hover {
   background: rgba(79, 172, 254, 0.3);
   border-color: rgba(79, 172, 254, 0.5);
 }

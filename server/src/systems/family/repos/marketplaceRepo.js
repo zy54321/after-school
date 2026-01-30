@@ -544,7 +544,7 @@ exports.getInventoryItemByIdForUpdate = async (inventoryId, client = pool) => {
      JOIN family_members m ON i.member_id = m.id
      LEFT JOIN family_sku s ON i.sku_id = s.id
      WHERE i.id = $1
-     FOR UPDATE`,
+     FOR UPDATE OF i`,
     [inventoryId]
   );
   return result.rows[0];

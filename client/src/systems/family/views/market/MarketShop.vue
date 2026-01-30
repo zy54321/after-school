@@ -188,9 +188,14 @@ const openPurchaseModal = (item) => {
   } else if (item.offers && item.offers.length > 1) {
     // 多个 offer，先选择
     showOfferModal.value = true;
-  } else {
-    // 没有 offer，直接选成员（使用默认价格）
+  } else if ((!item.offers || item.offers.length === 0) && item.default_offer_id) {
+    // 没有 offers 但有 default_offer_id，使用默认 offer
+    purchaseForm.value.offerId = item.default_offer_id;
     showMemberSelector.value = true;
+  } else {
+    // 没有 offer 且没有 default_offer_id，提示并阻止下单
+    alert('该商品未配置价格方案（Offer），请到【市场管理-商品管理】为该商品发布/启用Offer');
+    return;
   }
 };
 
@@ -221,7 +226,7 @@ const handleMemberConfirm = async ({ memberId }) => {
   purchasing.value = true;
   try {
     const res = await axios.post('/api/v2/orders', {
-      member_id: memberId,
+      buyer_member_id: memberId,
       offer_id: purchaseForm.value.offerId,
       quantity: 1,
       idempotency_key: `buy_${purchaseForm.value.offerId}_${memberId}_${Date.now()}`,

@@ -294,20 +294,31 @@ exports.getMarketCatalog = async (parentId, options = {}) => {
   }
 
   // 获取 Offers（如果需要）
+  // 注意：不要用 type 过滤 offers，因为 type 是 SKU 的类型（reward/auction/ticket），不是 offer_type
   let offers = [];
   if (includeOffers) {
-    offers = await marketplaceRepo.getActiveOffers(parentId, { offerType: type });
+    offers = await marketplaceRepo.getActiveOffers(parentId, {});
   }
 
   // 组装目录
   const catalog = filteredSkus.map(sku => {
     const skuOffers = offers.filter(o => o.sku_id === sku.id);
+    // 按 created_at desc 排序，取第一个作为默认 offer
+    const sortedOffers = [...skuOffers].sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bTime - aTime;
+    });
+    const defaultOffer = sortedOffers[0] || null;
+    
     return {
       ...sku,
       offers: skuOffers,
       lowestPrice: skuOffers.length > 0
         ? Math.min(...skuOffers.map(o => o.cost))
         : sku.base_cost,
+      default_offer_id: defaultOffer?.id || null,
+      default_cost: defaultOffer?.cost || null,
     };
   });
 
