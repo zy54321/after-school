@@ -28,16 +28,30 @@
     </header>
 
     <div class="flex-1 overflow-y-auto p-6 custom-scroll">
+      <!-- 商品类型筛选 -->
+      <div class="category-tabs mb-6">
+        <button 
+          v-for="cat in categories" 
+          :key="cat.value"
+          class="category-tab"
+          :class="{ active: filterType === cat.value }"
+          @click="filterType = cat.value"
+        >
+          <span class="cat-icon">{{ cat.icon }}</span>
+          <span>{{ cat.label }}</span>
+        </button>
+      </div>
+
       <div v-if="loading" class="text-center py-20 text-gray-500">加载中...</div>
 
-      <div v-else-if="products.length === 0"
+      <div v-else-if="filteredOffers.length === 0"
         class="flex flex-col items-center justify-center h-full text-gray-500 opacity-60">
         <span class="text-6xl mb-4">🛒</span>
-        <p>还没有上架任何商品，快去发布一个吧！</p>
+        <p>还没有{{ filterType === 'all' ? '上架任何' : (categories.find(c => c.value === filterType)?.label?.split('(')[0] || '') }}商品，快去发布一个吧！</p>
       </div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        <div v-for="item in products" :key="item.id"
+        <div v-for="item in filteredOffers" :key="item.id"
           class="group relative bg-[#1e1e2d] rounded-2xl border border-white/5 hover:border-white/10 overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1">
 
           <div class="absolute top-3 right-3 z-10">
@@ -248,7 +262,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -256,6 +270,7 @@ const loading = ref(false);
 const submitting = ref(false);
 const products = ref([]);
 const showModal = ref(false);
+const filterType = ref('all'); // 筛选类型：all/item/permission/ticket
 
 // 统一表单：合并了 SKU 和 Offer 的字段
 const form = ref({
@@ -272,6 +287,42 @@ const form = ref({
   limit_type: 'unlimited', // SKU Limit
   limit_max: 1, // SKU Limit Max
   is_active: true
+});
+
+// 商品类型分类配置（与奖励商城一致）
+const categories = computed(() => {
+  // 归一化类型：service -> permission
+  const itemCount = products.value.filter(p => {
+    const type = p.sku_type === 'service' ? 'permission' : (p.sku_type || p.type || 'item');
+    return type === 'item';
+  }).length;
+  const permissionCount = products.value.filter(p => {
+    const type = p.sku_type === 'service' ? 'permission' : (p.sku_type || p.type || 'item');
+    return type === 'permission';
+  }).length;
+  const ticketCount = products.value.filter(p => {
+    const type = p.sku_type === 'service' ? 'permission' : (p.sku_type || p.type || 'item');
+    return type === 'ticket';
+  }).length;
+  
+  return [
+    { label: '全部', value: 'all', icon: '📦' },
+    { label: `物品(${itemCount})`, value: 'item', icon: '🎁' },
+    { label: `权限(${permissionCount})`, value: 'permission', icon: '🔓' },
+    { label: `抽奖券(${ticketCount})`, value: 'ticket', icon: '🎟️' },
+  ];
+});
+
+// 筛选后的商品列表
+const filteredOffers = computed(() => {
+  if (filterType.value === 'all') {
+    return products.value;
+  }
+  // 归一化类型：service -> permission
+  return products.value.filter(item => {
+    const itemType = item.sku_type === 'service' ? 'permission' : (item.sku_type || item.type);
+    return itemType === filterType.value;
+  });
 });
 
 const loadProducts = async () => {
@@ -623,5 +674,41 @@ onMounted(loadProducts);
 
 .modal-close-btn:active {
   transform: scale(0.95);
+}
+
+/* 分类标签（与奖励商城一致） */
+.category-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.category-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.category-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.category-tab.active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  border-color: transparent;
+}
+
+.cat-icon {
+  font-size: 16px;
 }
 </style>
