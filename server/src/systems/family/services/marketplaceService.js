@@ -468,6 +468,17 @@ exports.publishProduct = async (userId, data) => {
     if (skuType === 'service') {
       skuType = 'permission';
     }
+    
+    // Permission 类型必须包含 duration_minutes 或 uses
+    let durationMinutes = data.duration_minutes;
+    let uses = data.uses;
+    if (skuType === 'permission') {
+      // 如果都缺失，抛出错误（前端应该已经校验，这里是兜底）
+      if ((!durationMinutes || durationMinutes <= 0) && (!uses || uses <= 0)) {
+        throw new Error('permission 类型商品必须包含 duration_minutes 或 uses 至少一个');
+      }
+    }
+    
     const sku = await marketplaceRepo.createSku({
       parentId: userId,
       name: data.name,
@@ -478,7 +489,9 @@ exports.publishProduct = async (userId, data) => {
       weightScore: data.weight_score !== undefined ? data.weight_score : 0,
       limitType: data.limit_type,
       limitMax: data.limit_max,
-      isActive: true
+      isActive: true,
+      durationMinutes: durationMinutes !== undefined ? durationMinutes : null,
+      uses: uses !== undefined ? uses : null
     }, client);
 
     // 2. 创建 Offer

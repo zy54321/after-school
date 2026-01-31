@@ -1050,6 +1050,7 @@ exports.quickPublish = async (req, res) => {
       name, icon, description,
       type,
       weight_score,
+      duration_minutes, uses,
       cost, quantity,
       limit_type, limit_max,
       valid_until
@@ -1068,6 +1069,17 @@ exports.quickPublish = async (req, res) => {
       return res.status(400).json({ code: 400, msg: `商品类型必须是以下之一: ${allowedTypes.join(', ')}` });
     }
 
+    // 校验 permission 类型必须包含 duration_minutes 或 uses
+    const finalType = type || 'item';
+    if (finalType === 'permission') {
+      if ((!duration_minutes || duration_minutes <= 0) && (!uses || uses <= 0)) {
+        return res.status(400).json({ 
+          code: 400, 
+          msg: 'permission 类型商品必须包含 duration_minutes 或 uses 至少一个' 
+        });
+      }
+    }
+
     // 校验 weight_score
     if (weight_score !== undefined && (weight_score < 0 || weight_score > 100)) {
       return res.status(400).json({ code: 400, msg: '权重必须在 0-100 之间' });
@@ -1075,8 +1087,10 @@ exports.quickPublish = async (req, res) => {
 
     const result = await marketplaceService.publishProduct(userId, {
       name, icon, description,
-      type: type || 'item',
+      type: finalType,
       weight_score: weight_score !== undefined ? parseInt(weight_score) : 0,
+      duration_minutes: duration_minutes !== undefined ? parseInt(duration_minutes) : null,
+      uses: uses !== undefined ? parseInt(uses) : null,
       cost: parseInt(cost),
       quantity: quantity ? parseInt(quantity) : 999,
       limit_type: limit_type || 'unlimited',
