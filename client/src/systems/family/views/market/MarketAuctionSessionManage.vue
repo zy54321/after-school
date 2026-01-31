@@ -196,7 +196,8 @@
                   <div>排序</div>
                   <div>标题</div>
                   <div>稀有度</div>
-                  <div>保留价</div>
+                  <div>标价</div>
+                  <div>拍卖价(7折)</div>
                   <div>锁定</div>
                 </div>
                 <div class="preview-row" v-for="(lot, index) in previewData.preview_lots" :key="index">
@@ -207,7 +208,11 @@
                       {{ lot.rarity?.toUpperCase() || 'R' }}
                     </span>
                   </div>
-                  <div>{{ lot.reserve_price || lot.start_price || 0 }} 积分</div>
+                  <div>{{ lot.base_price || lot.reserve_price || lot.start_price || 0 }} 积分</div>
+                  <div class="auction-price">
+                    <span class="price-highlight">{{ lot.auction_price || lot.reserve_price || lot.start_price || 0 }}</span>
+                    <span class="discount-tag">7折</span>
+                  </div>
                   <div>
                     <button 
                       class="lock-btn" 
@@ -1436,6 +1441,27 @@ onMounted(() => {
   color: rgba(255, 255, 255, 0.7);
 }
 
+.auction-price {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.price-highlight {
+  font-weight: 600;
+  color: #ffd700;
+  font-size: 15px;
+}
+
+.discount-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(255, 215, 0, 0.2);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 4px;
+  color: #ffd700;
+}
+
 .preview-table {
   display: flex;
   flex-direction: column;
@@ -1444,7 +1470,7 @@ onMounted(() => {
 
 .preview-header {
   display: grid;
-  grid-template-columns: 0.5fr 2fr 0.8fr 1fr 0.8fr;
+  grid-template-columns: 0.5fr 2fr 0.8fr 1fr 1.2fr 0.8fr;
   gap: 12px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.05);
@@ -1455,7 +1481,7 @@ onMounted(() => {
 
 .preview-row {
   display: grid;
-  grid-template-columns: 0.5fr 2fr 0.8fr 1fr 0.8fr;
+  grid-template-columns: 0.5fr 2fr 0.8fr 1fr 1.2fr 0.8fr;
   gap: 12px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.03);

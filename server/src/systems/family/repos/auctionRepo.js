@@ -863,6 +863,56 @@ exports.createAuctionOffer = async ({
   return result.rows[0];
 };
 
+/**
+ * 插入或更新 Offer 并返回 ID（用于拍卖生成，避免唯一约束冲突）
+ * @param {object} params - Offer 参数
+ * @param {number} params.parentId - 所属用户ID
+ * @param {number} params.skuId - SKU ID
+ * @param {number} params.cost - 价格
+ * @param {number} params.quantity - 数量
+ * @param {boolean} params.isActive - 是否激活
+ * @param {string} params.offerType - Offer 类型（可选，默认 'auction'）
+ * @param {object} client - 数据库连接
+ * @returns {object} Offer 对象（含 id）
+ */
+exports.upsertOfferAndGetId = async ({
+  parentId,
+  skuId,
+  cost,
+  quantity = 1,
+  isActive = true,
+  offerType = 'auction'
+}, client = pool) => {
+  const result = await client.query(
+    `INSERT INTO family_offer (parent_id, sku_id, cost, quantity, is_active, offer_type, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+     ON CONFLICT (parent_id, sku_id)
+     DO UPDATE SET
+       cost = EXCLUDED.cost,
+       quantity = EXCLUDED.quantity,
+       is_active = EXCLUDED.is_active,
+       offer_type = EXCLUDED.offer_type
+     RETURNING id, parent_id, sku_id, cost, quantity, is_active, offer_type`,
+    [parentId, skuId, cost, quantity, isActive, offerType]
+  );
+  
+  // 如果冲突时 DO UPDATE 没有返回行（理论上不会发生），则查询
+  if (result.rows.length === 0) {
+    const selectResult = await client.query(
+      `SELECT id, parent_id, sku_id, cost, quantity, is_active, offer_type
+       FROM family_offer
+       WHERE parent_id = $1 AND sku_id = $2`,
+      [parentId, skuId]
+    );
+    if (selectResult.rows.length > 0) {
+      return selectResult.rows[0];
+    }
+    throw new Error('upsertOfferAndGetId: 无法获取或创建 offer');
+  }
+  
+  return result.rows[0];
+};
+
 // ========== 视图查询 ==========
 
 /**

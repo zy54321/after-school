@@ -1489,7 +1489,16 @@ exports.previewGenerateLots = async (sessionId, options = {}) => {
       throw new Error(`生成数量不匹配：期望 ${count} 个，实际 ${selected.length} 个`);
     }
     
-    // 12) 生成 preview_lots，rarity 用 weight_score 映射
+    // 12) 获取所有有效的 offers（用于获取标价）
+    const activeOffers = await marketplaceRepo.getActiveOffers(session.parent_id, {}, client);
+    const offerMap = new Map();
+    activeOffers.forEach(offer => {
+      if (!offerMap.has(offer.sku_id)) {
+        offerMap.set(offer.sku_id, offer);
+      }
+    });
+    
+    // 13) 生成 preview_lots，rarity 用 weight_score 映射
     const previewLots = [];
     let sortOrder = 1;
     
@@ -1497,22 +1506,36 @@ exports.previewGenerateLots = async (sessionId, options = {}) => {
       // 根据 weight_score 映射稀有度
       const rarity = rarityFromWeightScore(sku.weight_score);
       
-      const baseCost = sku.default_cost || sku.base_cost || 10;
-      const startPrice = calculateStartPrice(baseCost, rarity);
+      // 获取标价：优先从 family_offer 获取（家庭 offer > 系统 offer），否则使用 sku 默认值
+      let basePrice = 10; // 默认值
+      const offer = offerMap.get(sku.id);
+      if (offer && offer.cost) {
+        basePrice = offer.cost;
+      } else if (sku.base_cost) {
+        basePrice = sku.base_cost;
+      } else if (sku.default_cost) {
+        basePrice = sku.default_cost;
+      }
+      
+      // 计算拍卖价（7折，向下取整，最小值=1）
+      let auctionPrice = Math.floor(basePrice * 0.7);
+      if (auctionPrice < 1) auctionPrice = 1;
       
       previewLots.push({
         sku_id: sku.id,
         sku_name: sku.name,
         sku_icon: sku.icon || null,
         rarity,
-        reserve_price: startPrice,
-        start_price: startPrice,
+        base_price: basePrice, // 标价（商城原价）
+        auction_price: auctionPrice, // 拍卖价（7折后）
+        reserve_price: auctionPrice, // 保留价 = 拍卖价
+        start_price: auctionPrice, // 起拍价 = 拍卖价
         sort_order: sortOrder++,
         status: 'pending',
       });
     }
     
-    // 13) 统计池子信息（按稀有度分组）
+    // 14) 统计池子信息（按稀有度分组）
     const skuByRarity = {
       r: [],
       sr: [],
@@ -1605,19 +1628,43 @@ exports.commitGenerateLots = async (sessionId, actorUserId, options = {}) => {
       maxSortOrder = result.rows[0]?.max_order || 0;
     }
     
-    // 5) 按 preview_lots 写入 auction_lot
+    // 5) 获取所有有效的 offers（用于获取标价，与预览时一致）
+    const activeOffers = await marketplaceRepo.getActiveOffers(session.parent_id, {}, client);
+    const offerMap = new Map();
+    activeOffers.forEach(offer => {
+      if (!offerMap.has(offer.sku_id)) {
+        offerMap.set(offer.sku_id, offer);
+      }
+    });
+    
+    // 6) 按 preview_lots 写入 auction_lot
     const createdLots = [];
     for (const previewLot of options.preview_lots) {
       // 调整 sort_order（追加模式）
       const sortOrder = options.replace ? previewLot.sort_order : (maxSortOrder + previewLot.sort_order);
+      
+      // 计算拍卖价：优先使用预览数据中的 auction_price，否则从 base_price 计算（7折，最小值=1）
+      let auctionPrice = previewLot.auction_price;
+      if (!auctionPrice && previewLot.base_price) {
+        auctionPrice = Math.floor(previewLot.base_price * 0.7);
+        if (auctionPrice < 1) auctionPrice = 1;
+      } else if (!auctionPrice) {
+        // 兜底：从 offer 获取标价并计算
+        const offer = offerMap.get(previewLot.sku_id);
+        const basePrice = offer?.cost || previewLot.start_price || previewLot.reserve_price || 10;
+        auctionPrice = Math.floor(basePrice * 0.7);
+        if (auctionPrice < 1) auctionPrice = 1;
+      }
+      // 确保最终价格 >= 1（即使预览数据传入了小于1的值）
+      if (auctionPrice < 1) auctionPrice = 1;
       
       const lot = await auctionRepo.createLot({
         sessionId,
         skuId: previewLot.sku_id,
         offerId: null, // 稍后创建
         rarity: previewLot.rarity,
-        startPrice: previewLot.start_price || previewLot.reserve_price,
-        reservePrice: previewLot.reserve_price,
+        startPrice: auctionPrice, // 使用后端计算的拍卖价
+        reservePrice: auctionPrice, // 保留价 = 拍卖价
         buyNowPrice: null,
         quantity: 1,
         status: 'pending',
@@ -1626,29 +1673,35 @@ exports.commitGenerateLots = async (sessionId, actorUserId, options = {}) => {
         skuIcon: previewLot.sku_icon,
       }, client);
       
-      // 为每个 lot 创建专用 offer
-      const baseCost = previewLot.start_price || previewLot.reserve_price || 10;
-      const offer = await marketplaceRepo.createOffer({
+      // 获取标价（用于创建 offer）
+      const offer = offerMap.get(previewLot.sku_id);
+      const basePrice = offer?.cost || previewLot.base_price || auctionPrice;
+      
+      // 使用 upsertOfferAndGetId 避免唯一约束冲突
+      const offerRecord = await auctionRepo.upsertOfferAndGetId({
         parentId: session.parent_id,
         skuId: previewLot.sku_id,
-        cost: baseCost,
+        cost: basePrice, // offer 存储标价（商城原价）
         quantity: 1,
         isActive: true,
+        offerType: 'auction',
       }, client);
       
       // 更新 lot 的 offer_id
       await client.query(
         `UPDATE auction_lot SET offer_id = $1 WHERE id = $2`,
-        [offer.id, lot.id]
+        [offerRecord.id, lot.id]
       );
       
       createdLots.push({
         ...lot,
-        offer_id: offer.id,
+        offer_id: offerRecord.id,
+        base_price: basePrice,
+        auction_price: auctionPrice,
       });
     }
     
-    // 6) 写 event
+    // 7) 写 event
     await auctionRepo.createEvent({
       actorUserId,
       sessionId,
