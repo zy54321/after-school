@@ -124,6 +124,7 @@ app.use('/api/mapbox/dictionary', checkAuth, dictionaryRoutes);
 app.use('/api/mapbox', checkAuth, mapboxRoutes);
 app.use('/api/analytics/demographics', checkAuth, demographicsRoutes);
 app.use('/api/family', checkAuth, familyRoutes);
+app.use('/api/v2/family', checkAuth, familyRoutes); // v2 路由别名，支持成员级预设接口
 app.use('/api/v2', checkAuth, marketplaceRoutes);
 app.use('/api/v2/auction', checkAuth, auctionRoutes);
 app.use('/api/v2/tasks', checkAuth, bountyRoutes);

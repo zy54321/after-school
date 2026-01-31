@@ -379,7 +379,12 @@ exports.getActiveSkus = async (parentId) => {
  * @returns {object} 市场目录
  */
 exports.getMarketCatalog = async (parentId, options = {}) => {
-  const { type, includeOffers = true } = options;
+  let { type, includeOffers = true } = options;
+
+  // 如果筛选类型是 service，映射为 permission
+  if (type === 'service') {
+    type = 'permission';
+  }
 
   // 获取 SKU 列表
   const skus = await marketplaceRepo.getActiveSkus(parentId);
@@ -387,7 +392,11 @@ exports.getMarketCatalog = async (parentId, options = {}) => {
   // 按类型筛选
   let filteredSkus = skus;
   if (type) {
-    filteredSkus = skus.filter(s => s.type === type);
+    filteredSkus = skus.filter(s => {
+      // 统一修正类型：若 sku.type==='service'，返回 permission
+      const normalizedType = s.type === 'service' ? 'permission' : s.type;
+      return normalizedType === type;
+    });
   }
 
   // 获取 Offers（如果需要）
@@ -399,6 +408,9 @@ exports.getMarketCatalog = async (parentId, options = {}) => {
 
   // 组装目录
   const catalog = filteredSkus.map(sku => {
+    // 统一修正类型：若 sku.type==='service'，返回 permission（确保前端永远收不到 service）
+    const normalizedType = sku.type === 'service' ? 'permission' : sku.type;
+    
     const skuOffers = offers.filter(o => o.sku_id === sku.id);
     // 按 created_at desc 排序，取第一个作为默认 offer
     const sortedOffers = [...skuOffers].sort((a, b) => {
@@ -410,6 +422,7 @@ exports.getMarketCatalog = async (parentId, options = {}) => {
     
     return {
       ...sku,
+      type: normalizedType, // 使用归一化后的类型
       offers: skuOffers,
       lowestPrice: skuOffers.length > 0
         ? Math.min(...skuOffers.map(o => o.cost))
@@ -450,12 +463,17 @@ exports.publishProduct = async (userId, data) => {
     await client.query('BEGIN');
 
     // 1. 创建 SKU
+    // 服务端兜底：若 data.type==='service'，强制改为 'permission'（防止旧前端或第三方请求写入 service）
+    let skuType = data.type || 'item';
+    if (skuType === 'service') {
+      skuType = 'permission';
+    }
     const sku = await marketplaceRepo.createSku({
       parentId: userId,
       name: data.name,
       description: data.description,
       icon: data.icon,
-      type: 'reward', // 默认为奖励商品
+      type: skuType, // 使用处理后的类型
       baseCost: data.cost, // SKU 基价 = 初始售价
       weightScore: data.weight_score !== undefined ? data.weight_score : 0,
       limitType: data.limit_type,
@@ -501,7 +519,13 @@ exports.updateProduct = async (userId, offerId, data) => {
       throw new Error('商品不存在或无权限');
     }
 
-    // 2. 更新 Offer 信息 (价格、库存、有效期)
+    // 2. 获取当前 SKU 信息（用于判断类型和获取现有值）
+    const currentSku = await marketplaceRepo.getSkuByIdRaw(oldOffer.sku_id, client);
+    if (!currentSku) {
+      throw new Error('SKU 不存在');
+    }
+
+    // 3. 更新 Offer 信息 (价格、库存、有效期)
     const updatedOffer = await marketplaceRepo.updateOffer({
       offerId: offerId,
       cost: data.cost,
@@ -510,17 +534,44 @@ exports.updateProduct = async (userId, offerId, data) => {
       isActive: data.is_active // 支持上下架
     }, client);
 
-    // 3. 更新关联 SKU 信息 (名称、图标、描述、限购、权重)
+    // 4. 更新关联 SKU 信息 (名称、图标、描述、限购、权重、类型)
+    // 服务端兜底：若 data.type==='service'，强制改为 'permission'（防止旧前端或第三方请求写入 service）
+    let skuType = data.type;
+    if (skuType === 'service') {
+      skuType = 'permission';
+    }
+    // 如果未传 type，使用当前 SKU 的类型
+    if (skuType === undefined) {
+      skuType = currentSku.type === 'service' ? 'permission' : currentSku.type;
+    }
+    
+    // 当 sku.type==='permission' 时，若 body.duration_minutes 与 body.uses 都缺失，
+    // 则先查询当前 sku 的 duration_minutes/uses 并补回到 updateSku 的参数中，保证触发器校验通过
+    let durationMinutes = data.duration_minutes;
+    let uses = data.uses;
+    
+    if (skuType === 'permission' || currentSku.type === 'permission') {
+      // 如果类型是 permission，需要确保有 duration_minutes 或 uses
+      if (durationMinutes === undefined && uses === undefined) {
+        // 使用当前 SKU 的值
+        durationMinutes = currentSku.duration_minutes;
+        uses = currentSku.uses;
+      }
+    }
+    
     await marketplaceRepo.updateSku({
       skuId: oldOffer.sku_id,
       name: data.name,
       icon: data.icon,
       description: data.description,
+      type: skuType, // 使用处理后的类型（前端已保证总会传）
       weightScore: data.weight_score !== undefined ? data.weight_score : undefined,
       limitType: data.limit_type,
       limitMax: data.limit_max,
       baseCost: data.cost, // 同步基价
-      isActive: data.is_active // 同步状态
+      isActive: data.is_active, // 同步状态
+      durationMinutes: durationMinutes !== undefined ? durationMinutes : undefined,
+      uses: uses !== undefined ? uses : undefined
     }, client);
 
     await client.query('COMMIT');

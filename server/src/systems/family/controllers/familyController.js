@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { fixSequenceAsync } = require('../../../shared/utils/sequenceFixer');
 const familyService = require('../services/familyService');
+const familyRepo = require('../repos/familyRepo');
 
 // === 📦 配置图片上传 ===
 const storage = multer.diskStorage({
@@ -406,35 +407,204 @@ exports.getUsageHistory = async (req, res) => {
   }
 };
 
-// 获取预设列表
+// ========== 成员级预设规则 API ==========
+
+/**
+ * 获取成员的预设规则列表
+ * GET /api/v2/family/member/:memberId/presets
+ */
+exports.getMemberPresets = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const memberId = parseInt(req.params.memberId);
+    
+    if (!memberId) {
+      return res.status(400).json({ code: 400, msg: 'memberId 不能为空' });
+    }
+    
+    // 验证 memberId 属于当前用户
+    const member = await familyRepo.getMemberById(memberId);
+    if (!member || member.parent_id !== userId) {
+      return res.status(403).json({ code: 403, msg: '无权访问该成员的规则' });
+    }
+    
+    const presets = await familyService.getMemberPresets(memberId);
+    res.json({ code: 200, data: presets });
+  } catch (err) {
+    console.error('getMemberPresets 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取预设规则失败', error: err.message });
+  }
+};
+
+/**
+ * 获取成员的奖励规则
+ * GET /api/v2/family/member/:memberId/rewards
+ */
+exports.getMemberRewardRules = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const memberId = parseInt(req.params.memberId);
+    
+    if (!memberId) {
+      return res.status(400).json({ code: 400, msg: 'memberId 不能为空' });
+    }
+    
+    // 验证 memberId 属于当前用户
+    const member = await familyRepo.getMemberById(memberId);
+    if (!member || member.parent_id !== userId) {
+      return res.status(403).json({ code: 403, msg: '无权访问该成员的规则' });
+    }
+    
+    const rules = await familyService.getMemberRewardRules(memberId);
+    res.json({ code: 200, data: rules });
+  } catch (err) {
+    console.error('getMemberRewardRules 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取奖励规则失败', error: err.message });
+  }
+};
+
+/**
+ * 获取成员的惩罚规则
+ * GET /api/v2/family/member/:memberId/penalties
+ */
+exports.getMemberPenaltyRules = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const memberId = parseInt(req.params.memberId);
+    
+    if (!memberId) {
+      return res.status(400).json({ code: 400, msg: 'memberId 不能为空' });
+    }
+    
+    // 验证 memberId 属于当前用户
+    const member = await familyRepo.getMemberById(memberId);
+    if (!member || member.parent_id !== userId) {
+      return res.status(403).json({ code: 403, msg: '无权访问该成员的规则' });
+    }
+    
+    const rules = await familyService.getMemberPenaltyRules(memberId);
+    res.json({ code: 200, data: rules });
+  } catch (err) {
+    console.error('getMemberPenaltyRules 错误:', err);
+    res.status(500).json({ code: 500, msg: '获取惩罚规则失败', error: err.message });
+  }
+};
+
+/**
+ * 创建成员预设规则
+ * POST /api/v2/family/member/:memberId/presets
+ */
+exports.createMemberPreset = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const memberId = parseInt(req.params.memberId);
+    
+    if (!memberId) {
+      return res.status(400).json({ code: 400, msg: 'memberId 不能为空' });
+    }
+    
+    const preset = await familyService.createMemberPreset(userId, memberId, req.body);
+    res.json({ code: 200, data: preset, msg: '规则创建成功' });
+  } catch (err) {
+    console.error('createMemberPreset 错误:', err);
+    res.status(500).json({ code: 500, msg: err.message || '创建规则失败', error: err.message });
+  }
+};
+
+/**
+ * 更新成员预设规则
+ * PUT /api/v2/family/member/:memberId/presets/:id
+ */
+exports.updateMemberPreset = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const memberId = parseInt(req.params.memberId);
+    const id = parseInt(req.params.id);
+    
+    if (!memberId || !id) {
+      return res.status(400).json({ code: 400, msg: 'memberId 和 id 不能为空' });
+    }
+    
+    const preset = await familyService.updateMemberPreset(userId, memberId, id, req.body);
+    res.json({ code: 200, data: preset, msg: '规则更新成功' });
+  } catch (err) {
+    console.error('updateMemberPreset 错误:', err);
+    res.status(500).json({ code: 500, msg: err.message || '更新规则失败', error: err.message });
+  }
+};
+
+/**
+ * 删除成员预设规则
+ * DELETE /api/v2/family/member/:memberId/presets/:id
+ */
+exports.deleteMemberPreset = async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const memberId = parseInt(req.params.memberId);
+    const id = parseInt(req.params.id);
+    
+    if (!memberId || !id) {
+      return res.status(400).json({ code: 400, msg: 'memberId 和 id 不能为空' });
+    }
+    
+    const deleted = await familyService.deleteMemberPreset(userId, memberId, id);
+    
+    // 如果删除影响行数为 0，返回 404
+    if (!deleted) {
+      return res.status(404).json({ code: 404, msg: '预设规则不存在或不属于该成员' });
+    }
+    
+    // 成功删除返回 204 No Content
+    res.status(204).send();
+  } catch (err) {
+    console.error('deleteMemberPreset 错误:', err);
+    // 如果是"未找到"错误，返回 404
+    if (err.message && err.message.includes('不存在')) {
+      return res.status(404).json({ code: 404, msg: err.message });
+    }
+    res.status(500).json({ code: 500, msg: err.message || '删除规则失败', error: err.message });
+  }
+};
+
+// ========== 兼容旧接口（已废弃） ==========
+
+/**
+ * 获取预设列表（已废弃）
+ * @deprecated 请使用 GET /member/:memberId/presets
+ */
 exports.getPresets = async (req, res, next) => {
   try {
-    const presets = await familyService.getPresets();
-    res.json({ code: 200, data: presets });
+    res.status(410).json({ code: 410, msg: '此接口已废弃，请使用 /member/:memberId/presets' });
   } catch (err) { next(err); }
 };
 
-// 创建预设
+/**
+ * 创建预设（已废弃）
+ * @deprecated 请使用 POST /member/:memberId/presets
+ */
 exports.createPreset = async (req, res, next) => {
   try {
-    const preset = await familyService.createPreset(req.body);
-    res.json({ code: 200, data: preset });
+    res.status(410).json({ code: 410, msg: '此接口已废弃，请使用 POST /member/:memberId/presets' });
   } catch (err) { next(err); }
 };
 
-// 更新预设
+/**
+ * 更新预设（已废弃）
+ * @deprecated 请使用 PUT /member/:memberId/presets/:id
+ */
 exports.updatePreset = async (req, res, next) => {
   try {
-    const preset = await familyService.updatePreset(req.params.id, req.body);
-    res.json({ code: 200, data: preset });
+    res.status(410).json({ code: 410, msg: '此接口已废弃，请使用 PUT /member/:memberId/presets/:id' });
   } catch (err) { next(err); }
 };
 
-// 删除预设
+/**
+ * 删除预设（已废弃）
+ * @deprecated 请使用 DELETE /member/:memberId/presets/:id
+ */
 exports.deletePreset = async (req, res, next) => {
   try {
-    await familyService.deletePreset(req.params.id);
-    res.json({ code: 200, msg: 'Deleted' });
+    res.status(410).json({ code: 410, msg: '此接口已废弃，请使用 DELETE /member/:memberId/presets/:id' });
   } catch (err) { next(err); }
 };
 

@@ -161,6 +161,33 @@
                 class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white focus:border-blue-500 outline-none"
                 placeholder="0" />
             </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">商品类型</label>
+              <select v-model="form.type"
+                class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white focus:border-blue-500 outline-none appearance-none">
+                <option value="item">物品 (Item)</option>
+                <option value="permission">权限 (Permission)</option>
+                <option value="ticket">抽奖券 (Ticket)</option>
+              </select>
+            </div>
+            <!-- Permission 类型专用字段 -->
+            <div v-if="form.type === 'permission'" class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">持续时间（分钟）</label>
+                <input type="number" v-model.number="form.duration_minutes" min="1"
+                  class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white focus:border-blue-500 outline-none"
+                  placeholder="如：30" />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">使用次数</label>
+                <input type="number" v-model.number="form.uses" min="1"
+                  class="w-[calc(100%-20px)] bg-[#252538] border border-white/10 rounded-lg p-2.5 text-white focus:border-blue-500 outline-none"
+                  placeholder="如：1" />
+              </div>
+              <div class="col-span-2 text-xs text-gray-500">
+                ⚠️ 权限商品必须填写“持续时间”或“使用次数”至少一个
+              </div>
+            </div>
           </div>
 
           <div class="space-y-3 pt-2 border-t border-white/5">
@@ -236,7 +263,10 @@ const form = ref({
   name: '', // SKU Name
   icon: '🎁', // SKU Icon
   description: '', // SKU Desc
+  type: 'item', // SKU Type: item/permission/ticket
   weight_score: 0, // SKU Weight Score (0-100)
+  duration_minutes: null, // Permission: 持续时间（分钟）
+  uses: null, // Permission: 使用次数
   cost: 100, // Offer Cost
   quantity: 999, // Offer Qty
   limit_type: 'unlimited', // SKU Limit
@@ -262,13 +292,21 @@ const loadProducts = async () => {
 const openModal = (item = null) => {
   if (item) {
     // 编辑模式：回填数据
+    // 若编辑回填遇到 sku_type==='service'，强制映射为 'permission'
+    let skuType = item.sku_type || 'item';
+    if (skuType === 'service') {
+      skuType = 'permission';
+    }
     form.value = {
       id: item.id,
       name: item.sku_name,
       // 如果后端没返回 icon，这里会是 undefined，前端模板里有 fallback
       icon: item.sku_icon || '🎁',
       description: item.sku_description || '',
+      type: skuType,
       weight_score: item.sku_weight_score ?? 0,
+      duration_minutes: item.sku_duration_minutes || null,
+      uses: item.sku_uses || null,
       cost: item.cost,
       quantity: item.quantity,
       limit_type: item.limit_type || 'unlimited',
@@ -282,7 +320,10 @@ const openModal = (item = null) => {
       name: '',
       icon: '🎁',
       description: '',
+      type: 'item', // 默认值
       weight_score: 0,
+      duration_minutes: null,
+      uses: null,
       cost: 100,
       quantity: 999,
       limit_type: 'unlimited',
@@ -300,6 +341,14 @@ const submit = async () => {
   if (form.value.cost < 0) return ElMessage.warning('价格不能为负');
   if (form.value.weight_score < 0 || form.value.weight_score > 100) {
     return ElMessage.warning('权重必须在 0-100 之间');
+  }
+  
+  // Permission 类型校验：必须包含 duration_minutes 或 uses 至少一个
+  if (form.value.type === 'permission') {
+    if ((!form.value.duration_minutes || form.value.duration_minutes <= 0) 
+        && (!form.value.uses || form.value.uses <= 0)) {
+      return ElMessage.warning('权限商品必须填写“持续时间”或“使用次数”至少一个');
+    }
   }
 
   submitting.value = true;
@@ -326,14 +375,23 @@ const toggleStatus = async (item) => {
   try {
     // 简单更新状态，复用 quick-update 接口
     const newStatus = !item.is_active;
+    // 若遇到 service 类型，强制映射为 permission
+    let skuType = item.sku_type || 'item';
+    if (skuType === 'service') {
+      skuType = 'permission';
+    }
     await axios.put(`/api/v2/admin/quick-update/${item.id}`, {
       ...item, // 补全字段
       name: item.sku_name,
       icon: item.sku_icon,
+      type: skuType, // 必须传，否则后端可能写回默认类型
       cost: item.cost,
       quantity: item.quantity,
       limit_type: item.limit_type,
       limit_max: item.limit_max,
+      // 上下架/快捷更新时补齐 duration_minutes 与 uses：从当前行 item 上读取并带上（即使不修改也带上），避免后端收到缺失字段
+      duration_minutes: item.sku_duration_minutes || null,
+      uses: item.sku_uses || null,
       is_active: newStatus
     });
     item.is_active = newStatus; // 乐观更新

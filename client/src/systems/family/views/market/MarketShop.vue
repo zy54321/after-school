@@ -145,7 +145,6 @@ const categories = [
   { label: '全部', value: '', icon: '📦' },
   { label: '物品', value: 'item', icon: '🎁' },
   { label: '权限', value: 'permission', icon: '🔓' },
-  { label: '服务', value: 'service', icon: '💼' },
   { label: '抽奖券', value: 'ticket', icon: '🎟️' },
 ];
 
@@ -162,12 +161,25 @@ const selectedOfferCost = computed(() => {
 const loadCatalog = async () => {
   loading.value = true;
   try {
+    // 如果筛选类型是 service，映射为 permission（避免旧数据导致问题）
+    let filterType = filter.value.type;
+    if (filterType === 'service') {
+      filterType = 'permission';
+    }
+    
     const res = await axios.get('/api/v2/catalog', {
-      params: { type: filter.value.type || undefined }
+      params: { type: filterType || undefined }
     });
     
     if (res.data?.code === 200) {
-      catalog.value = res.data.data?.skus || [];
+      // 数据归一化：如果后端返回了 service 类型，强制改为 permission
+      const skus = res.data.data?.skus || [];
+      catalog.value = skus.map(sku => {
+        if (sku.type === 'service') {
+          return { ...sku, type: 'permission' };
+        }
+        return sku;
+      });
     }
   } catch (err) {
     console.error('加载商品失败:', err);

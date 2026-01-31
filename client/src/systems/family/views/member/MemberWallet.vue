@@ -332,6 +332,12 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { 
+  getMemberPresets, 
+  createMemberPreset, 
+  updateMemberPreset, 
+  deleteMemberPreset 
+} from '../../api/presetApi';
 
 const route = useRoute();
 const emit = defineEmits(['refresh-balance']);
@@ -421,15 +427,20 @@ const handleRevoke = async (log) => {
 
 // ====== 预设管理逻辑 ======
 
-const loadPresets = async () => {
+const loadPresets = async (memberId = null) => {
+  const targetMemberId = memberId || currentMemberId.value;
+  if (!targetMemberId) {
+    console.warn('memberId 为空，无法加载预设');
+    return;
+  }
+  // 先清空本地数组，避免复用上一个成员的数据
+  allPresets.value = [];
   presetsLoading.value = true;
   try {
-    const res = await axios.get('/api/family/presets');
-    if (res.data?.code === 200) {
-      allPresets.value = res.data.data || [];
-    }
+    allPresets.value = await getMemberPresets(targetMemberId);
   } catch (err) {
     console.error('加载预设失败', err);
+    ElMessage.error(err.message || '加载预设失败');
   } finally {
     presetsLoading.value = false;
   }
@@ -464,23 +475,33 @@ const editPreset = (preset) => {
 
 const savePreset = async () => {
   if (!presetForm.value.label) return ElMessage.warning('请输入名称');
+  if (!currentMemberId.value) {
+    ElMessage.error('无法获取成员ID，请刷新页面重试');
+    return;
+  }
 
   try {
     if (editingPreset.value) {
-      await axios.put(`/api/family/presets/${editingPreset.value.id}`, presetForm.value);
+      // 更新成员预设
+      await updateMemberPreset(currentMemberId.value, editingPreset.value.id, presetForm.value);
       ElMessage.success('修改成功');
     } else {
-      await axios.post('/api/family/presets', presetForm.value);
+      // 创建成员预设
+      await createMemberPreset(currentMemberId.value, presetForm.value);
       ElMessage.success('添加成功');
     }
     await loadPresets();
     resetPresetForm();
   } catch (err) {
-    ElMessage.error(err.response?.data?.msg || '保存失败');
+    ElMessage.error(err.message || '保存失败');
   }
 };
 
 const deletePreset = async (id) => {
+  if (!currentMemberId.value) {
+    ElMessage.error('无法获取成员ID，请刷新页面重试');
+    return;
+  }
   try {
     await ElMessageBox.confirm('确定要删除这个预设吗？', '提示', {
       type: 'warning',
@@ -489,15 +510,24 @@ const deletePreset = async (id) => {
       cancelButtonText: '取消',
       confirmButtonClass: 'el-button--danger'
     });
-    await axios.delete(`/api/family/presets/${id}`);
+    // 等待删除成功（HTTP 200/204）才更新 UI
+    await deleteMemberPreset(currentMemberId.value, id);
+    // 删除成功后重新加载列表，确保 UI 与 DB 一致
+    await loadPresets(currentMemberId.value);
     ElMessage.success('已删除');
-    loadPresets();
   } catch (e) {
-    // 取消
+    if (e !== 'cancel') {
+      // 删除失败时不更新本地列表，只提示错误
+      ElMessage.error(e.message || '删除失败');
+    }
   }
 };
 
 const renameCategory = async (oldName) => {
+  if (!currentMemberId.value) {
+    ElMessage.error('无法获取成员ID，请刷新页面重试');
+    return;
+  }
   try {
     const { value: newName } = await ElMessageBox.prompt('请输入新的分类名称', '重命名分类', {
       confirmButtonText: '确定',
@@ -507,17 +537,25 @@ const renameCategory = async (oldName) => {
     });
 
     if (newName && newName !== oldName) {
+      // 注意：分类重命名需要批量更新该成员的所有相关预设
+      // 这里暂时保留旧接口，如果后端不支持成员级分类管理，需要单独实现
       await axios.put('/api/family/presets/category/update', { oldCategory: oldName, newCategory: newName });
       ElMessage.success('重命名成功');
       activeManageCategory.value = newName;
       loadPresets();
     }
   } catch (e) {
-    // 取消
+    if (e !== 'cancel') {
+      ElMessage.error(e.response?.data?.msg || '重命名失败');
+    }
   }
 };
 
 const deleteCategory = async (catName) => {
+  if (!currentMemberId.value) {
+    ElMessage.error('无法获取成员ID，请刷新页面重试');
+    return;
+  }
   try {
     await ElMessageBox.confirm(
       `确定要删除分类【${catName}】吗？\n\n注意：该分类下的所有预设项将被移动到「常规」分类，不会被删除。`,
@@ -531,12 +569,16 @@ const deleteCategory = async (catName) => {
       }
     );
 
+    // 注意：分类删除需要批量更新该成员的所有相关预设
+    // 这里暂时保留旧接口，如果后端不支持成员级分类管理，需要单独实现
     await axios.post('/api/family/presets/category/delete', { category: catName });
     ElMessage.success('分类已删除');
     activeManageCategory.value = '全部';
     loadPresets();
   } catch (e) {
-    // 取消
+    if (e !== 'cancel') {
+      ElMessage.error(e.response?.data?.msg || '删除失败');
+    }
   }
 };
 
@@ -627,6 +669,10 @@ const handleTriggerAdjustModal = (e) => {
 onMounted(() => {
   window.addEventListener('trigger-adjust-modal', handleTriggerAdjustModal);
   loadLogs();
+  // 初始加载预设
+  if (currentMemberId.value) {
+    loadPresets(currentMemberId.value);
+  }
 });
 
 onUnmounted(() => {
@@ -642,8 +688,15 @@ const getReasonLabel = (code) => {
   return map[code] || code;
 };
 
-watch(() => route.params.id, (newId) => {
-  if (newId) loadLogs();
+// 监听路由 memberId 变化，切换成员时重载预设
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId) {
+    loadLogs();
+    // 如果 memberId 发生变化，重新加载预设（清空旧数据并加载新数据）
+    if (newId !== oldId || oldId === undefined) {
+      loadPresets(parseInt(newId));
+    }
+  }
 }, { immediate: true });
 </script>
 

@@ -589,10 +589,139 @@ exports.getUsageHistory = async (memberId, rewardId = null, limit = 50) => {
   return result.rows;
 };
 
-// ========== ✅ 新增：预设管理 (Presets) ==========
+// ========== ✅ 预设管理 (Presets) - 成员级 ==========
 
 /**
- * 获取所有预设
+ * 获取成员的所有预设规则
+ * @param {number} memberId - 成员ID
+ * @param {object} client - 数据库连接（可选）
+ */
+exports.getMemberPresets = async (memberId, client = pool) => {
+  const result = await client.query(
+    'SELECT * FROM family_point_presets WHERE member_id = $1 ORDER BY category, id ASC',
+    [memberId]
+  );
+  return result.rows;
+};
+
+/**
+ * 获取成员的奖励规则（type='add'）
+ * @param {number} memberId - 成员ID
+ * @param {object} client - 数据库连接（可选）
+ */
+exports.getMemberRewardRules = async (memberId, client = pool) => {
+  const result = await client.query(
+    'SELECT * FROM family_point_presets WHERE member_id = $1 AND type = $2 ORDER BY category, id ASC',
+    [memberId, 'add']
+  );
+  return result.rows;
+};
+
+/**
+ * 获取成员的惩罚规则（type='deduct'）
+ * @param {number} memberId - 成员ID
+ * @param {object} client - 数据库连接（可选）
+ */
+exports.getMemberPenaltyRules = async (memberId, client = pool) => {
+  const result = await client.query(
+    'SELECT * FROM family_point_presets WHERE member_id = $1 AND type = $2 ORDER BY category, id ASC',
+    [memberId, 'deduct']
+  );
+  return result.rows;
+};
+
+/**
+ * 创建成员预设规则
+ * @param {number} parentId - 用户ID
+ * @param {number} memberId - 成员ID
+ * @param {string} label - 规则名称
+ * @param {number} points - 积分值
+ * @param {string} type - 类型（'add' 或 'deduct'）
+ * @param {string} icon - 图标
+ * @param {string} category - 分类
+ * @param {object} client - 数据库连接（可选）
+ */
+exports.createMemberPreset = async (parentId, memberId, label, points, type, icon, category, client = pool) => {
+  const result = await client.query(
+    `INSERT INTO family_point_presets (parent_id, member_id, label, points, type, icon, category) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7) 
+     RETURNING *`,
+    [parentId, memberId, label, points, type, icon || '🌟', category || '常规']
+  );
+  return result.rows[0];
+};
+
+/**
+ * 插入或更新成员预设规则（UPSERT）
+ * @param {number} parentId - 用户ID
+ * @param {number} memberId - 成员ID
+ * @param {string} label - 规则名称
+ * @param {number} points - 积分值
+ * @param {string} type - 类型（'add' 或 'deduct'）
+ * @param {string} icon - 图标
+ * @param {string} category - 分类
+ * @param {object} client - 数据库连接（可选）
+ */
+exports.upsertMemberPreset = async (parentId, memberId, label, points, type, icon, category, client = pool) => {
+  const result = await client.query(
+    `INSERT INTO family_point_presets (parent_id, member_id, label, points, type, icon, category) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (member_id, label)
+     DO UPDATE SET
+       points = EXCLUDED.points,
+       type = EXCLUDED.type,
+       icon = EXCLUDED.icon,
+       category = EXCLUDED.category
+     RETURNING *`,
+    [parentId, memberId, label, points, type, icon || '🌟', category || '常规']
+  );
+  return result.rows[0];
+};
+
+/**
+ * 更新成员预设规则
+ * @param {number} id - 预设ID
+ * @param {number} memberId - 成员ID（用于权限校验）
+ * @param {string} label - 规则名称
+ * @param {number} points - 积分值
+ * @param {string} type - 类型（'add' 或 'deduct'）
+ * @param {string} icon - 图标
+ * @param {string} category - 分类
+ * @param {object} client - 数据库连接（可选）
+ */
+exports.updateMemberPreset = async (id, memberId, label, points, type, icon, category, client = pool) => {
+  const result = await client.query(
+    `UPDATE family_point_presets 
+     SET label=$1, points=$2, type=$3, icon=$4, category=$5 
+     WHERE id=$6 AND member_id=$7 
+     RETURNING *`,
+    [label, points, type, icon || '🌟', category || '常规', id, memberId]
+  );
+  return result.rows[0];
+};
+
+/**
+ * 删除成员预设规则
+ * @param {number} id - 预设ID
+ * @param {number} memberId - 成员ID（用于权限校验和约束）
+ * @param {object} client - 数据库连接（可选）
+ * @returns {Promise<boolean>} 是否成功删除（true=已删除，false=未找到）
+ */
+exports.deleteMemberPreset = async (id, memberId, client = pool) => {
+  // 固定使用 member_id 约束的删除，禁止仅按 id 或 parent_id 删除
+  const result = await client.query(
+    'DELETE FROM family_point_presets WHERE id=$1 AND member_id=$2 RETURNING id',
+    [id, memberId]
+  );
+  // 返回是否真的删除了（影响行数 > 0）
+  return result.rows.length > 0;
+};
+
+// ========== 兼容旧接口（已废弃，保留用于过渡） ==========
+
+/**
+ * 获取所有预设（已废弃，请使用 getMemberPresets）
+ * @deprecated 请使用 getMemberPresets(memberId)
  */
 exports.getPresets = async () => {
   // 按分类和ID排序，让同类聚在一起
@@ -601,7 +730,8 @@ exports.getPresets = async () => {
 };
 
 /**
- * 创建预设
+ * 创建预设（已废弃，请使用 createMemberPreset）
+ * @deprecated 请使用 createMemberPreset(parentId, memberId, ...)
  */
 exports.createPreset = async (label, points, type, icon, category) => {
   const result = await pool.query(
@@ -612,7 +742,8 @@ exports.createPreset = async (label, points, type, icon, category) => {
 };
 
 /**
- * 更新预设
+ * 更新预设（已废弃，请使用 updateMemberPreset）
+ * @deprecated 请使用 updateMemberPreset(id, memberId, ...)
  */
 exports.updatePreset = async (id, label, points, type, icon, category) => {
   const result = await pool.query(
@@ -623,7 +754,8 @@ exports.updatePreset = async (id, label, points, type, icon, category) => {
 };
 
 /**
- * 删除预设
+ * 删除预设（已废弃，请使用 deleteMemberPreset）
+ * @deprecated 请使用 deleteMemberPreset(id, memberId)
  */
 exports.deletePreset = async (id) => {
   await pool.query('DELETE FROM family_point_presets WHERE id=$1', [id]);

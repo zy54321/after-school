@@ -27,7 +27,13 @@ exports.getSkuById = async (skuId, client = pool) => {
  */
 exports.getActiveSkus = async (parentId, client = pool) => {
   const result = await client.query(
-    `SELECT * FROM family_sku 
+    `SELECT 
+       id, parent_id, name, description, icon,
+       CASE WHEN type = 'service' THEN 'permission' ELSE type END as type,
+       base_cost, limit_type, limit_max, target_members, is_active,
+       created_at, updated_at, source_type, source_id, source_meta, weight_score,
+       fulfillment_mode, verification, duration_minutes, uses
+     FROM family_sku 
      WHERE is_active = TRUE AND (parent_id = 0 OR parent_id = $1)
      ORDER BY base_cost`,
     [parentId]
@@ -76,19 +82,23 @@ exports.createSku = async ({
   sourceType,
   sourceId,
   sourceMeta,
-  weightScore
+  weightScore,
+  fulfillmentMode,
+  verification,
+  durationMinutes,
+  uses
 }, client = pool) => {
   const result = await client.query(
     `INSERT INTO family_sku
-     (parent_id, name, description, icon, type, base_cost, limit_type, limit_max, target_members, is_active, source_type, source_id, source_meta, weight_score)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+     (parent_id, name, description, icon, type, base_cost, limit_type, limit_max, target_members, is_active, source_type, source_id, source_meta, weight_score, fulfillment_mode, verification, duration_minutes, uses)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
      RETURNING *`,
     [
       parentId,
       name,
       description || null,
       icon || null,
-      type || 'reward',
+      type || 'item',
       baseCost || 0,
       limitType || 'unlimited',
       limitMax || 0,
@@ -97,7 +107,11 @@ exports.createSku = async ({
       sourceType || 'custom',
       sourceId || null,
       sourceMeta ? JSON.stringify(sourceMeta) : JSON.stringify({}),
-      weightScore ?? 0
+      weightScore ?? 0,
+      fulfillmentMode || 'instant',
+      verification || 'auto',
+      durationMinutes || null,
+      uses || null
     ]
   );
   return result.rows[0];
@@ -120,42 +134,109 @@ exports.updateSku = async ({
   sourceType,
   sourceId,
   sourceMeta,
-  weightScore
+  weightScore,
+  fulfillmentMode,
+  verification,
+  durationMinutes,
+  uses
 }, client = pool) => {
+  // 构建动态更新语句
+  const updates = [];
+  const values = [];
+  let paramIndex = 1;
+
+  if (name !== undefined) {
+    updates.push(`name = $${paramIndex++}`);
+    values.push(name);
+  }
+  if (description !== undefined) {
+    updates.push(`description = $${paramIndex++}`);
+    values.push(description || null);
+  }
+  if (icon !== undefined) {
+    updates.push(`icon = $${paramIndex++}`);
+    values.push(icon || null);
+  }
+  if (type !== undefined) {
+    updates.push(`type = $${paramIndex++}`);
+    values.push(type);
+  }
+  if (baseCost !== undefined) {
+    updates.push(`base_cost = $${paramIndex++}`);
+    values.push(baseCost);
+  }
+  if (limitType !== undefined) {
+    updates.push(`limit_type = $${paramIndex++}`);
+    values.push(limitType);
+  }
+  if (limitMax !== undefined) {
+    updates.push(`limit_max = $${paramIndex++}`);
+    values.push(limitMax);
+  }
+  if (targetMembers !== undefined) {
+    updates.push(`target_members = $${paramIndex++}`);
+    values.push(targetMembers && targetMembers.length > 0 ? targetMembers : null);
+  }
+  if (isActive !== undefined) {
+    updates.push(`is_active = $${paramIndex++}`);
+    values.push(isActive);
+  }
+  if (sourceType !== undefined) {
+    updates.push(`source_type = $${paramIndex++}`);
+    values.push(sourceType);
+  }
+  if (sourceId !== undefined) {
+    updates.push(`source_id = $${paramIndex++}`);
+    values.push(sourceId || null);
+  }
+  if (sourceMeta !== undefined) {
+    updates.push(`source_meta = $${paramIndex++}`);
+    values.push(sourceMeta ? JSON.stringify(sourceMeta) : JSON.stringify({}));
+  }
+  if (weightScore !== undefined) {
+    updates.push(`weight_score = $${paramIndex++}`);
+    values.push(weightScore);
+  }
+  if (fulfillmentMode !== undefined) {
+    updates.push(`fulfillment_mode = $${paramIndex++}`);
+    values.push(fulfillmentMode);
+  }
+  if (verification !== undefined) {
+    updates.push(`verification = $${paramIndex++}`);
+    values.push(verification);
+  }
+  if (durationMinutes !== undefined) {
+    // 使用 COALESCE 保留旧值：如果传入 null 或未提供，保留原值
+    // 若传入 0，视为 NULL（因为触发器不接受 0，0 应该被视为未设置）
+    const durationValue = durationMinutes === 0 ? null : (durationMinutes || null);
+    updates.push(`duration_minutes = COALESCE($${paramIndex}, duration_minutes)`);
+    values.push(durationValue);
+    paramIndex++;
+  }
+  if (uses !== undefined) {
+    // 使用 COALESCE 保留旧值：如果传入 null 或未提供，保留原值
+    // 若传入 0，视为 NULL（因为触发器不接受 0，0 应该被视为未设置）
+    const usesValue = uses === 0 ? null : (uses || null);
+    updates.push(`uses = COALESCE($${paramIndex}, uses)`);
+    values.push(usesValue);
+    paramIndex++;
+  }
+
+  if (updates.length === 0) {
+    // 如果没有要更新的字段，直接返回原记录
+    const current = await client.query('SELECT * FROM family_sku WHERE id = $1', [skuId]);
+    return current.rows[0];
+  }
+
+  updates.push(`updated_at = CURRENT_TIMESTAMP`);
+  values.push(skuId);
+
   const result = await client.query(
     `UPDATE family_sku
-     SET name = $1,
-         description = $2,
-         icon = $3,
-         type = $4,
-         base_cost = $5,
-         limit_type = $6,
-         limit_max = $7,
-         target_members = $8,
-         is_active = $9,
-         source_type = $10,
-         source_id = $11,
-         source_meta = $12,
-         weight_score = $13,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = $14
+     SET ${updates.join(', ')}
+     WHERE id = $${paramIndex}
      RETURNING *`,
-    [
-      name,
-      description || null,
-      icon || null,
-      type || 'reward',
-      baseCost || 0,
-      limitType || 'unlimited',
-      limitMax || 0,
-      targetMembers && targetMembers.length > 0 ? targetMembers : null,
-      isActive !== false,
-      sourceType || 'custom',
-      sourceId || null,
-      sourceMeta ? JSON.stringify(sourceMeta) : JSON.stringify({}),
-      weightScore ?? 0,
-      skuId
-    ]
+    values
   );
   return result.rows[0];
 };
@@ -315,6 +396,8 @@ exports.getOffersByParentId = async (parentId, client = pool) => {
               s.limit_type,
               s.limit_max,
               s.weight_score as sku_weight_score,
+              s.duration_minutes as sku_duration_minutes,
+              s.uses as sku_uses,
               'family' as source
        FROM family_offer o
        JOIN family_sku s ON o.sku_id = s.id
@@ -329,6 +412,8 @@ exports.getOffersByParentId = async (parentId, client = pool) => {
               s.limit_type,
               s.limit_max,
               s.weight_score as sku_weight_score,
+              s.duration_minutes as sku_duration_minutes,
+              s.uses as sku_uses,
               CASE 
                 WHEN EXISTS (
                   SELECT 1 FROM family_offer fo 
@@ -348,14 +433,14 @@ exports.getOffersByParentId = async (parentId, client = pool) => {
        f.id, f.sku_id, f.cost, f.quantity, f.valid_from, f.valid_until, 
        f.is_active,
        f.created_at, f.parent_id, f.sku_name, f.sku_type, f.sku_icon, f.sku_description,
-       f.limit_type, f.limit_max, f.sku_weight_score, f.source
+       f.limit_type, f.limit_max, f.sku_weight_score, f.sku_duration_minutes, f.sku_uses, f.source
      FROM family_offers f
      UNION ALL
      SELECT 
        s.id, s.sku_id, s.cost, s.quantity, s.valid_from, s.valid_until,
        s.effective_is_active as is_active,
        s.created_at, s.parent_id, s.sku_name, s.sku_type, s.sku_icon, s.sku_description,
-       s.limit_type, s.limit_max, s.sku_weight_score, s.source
+       s.limit_type, s.limit_max, s.sku_weight_score, s.sku_duration_minutes, s.sku_uses, s.source
      FROM system_offers s
      ORDER BY source DESC, is_active DESC, created_at DESC`,
     [parentId]

@@ -532,23 +532,151 @@ exports.getUsageHistory = async (memberId, rewardId, limit) => {
   };
 };
 
+// ========== 成员级预设规则管理 ==========
+
+/**
+ * 获取成员的预设规则列表
+ * @param {number} memberId - 成员ID
+ */
+exports.getMemberPresets = async (memberId) => {
+  if (!memberId) {
+    throw new Error('memberId 不能为空');
+  }
+  return await familyRepo.getMemberPresets(memberId);
+};
+
+/**
+ * 获取成员的奖励规则
+ * @param {number} memberId - 成员ID
+ */
+exports.getMemberRewardRules = async (memberId) => {
+  if (!memberId) {
+    throw new Error('memberId 不能为空');
+  }
+  return await familyRepo.getMemberRewardRules(memberId);
+};
+
+/**
+ * 获取成员的惩罚规则
+ * @param {number} memberId - 成员ID
+ */
+exports.getMemberPenaltyRules = async (memberId) => {
+  if (!memberId) {
+    throw new Error('memberId 不能为空');
+  }
+  return await familyRepo.getMemberPenaltyRules(memberId);
+};
+
+/**
+ * 创建成员预设规则
+ * @param {number} parentId - 用户ID
+ * @param {number} memberId - 成员ID
+ * @param {object} data - 规则数据
+ */
+exports.createMemberPreset = async (parentId, memberId, data) => {
+  if (!memberId) {
+    throw new Error('memberId 不能为空');
+  }
+  if (!parentId) {
+    throw new Error('parentId 不能为空');
+  }
+  const { label, points, type, icon, category } = data;
+  if (!label || !type) {
+    throw new Error('label 和 type 不能为空');
+  }
+  // 验证 memberId 属于 parentId
+  const member = await familyRepo.getMemberById(memberId);
+  if (!member || member.parent_id !== parentId) {
+    throw new Error('无权操作该成员');
+  }
+  return await familyRepo.createMemberPreset(parentId, memberId, label, points, type, icon || '🌟', category);
+};
+
+/**
+ * 更新成员预设规则
+ * @param {number} parentId - 用户ID
+ * @param {number} memberId - 成员ID
+ * @param {number} id - 规则ID
+ * @param {object} data - 规则数据
+ */
+exports.updateMemberPreset = async (parentId, memberId, id, data) => {
+  if (!memberId) {
+    throw new Error('memberId 不能为空');
+  }
+  if (!parentId) {
+    throw new Error('parentId 不能为空');
+  }
+  // 验证 memberId 属于 parentId
+  const member = await familyRepo.getMemberById(memberId);
+  if (!member || member.parent_id !== parentId) {
+    throw new Error('无权操作该成员');
+  }
+  const { label, points, type, icon, category } = data;
+  return await familyRepo.updateMemberPreset(id, memberId, label, points, type, icon || '🌟', category);
+};
+
+/**
+ * 删除成员预设规则
+ * @param {number} parentId - 用户ID
+ * @param {number} memberId - 成员ID
+ * @param {number} id - 规则ID
+ * @returns {Promise<boolean>} 是否成功删除（true=已删除，false=未找到）
+ */
+exports.deleteMemberPreset = async (parentId, memberId, id) => {
+  if (!memberId) {
+    throw new Error('memberId 不能为空');
+  }
+  if (!parentId) {
+    throw new Error('parentId 不能为空');
+  }
+  if (!id) {
+    throw new Error('id 不能为空');
+  }
+  // 验证 memberId 属于 parentId
+  const member = await familyRepo.getMemberById(memberId);
+  if (!member || member.parent_id !== parentId) {
+    throw new Error('无权操作该成员');
+  }
+  // 必须调用 repo 执行按 memberId 约束的删除
+  const deleted = await familyRepo.deleteMemberPreset(id, memberId);
+  if (!deleted) {
+    throw new Error('预设规则不存在或不属于该成员');
+  }
+  return true;
+};
+
+// ========== 兼容旧接口（已废弃） ==========
+
+/**
+ * 获取所有预设（已废弃）
+ * @deprecated 请使用 getMemberPresets(memberId)
+ */
 exports.getPresets = async () => {
-  return await familyRepo.getPresets();
+  throw new Error('此接口已废弃，请使用 /member/:memberId/presets');
 };
 
+/**
+ * 创建预设（已废弃）
+ * @deprecated 请使用 createMemberPreset(parentId, memberId, data)
+ */
 exports.createPreset = async (data) => {
-  // 解构出 category
-  const { label, points, type, icon, category } = data;
-  return await familyRepo.createPreset(label, points, type, icon || '🌟', category);
+  throw new Error('此接口已废弃，请使用 /member/:memberId/presets');
 };
 
+/**
+ * 更新预设（已废弃）
+ * @deprecated 请使用 updateMemberPreset(parentId, memberId, id, data)
+ */
 exports.updatePreset = async (id, data) => {
-  const { label, points, type, icon, category } = data;
-  return await familyRepo.updatePreset(id, label, points, type, icon, category);
+  throw new Error('此接口已废弃，请使用 /member/:memberId/presets/:id');
 };
 
+/**
+ * 删除预设（已废弃）
+ * @deprecated 请使用 deleteMemberPreset(parentId, memberId, id)
+ */
 exports.deletePreset = async (id) => {
-  return await familyRepo.deletePreset(id);
+  throw new Error('此接口已废弃，请使用 DELETE /member/:memberId/presets/:id');
 };
 
 exports.updatePresetCategory = async (oldCategory, newCategory) => {

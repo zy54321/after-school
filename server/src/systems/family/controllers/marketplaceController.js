@@ -162,6 +162,22 @@ exports.createSku = async (req, res) => {
       return res.status(400).json({ code: 400, msg: 'SKU 名称不能为空' });
     }
 
+    // 禁止创建 service 类型
+    if (type === 'service') {
+      return res.status(400).json({ code: 400, msg: 'service 类型已废弃，请使用 permission 类型' });
+    }
+
+    // 校验 permission 类型必须包含 duration_minutes 或 uses
+    if (type === 'permission') {
+      const { duration_minutes: durationMinutes, uses } = req.body;
+      if ((!durationMinutes || durationMinutes <= 0) && (!uses || uses <= 0)) {
+        return res.status(400).json({ 
+          code: 400, 
+          msg: 'permission 类型商品必须包含 duration_minutes 或 uses 至少一个' 
+        });
+      }
+    }
+
     // 校验 weight_score
     if (weightScore !== undefined && (weightScore < 0 || weightScore > 100)) {
       return res.status(400).json({ code: 400, msg: 'weight_score 必须在 0~100 范围内' });
@@ -182,6 +198,10 @@ exports.createSku = async (req, res) => {
       sourceId,
       sourceMeta,
       weightScore: weightScore !== undefined ? weightScore : 0,
+      fulfillmentMode,
+      verification,
+      durationMinutes,
+      uses
     });
 
     if (ticketTypeId) {
@@ -229,6 +249,25 @@ exports.updateSku = async (req, res) => {
       return res.status(404).json({ code: 404, msg: 'SKU 不存在或无权限' });
     }
 
+    // 禁止更新为 service 类型
+    if (type === 'service') {
+      return res.status(400).json({ code: 400, msg: 'service 类型已废弃，请使用 permission 类型' });
+    }
+
+    // 校验 permission 类型必须包含 duration_minutes 或 uses
+    const finalType = type || sku.type;
+    if (finalType === 'permission') {
+      const { duration_minutes: durationMinutes, uses } = req.body;
+      const currentDuration = durationMinutes !== undefined ? durationMinutes : sku.duration_minutes;
+      const currentUses = uses !== undefined ? uses : sku.uses;
+      if ((!currentDuration || currentDuration <= 0) && (!currentUses || currentUses <= 0)) {
+        return res.status(400).json({ 
+          code: 400, 
+          msg: 'permission 类型商品必须包含 duration_minutes 或 uses 至少一个' 
+        });
+      }
+    }
+
     // 校验 weight_score
     if (weightScore !== undefined && (weightScore < 0 || weightScore > 100)) {
       return res.status(400).json({ code: 400, msg: 'weight_score 必须在 0~100 范围内' });
@@ -236,12 +275,12 @@ exports.updateSku = async (req, res) => {
 
     const updated = await marketplaceRepo.updateSku({
       skuId,
-      name: name || sku.name,
+      name: name !== undefined ? name : sku.name,
       description: description !== undefined ? description : sku.description,
       icon: icon !== undefined ? icon : sku.icon,
-      type: type || sku.type,
+      type: type !== undefined ? type : sku.type,
       baseCost: baseCost !== undefined ? baseCost : sku.base_cost,
-      limitType: limitType || sku.limit_type,
+      limitType: limitType !== undefined ? limitType : sku.limit_type,
       limitMax: limitMax !== undefined ? limitMax : sku.limit_max,
       targetMembers: targetMembers !== undefined ? targetMembers : sku.target_members,
       isActive: isActive !== undefined ? isActive : sku.is_active,
@@ -249,6 +288,10 @@ exports.updateSku = async (req, res) => {
       sourceId: sourceId !== undefined ? sourceId : sku.source_id,
       sourceMeta: sourceMeta !== undefined ? sourceMeta : sku.source_meta,
       weightScore: weightScore !== undefined ? weightScore : sku.weight_score,
+      fulfillmentMode: fulfillmentMode !== undefined ? fulfillmentMode : sku.fulfillment_mode,
+      verification: verification !== undefined ? verification : sku.verification,
+      durationMinutes: durationMinutes !== undefined ? durationMinutes : sku.duration_minutes,
+      uses: uses !== undefined ? uses : sku.uses,
     });
 
     if (ticketTypeId) {
@@ -1005,6 +1048,7 @@ exports.quickPublish = async (req, res) => {
     const userId = req.session.user.id;
     const {
       name, icon, description,
+      type,
       weight_score,
       cost, quantity,
       limit_type, limit_max,
@@ -1015,6 +1059,15 @@ exports.quickPublish = async (req, res) => {
       return res.status(400).json({ code: 400, msg: '商品名称和价格必填' });
     }
 
+    // 校验 type 必须属于允许的类型（删除 service）
+    const allowedTypes = ['item', 'permission', 'ticket'];
+    if (type === 'service') {
+      return res.status(400).json({ code: 400, msg: 'service 类型已废弃，请使用 permission 类型' });
+    }
+    if (type && !allowedTypes.includes(type)) {
+      return res.status(400).json({ code: 400, msg: `商品类型必须是以下之一: ${allowedTypes.join(', ')}` });
+    }
+
     // 校验 weight_score
     if (weight_score !== undefined && (weight_score < 0 || weight_score > 100)) {
       return res.status(400).json({ code: 400, msg: '权重必须在 0-100 之间' });
@@ -1022,6 +1075,7 @@ exports.quickPublish = async (req, res) => {
 
     const result = await marketplaceService.publishProduct(userId, {
       name, icon, description,
+      type: type || 'item',
       weight_score: weight_score !== undefined ? parseInt(weight_score) : 0,
       cost: parseInt(cost),
       quantity: quantity ? parseInt(quantity) : 999,
@@ -1047,6 +1101,17 @@ exports.quickUpdate = async (req, res) => {
     const offerId = parseInt(req.params.offerId);
     const body = req.body;
 
+    // 校验 type 必须属于允许的类型（若未传则不改类型，删除 service）
+    if (body.type !== undefined) {
+      if (body.type === 'service') {
+        return res.status(400).json({ code: 400, msg: 'service 类型已废弃，请使用 permission 类型' });
+      }
+      const allowedTypes = ['item', 'permission', 'ticket'];
+      if (!allowedTypes.includes(body.type)) {
+        return res.status(400).json({ code: 400, msg: `商品类型必须是以下之一: ${allowedTypes.join(', ')}` });
+      }
+    }
+
     // 校验 weight_score
     if (body.weight_score !== undefined && (body.weight_score < 0 || body.weight_score > 100)) {
       return res.status(400).json({ code: 400, msg: '权重必须在 0-100 之间' });
@@ -1054,10 +1119,11 @@ exports.quickUpdate = async (req, res) => {
 
     await marketplaceService.updateProduct(userId, offerId, {
       ...body,
-      cost: parseInt(body.cost),
-      quantity: parseInt(body.quantity),
-      limit_max: parseInt(body.limit_max),
-      weight_score: body.weight_score !== undefined ? parseInt(body.weight_score) : undefined
+      cost: body.cost !== undefined ? parseInt(body.cost) : undefined,
+      quantity: body.quantity !== undefined ? parseInt(body.quantity) : undefined,
+      limit_max: body.limit_max !== undefined ? parseInt(body.limit_max) : undefined,
+      weight_score: body.weight_score !== undefined ? parseInt(body.weight_score) : undefined,
+      type: body.type // 允许更新类型
     });
 
     res.json({ code: 200, msg: '更新成功' });
