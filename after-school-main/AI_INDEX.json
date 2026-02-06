@@ -1,0 +1,85 @@
+﻿{
+  "project": {
+    "name": "after-school-main",
+    "frontend": {
+      "root": "client",
+      "entry": "client/src/main.js",
+      "router": "client/src/router/index.js",
+      "layouts": [
+        "client/src/portal/layout/PortalLayout.vue"
+      ],
+      "systems_root": "client/src/systems",
+      "systems": {
+        "education": {
+          "root": "client/src/systems/education",
+          "notes": "教务主系统（页面/组件/接口按目录组织）"
+        },
+        "family": {
+          "root": "client/src/systems/family",
+          "key_dirs": [
+            "client/src/systems/family/views",
+            "client/src/systems/family/components",
+            "client/src/systems/family/api",
+            "client/src/systems/family/layout"
+          ],
+          "notes": "家庭/成长银行/奖励商城/拍卖/任务/提醒等模块"
+        },
+        "analytics": {
+          "root": "client/src/systems/analytics",
+          "notes": "GIS/数据分析相关（Mapbox/Turf/ECharts）"
+        },
+        "catering": {
+          "root": "client/src/systems/catering",
+          "notes": "餐饮相关"
+        }
+      },
+      "shared": {
+        "permissions": "client/src/constants/permissions.js",
+        "permission_utils": [
+          "client/src/utils/permissionTree.js",
+          "client/src/composables/usePermission.js"
+        ],
+        "http": "axios"
+      }
+    },
+    "backend": {
+      "root": "server",
+      "entry": "server/app.js",
+      "db": "server/src/shared/config/db.js",
+      "shared_permissions": "server/src/shared/constants/permissions.js",
+      "portal_auth": {
+        "routes": "server/src/portal/routes/authRoutes.js",
+        "controller": "server/src/portal/controllers/authController.js"
+      },
+      "systems_root": "server/src/systems",
+      "systems": {
+        "education": {
+          "root": "server/src/systems/education",
+          "layers": ["controllers", "routes", "utils"],
+          "notes": "教务 API（用户/班级/考勤/订单/看板/权限等）"
+        },
+        "family": {
+          "root": "server/src/systems/family",
+          "layers": ["controllers", "routes", "repos", "services"],
+          "notes": "家庭系统 API（任务/提醒/商城/拍卖/钱包等）"
+        },
+        "analytics": {
+          "root": "server/src/systems/analytics",
+          "layers": ["controllers", "routes", "services"],
+          "notes": "分析/GIS API（字典/人口统计/Mapbox 等）"
+        },
+        "catering": {
+          "root": "server/src/systems/catering",
+          "layers": ["controllers", "routes"],
+          "notes": "餐饮 API"
+        }
+      }
+    },
+    "docs": {
+      "root_readme": "README.md",
+      "db_schema_doc": "数据库表结构说明.md",
+      "arch_doc": "托管班管理系统 (After-School Management System) - 技术架构说明.md",
+      "dev_spec": "技术架构与开发规范手册.md"
+    }
+  }
+}
