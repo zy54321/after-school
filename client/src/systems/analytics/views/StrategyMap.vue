@@ -54,6 +54,27 @@
         </div>
       </div>
       <div class="hud-right">
+        <el-dropdown @command="handleMapStyleCommand">
+          <el-button
+            link
+            class="style-btn"
+            style="color: #67C23A; margin-right: 15px; font-weight: bold;"
+          >
+            {{ locale === 'zh' ? `底图: ${currentMapStyleLabel}` : `Base: ${currentMapStyleLabel}` }}
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="style in mapStyleOptions"
+                :key="style.key"
+                :command="style.key"
+                :disabled="style.key === currentMapStyle"
+              >
+                {{ locale === 'zh' ? style.labelZh : style.labelEn }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button link class="lang-btn" @click="toggleLang"
           style="color: #409EFF; margin-right: 15px; font-weight: bold;">
           {{ locale === 'zh' ? '中文' : 'English' }}
@@ -486,11 +507,15 @@ import * as turf from '@turf/turf';
 import DemographicsAnalysis from '../components/DemographicsAnalysis.vue';
 import { usePermission } from '@/composables/usePermission';
 import PERMISSIONS from '@/constants/permissions';
+import { MAPBOX_TOKEN, AMAP_STYLES } from '@/config/mapStyles';
 
 const router = useRouter();
 const route = useRoute();
 
 const { t, locale } = useI18n();
+
+const token = MAPBOX_TOKEN;
+const userInfoStr = localStorage.getItem('user_info');
 
 // 🟢 人口构成分析模式状态
 const isDemographicsAnalysisMode = ref(false);
@@ -541,6 +566,105 @@ const currentTime = ref('');
 const map = ref(null);
 const draw = ref(null);
 const drawSelectedId = ref(null);
+
+const COORD_SYSTEM = {
+  WGS84: 'WGS84',
+  GCJ02: 'GCJ02'
+};
+
+const mapStyleOptions = [
+  {
+    key: 'mapbox-dark',
+    provider: 'mapbox',
+    coordSystem: COORD_SYSTEM.WGS84,
+    style: 'mapbox://styles/mapbox/dark-v11',
+    labelZh: 'Mapbox 暗色',
+    labelEn: 'Mapbox Dark'
+  },
+  {
+    key: 'amap-standard',
+    provider: 'amap',
+    coordSystem: COORD_SYSTEM.GCJ02,
+    style: AMAP_STYLES.standard,
+    labelZh: '高德标准',
+    labelEn: 'AMap Standard'
+  }
+];
+
+const currentMapStyle = ref('mapbox-dark');
+const currentMapStyleOption = computed(() => {
+  return mapStyleOptions.find(item => item.key === currentMapStyle.value) || mapStyleOptions[0];
+});
+const currentMapStyleLabel = computed(() => {
+  return locale.value === 'zh' ? currentMapStyleOption.value.labelZh : currentMapStyleOption.value.labelEn;
+});
+const isAmapProvider = computed(() => currentMapStyleOption.value.provider === 'amap');
+
+const getMapStyle = () => {
+  return currentMapStyleOption.value.style;
+};
+
+const getMapCoordSystem = () => {
+  return currentMapStyleOption.value.coordSystem;
+};
+
+const getSearchResultCoordSystem = () => {
+  return locale.value === 'zh' ? COORD_SYSTEM.GCJ02 : COORD_SYSTEM.WGS84;
+};
+
+const transformCoordinate = (coord, fromSystem, toSystem) => {
+  if (!Array.isArray(coord) || coord.length < 2 || fromSystem === toSystem) return coord;
+  try {
+    const from = fromSystem === COORD_SYSTEM.GCJ02 ? gcoord.GCJ02 : gcoord.WGS84;
+    const to = toSystem === COORD_SYSTEM.GCJ02 ? gcoord.GCJ02 : gcoord.WGS84;
+    return gcoord.transform(coord, from, to);
+  } catch (err) {
+    console.warn('Coordinate transform failed:', err);
+    return coord;
+  }
+};
+
+const transformCoordinates = (coords, fromSystem, toSystem) => {
+  if (!Array.isArray(coords)) return coords;
+  if (coords.length > 0 && typeof coords[0] === 'number') {
+    return transformCoordinate(coords, fromSystem, toSystem);
+  }
+  return coords.map(item => transformCoordinates(item, fromSystem, toSystem));
+};
+
+const transformGeometry = (geometry, fromSystem, toSystem) => {
+  if (!geometry || fromSystem === toSystem) return geometry;
+  if (geometry.type === 'GeometryCollection' && Array.isArray(geometry.geometries)) {
+    return {
+      ...geometry,
+      geometries: geometry.geometries.map(g => transformGeometry(g, fromSystem, toSystem))
+    };
+  }
+  if (!geometry.coordinates) return geometry;
+  return {
+    ...geometry,
+    coordinates: transformCoordinates(geometry.coordinates, fromSystem, toSystem)
+  };
+};
+
+const transformFeatureCollection = (geojson, fromSystem, toSystem) => {
+  if (!geojson || !Array.isArray(geojson.features) || fromSystem === toSystem) return geojson;
+  return {
+    ...geojson,
+    features: geojson.features.map(feature => ({
+      ...feature,
+      geometry: transformGeometry(feature.geometry, fromSystem, toSystem)
+    }))
+  };
+};
+
+const geometryToStoreSystem = (geometry) => {
+  return transformGeometry(geometry, getMapCoordSystem(), COORD_SYSTEM.WGS84);
+};
+
+const geojsonToMapSystem = (geojson) => {
+  return transformFeatureCollection(geojson, COORD_SYSTEM.WGS84, getMapCoordSystem());
+};
 
 const layers = reactive({
   own: true,
@@ -694,14 +818,9 @@ const handleSearch = async (query) => {
 const onSelectLocation = (item) => {
   if (!item || !item.center || !map.value) return;
 
-  let [lng, lat] = item.center;
-
-  // 如果是高德搜索结果(GCJ02)，必须转换为 WGS84
-  if (locale.value === 'zh') {
-    const result = gcoord.transform([lng, lat], gcoord.GCJ02, gcoord.WGS84);
-    lng = result[0];
-    lat = result[1];
-  }
+  const fromSystem = getSearchResultCoordSystem();
+  const toSystem = getMapCoordSystem();
+  const [lng, lat] = transformCoordinate(item.center, fromSystem, toSystem);
 
   // 地图飞行到该位置
   map.value.flyTo({
@@ -709,6 +828,47 @@ const onSelectLocation = (item) => {
     zoom: 14,
     duration: 1500
   });
+};
+
+const handleMapStyleCommand = (nextStyleKey) => {
+  if (!nextStyleKey || nextStyleKey === currentMapStyle.value) return;
+  const nextStyle = mapStyleOptions.find(item => item.key === nextStyleKey);
+  if (!nextStyle) return;
+
+  const currentCenter = map.value?.getCenter();
+  const fromSystem = getMapCoordSystem();
+  const toSystem = nextStyle.coordSystem;
+  const convertedCenter = transformCoordinate(
+    currentCenter ? [currentCenter.lng, currentCenter.lat] : [116.397, 39.918],
+    fromSystem,
+    toSystem
+  );
+
+  const currentView = {
+    center: convertedCenter,
+    zoom: map.value?.getZoom() ?? 13,
+    bearing: map.value?.getBearing() ?? 0,
+    pitch: map.value?.getPitch() ?? 0
+  };
+
+  if (isEditingFeature.value) {
+    cancelEditFeature();
+  }
+  if (measurementMode.value) {
+    clearMeasurement();
+  }
+  viewModeFeature.value = null;
+  drawSelectedId.value = null;
+  searchResult.value = null;
+
+  currentMapStyle.value = nextStyleKey;
+  initMap(currentView, { preserveView: true });
+
+  ElMessage.success(
+    locale.value === 'zh'
+      ? `已切换到底图：${nextStyle.labelZh}`
+      : `Switched base map to: ${nextStyle.labelEn}`
+  );
 };
 
 // 🟢 监听字典配置变化，更新地图图层颜色
@@ -860,16 +1020,32 @@ const editFormFields = computed(() => {
     }));
 });
 
-const initMap = () => {
-  const token = import.meta.env.VITE_MAPBOX_TOKEN;
+const initMap = (initialView = null, options = {}) => {
   if (!token) return ElMessage.error('Mapbox Token Missing');
+  const preserveView = !!options.preserveView;
+
+  if (map.value) {
+    map.value.remove();
+    map.value = null;
+  }
+  draw.value = null;
+  drawSelectedId.value = null;
+
+  const view = initialView || {
+    center: [116.397, 39.918],
+    zoom: 13,
+    bearing: 0,
+    pitch: 0
+  };
 
   mapboxgl.accessToken = token;
   map.value = new mapboxgl.Map({
     container: 'map-container',
-    style: 'mapbox://styles/mapbox/dark-v11',
-    center: [116.397, 39.918],
-    zoom: 13,
+    style: getMapStyle(),
+    center: view.center,
+    zoom: view.zoom,
+    bearing: view.bearing,
+    pitch: view.pitch
   });
 
   draw.value = new MapboxDraw({
@@ -949,8 +1125,10 @@ const initMap = () => {
   map.value.addControl(draw.value);
 
   map.value.on('load', () => {
-    add3DBuildings();
-    fetchFeatures();
+    if (!isAmapProvider.value) {
+      add3DBuildings();
+    }
+    fetchFeatures({ fitToData: !preserveView });
 
     map.value.on('contextmenu', (e) => {
       const mode = draw.value.getMode();
@@ -1321,7 +1499,7 @@ const saveFeature = async () => {
       feature_type: formData.featureType,
       category: formData.category,
       properties: formData.properties,
-      geometry: feature.geometry
+      geometry: geometryToStoreSystem(feature.geometry)
     };
 
     const res = await axios.post('/api/mapbox/features', payload);
@@ -1382,11 +1560,12 @@ const addLayerHoverEffects = () => {
   });
 };
 
-const fetchFeatures = async () => {
+const fetchFeatures = async (options = {}) => {
+  const fitToData = options.fitToData !== false;
   try {
     const res = await axios.get(`/api/mapbox/features?t=${new Date().getTime()}`);
     if (res.data.code === 200) {
-      const geojson = res.data.data;
+      const geojson = geojsonToMapSystem(res.data.data);
 
       if (map.value.getSource('market-data')) {
         map.value.getSource('market-data').setData(geojson);
@@ -1488,7 +1667,7 @@ const fetchFeatures = async () => {
         // 🟢 图层创建后添加悬停效果
         addLayerHoverEffects();
 
-        if (geojson.features.length > 0) {
+        if (fitToData && geojson.features.length > 0) {
           const bounds = new mapboxgl.LngLatBounds();
 
           geojson.features.forEach((feature) => {
@@ -1924,7 +2103,7 @@ const saveEditFeature = async () => {
       name: editFormData.name,
       category: editFormData.category,
       properties: { ...editFormData.properties },
-      geometry: updatedGeometry
+      geometry: geometryToStoreSystem(updatedGeometry)
     };
     
     const res = await axios.put(`/api/mapbox/features/${featureId}`, updateData);
@@ -1981,9 +2160,11 @@ const add3DBuildings = () => {
   if (map.value.getLayer('add-3d-buildings')) return;
 
   const layers = map.value.getStyle().layers;
-  const labelLayerId = layers.find(
+  const labelLayer = layers.find(
     (layer) => layer.type === 'symbol' && layer.layout['text-field']
-  ).id;
+  );
+  if (!labelLayer) return;
+  const labelLayerId = labelLayer.id;
 
   map.value.addLayer(
     {
@@ -2640,4 +2821,3 @@ onActivated(async () => {
   display: none !important;
 }
 </style>
-

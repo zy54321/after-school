@@ -47,3 +47,33 @@ export const MAP_STYLES = {
     ]
   }
 };
+
+// AMap raster style used by analytics system.
+// Note: AMap tiles are in GCJ-02 coordinates.
+export const AMAP_STYLES = {
+  standard: {
+    version: 8,
+    glyphs: 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf',
+    sources: {
+      'amap-raster': {
+        type: 'raster',
+        tiles: [
+          'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+          'https://webrd02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+          'https://webrd03.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+          'https://webrd04.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
+        ],
+        tileSize: 256
+      }
+    },
+    layers: [
+      {
+        id: 'amap-raster-layer',
+        type: 'raster',
+        source: 'amap-raster',
+        minzoom: 0,
+        maxzoom: 22
+      }
+    ]
+  }
+};
