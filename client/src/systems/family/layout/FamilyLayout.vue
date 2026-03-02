@@ -6,31 +6,32 @@
         <div class="logo-section">
           <router-link to="/family/home" class="logo-link">
             <span class="logo-icon">🏠</span>
-            <span class="logo-text">家庭成长银行</span>
+            <span class="logo-text">{{ t('family.bank') }}</span>
           </router-link>
         </div>
         
         <nav class="main-nav">
           <router-link to="/family/market" class="nav-item" active-class="active">
             <span class="nav-icon">🛒</span>
-            <span class="nav-text">市场</span>
+            <span class="nav-text">{{ t('family.market') }}</span>
           </router-link>
-          <router-link 
-            :to="currentMemberId ? `/family/member/${currentMemberId}/wallet` : '/family/dashboard'" 
-            class="nav-item" 
+          <a
+            href="#"
+            @click.prevent="goToMember"
+            class="nav-item"
             :class="{ active: $route.path.includes('/family/member/') }"
           >
             <span class="nav-icon">👤</span>
-            <span class="nav-text">成员</span>
-          </router-link>
+            <span class="nav-text">{{ t('family.member') }}</span>
+          </a>
           <router-link to="/family/dashboard" class="nav-item" active-class="active">
             <span class="nav-icon">📊</span>
-            <span class="nav-text">总览</span>
+            <span class="nav-text">{{ t('family.dashboard') }}</span>
           </router-link>
         </nav>
         
         <div class="user-section">
-          <button @click="handleLogout" class="logout-btn">退出</button>
+          <button @click="handleLogout" class="logout-btn">{{ t('family.logout') }}</button>
         </div>
       </div>
     </header>
@@ -45,8 +46,11 @@
 <script setup>
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import axios from 'axios';
 import { clearSessionCache } from '@/router';
 
+const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
@@ -54,6 +58,31 @@ const router = useRouter();
 const currentMemberId = computed(() => {
   return route.params.id || localStorage.getItem('currentMemberId');
 });
+
+// 点击成员导航：有当前成员则跳转，否则拉取成员列表取第一个再跳转
+const goToMember = async () => {
+  const memberId = currentMemberId.value;
+  if (memberId) {
+    router.push(`/family/member/${memberId}/wallet`);
+    return;
+  }
+  try {
+    const { data } = await axios.get('/api/v2/family/members');
+    // 接口返回格式为 { data: { members: [...], total } }
+    const members = data?.data?.members ?? data?.members ?? [];
+    const list = Array.isArray(members) ? members : [];
+    const first = list[0];
+    if (first?.id) {
+      localStorage.setItem('currentMemberId', String(first.id));
+      router.push(`/family/member/${first.id}/wallet`);
+    } else {
+      router.push('/family/dashboard');
+    }
+  } catch (err) {
+    console.error('获取成员列表失败:', err);
+    router.push('/family/dashboard');
+  }
+};
 
 // 登出
 const handleLogout = async () => {

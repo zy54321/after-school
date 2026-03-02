@@ -1,6 +1,9 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import dayjs from 'dayjs';
+
+const { t } = useI18n();
 
 const props = defineProps({
   rewards: {
@@ -63,7 +66,7 @@ const checkRewardStatus = (reward) => {
   }).length;
   
   const left = reward.limit_max - periodUsage;
-  return left <= 0 ? { available: false, text: '完' } : { available: true, text: `剩 ${left}` };
+  return left <= 0 ? { available: false, text: t('common.empty') } : { available: true, text: t('common.remaining', { count: left }) };
 };
 
 const handleRedeem = (reward) => {

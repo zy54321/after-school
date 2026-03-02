@@ -762,11 +762,11 @@ exports.useInventoryItem = async (inventoryId, useQty = 1, client = pool) => {
  */
 exports.getOrderCountSince = async (memberId, skuId, sinceDate, client = pool) => {
   const result = await client.query(
-    `SELECT COUNT(*) FROM family_market_order 
+    `SELECT COALESCE(SUM(quantity), 0) as count FROM family_market_order 
      WHERE member_id = $1 AND sku_id = $2 AND status = 'paid' AND created_at >= $3`,
     [memberId, skuId, sinceDate]
   );
-  return parseInt(result.rows[0].count);
+  return parseInt(result.rows[0].count, 10);
 };
 
 // ========== Offer 管理 ==========

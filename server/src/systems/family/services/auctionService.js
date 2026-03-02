@@ -13,11 +13,31 @@
  * - 出价记录：memberId 维度（参与记录）
  * - 订单/库存：memberId 维度（归属记录）
  */
+const dayjs = require('dayjs');
 const auctionRepo = require('../repos/auctionRepo');
 const walletRepo = require('../repos/walletRepo');
 const marketplaceRepo = require('../repos/marketplaceRepo');
 const seedrandom = require('seedrandom');
 const familyRepo = require('../repos/familyRepo');
+
+/**
+ * 按限购类型返回统计起始时间（用于兑换/竞拍限购校验）
+ * @param {string} limitType - 'daily' | 'weekly' | 'monthly'
+ * @returns {Date} 起始时间
+ */
+function getLimitStartTime(limitType) {
+  const now = dayjs();
+  switch (limitType) {
+    case 'daily':
+      return now.startOf('day').toDate();
+    case 'weekly':
+      return now.startOf('week').toDate();
+    case 'monthly':
+      return now.startOf('month').toDate();
+    default:
+      return now.subtract(100, 'year').toDate(); // 无限制则取很早的起点
+  }
+}
 
 /**
  * 稀有度配置
@@ -1059,6 +1079,17 @@ exports.submitBid = async (actorUserId, lotId, bidderId, bidPoints) => {
     // 检查是否已成交/流拍
     const existingResult = await auctionRepo.getResultByLotId(lotId, client);
     if (existingResult) throw new Error('拍品已成交/流拍，禁止出价');
+
+    // 兑换限购校验：若 SKU 有 limit_type，检查该成员在周期内已兑换数量 + 本拍数量 是否超过 limit_max
+    const sku = await marketplaceRepo.getSkuByIdRaw(lot.sku_id, client);
+    if (sku && sku.limit_type && sku.limit_type !== 'unlimited' && (sku.limit_max != null && sku.limit_max > 0)) {
+      const sinceDate = getLimitStartTime(sku.limit_type);
+      const orderCount = await marketplaceRepo.getOrderCountSince(bidderId, lot.sku_id, sinceDate, client);
+      const lotQty = lot.quantity || 1;
+      if (orderCount + lotQty > sku.limit_max) {
+        throw new Error(`该商品限购 ${sku.limit_max} 件/${sku.limit_type === 'daily' ? '日' : sku.limit_type === 'weekly' ? '周' : '月'}，当前已兑换 ${orderCount} 件，无法再出价`);
+      }
+    }
 
     // 3) 归属校验：bidder 必须属于当前 parent（你的系统：parent_id = userId）
     const bidder = await walletRepo.getMemberById(bidderId, client);

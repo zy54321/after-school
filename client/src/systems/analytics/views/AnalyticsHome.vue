@@ -96,7 +96,7 @@
     <!-- Features Section -->
     <section class="features-section">
       <div class="container">
-        <h2 class="section-title">核心功能</h2>
+        <h2 class="section-title">{{ $t('analytics.home.featuresTitle') }}</h2>
         <div class="features-grid">
           <div class="feature-card">
             <div class="feature-icon">🗺️</div>
@@ -188,8 +188,8 @@
     <!-- CTA Section -->
     <section class="cta-section">
       <div class="container">
-        <h2 class="cta-title">准备好开始了吗？</h2>
-        <p class="cta-desc">立即体验商业分析地图，让数据驱动您的商业决策</p>
+        <h2 class="cta-title">{{ $t('analytics.home.ctaTitle') }}</h2>
+        <p class="cta-desc">{{ $t('analytics.home.ctaDesc') }}</p>
         <el-button v-if="!isLoggedIn" type="primary" size="large" class="cta-btn-large" @click="showLoginModal">
           {{ $t('analytics.home.ctaBtn') }}
           <el-icon class="el-icon--right">

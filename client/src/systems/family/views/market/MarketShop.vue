@@ -2,17 +2,17 @@
   <div class="market-shop">
     <!-- 面包屑 -->
     <nav class="breadcrumb">
-      <router-link to="/family/market">市场</router-link>
+      <router-link to="/family/market">{{ t('family.market') }}</router-link>
       <span class="separator">/</span>
-      <span class="current">奖励商城</span>
+      <span class="current">{{ t('market.shopTitle') }}</span>
     </nav>
 
     <header class="page-header">
       <h1>
         <span class="header-icon">🛍️</span>
-        奖励商城
+        {{ t('market.shopTitle') }}
       </h1>
-      <p>用积分兑换你想要的奖励</p>
+      <p>{{ t('market.shopDesc') }}</p>
     </header>
 
     <!-- 商品分类 -->
@@ -31,8 +31,9 @@
 
     <!-- 商品网格 -->
     <div class="shop-grid" v-if="catalog.length > 0">
-      <div v-for="item in catalog" :key="item.id" class="shop-item">
+      <div v-for="item in catalog" :key="item.id" class="shop-item" :class="{ disabled: !getItemLimitStatus(item).available }">
         <div class="item-image">
+          <div class="limit-badge" :class="{ exhausted: !getItemLimitStatus(item).available }" v-if="getItemLimitStatus(item).limited">{{ getItemLimitStatus(item).text }}</div>
           <span class="item-icon">{{ item.icon || '🎁' }}</span>
         </div>
         <div class="item-info">
@@ -42,29 +43,29 @@
         <div class="item-footer">
           <div class="item-price">
             <span class="price-value">{{ item.lowestPrice || item.base_cost }}</span>
-            <span class="price-unit">积分</span>
+            <span class="price-unit">{{ t('market.points') }}</span>
           </div>
-          <button class="buy-btn" @click="openPurchaseModal(item)">兑换</button>
+          <button class="buy-btn" :disabled="!getItemLimitStatus(item).available" @click="openPurchaseModal(item)">{{ getItemLimitStatus(item).available ? t('market.redeem') : t('market.exhausted') }}</button>
         </div>
       </div>
     </div>
 
     <div class="empty-state" v-else-if="!loading">
       <div class="empty-icon">🏪</div>
-      <p>暂无商品</p>
+      <p>{{ t('market.emptyShop') }}</p>
     </div>
 
     <div class="loading-state" v-if="loading">
-      加载中...
+      {{ t('common.loading') }}
     </div>
 
     <!-- 统一成员选择器 -->
     <MemberSelector
       v-model:visible="showMemberSelector"
-      title="选择兑换成员"
-      :action-description="selectedItem ? `兑换「${selectedItem.name}」` : ''"
+      :title="t('market.selectMemberTitle')"
+      :action-description="selectedItem ? `${t('market.redeem')}「${selectedItem.name}」` : ''"
       action-icon="🛍️"
-      confirm-text="确认兑换"
+      :confirm-text="t('market.confirmRedeem')"
       :required-balance="selectedOfferCost"
       :require-balance="true"
       :loading="purchasing"
@@ -76,7 +77,7 @@
     <div class="modal-overlay" v-if="showOfferModal" @click.self="closeOfferModal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>选择兑换方式</h3>
+          <h3>{{ t('market.selectOfferTitle') }}</h3>
           <button class="close-btn" @click="closeOfferModal">×</button>
         </div>
         <div class="modal-body" v-if="selectedItem">
@@ -88,7 +89,7 @@
           </div>
           
           <div class="form-group">
-            <label>选择价格方案</label>
+            <label>{{ t('market.selectPricePlan') }}</label>
             <div class="offer-list">
               <div 
                 v-for="offer in selectedItem.offers" 
@@ -97,20 +98,20 @@
                 :class="{ selected: purchaseForm.offerId === offer.id }"
                 @click="purchaseForm.offerId = offer.id"
               >
-                <div class="offer-cost">{{ offer.cost }} 积分</div>
+                <div class="offer-cost">{{ offer.cost }} {{ t('market.points') }}</div>
                 <div class="offer-type">{{ getOfferTypeLabel(offer.offer_type) }}</div>
               </div>
             </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="cancel-btn" @click="closeOfferModal">取消</button>
+          <button class="cancel-btn" @click="closeOfferModal">{{ t('common.cancel') }}</button>
           <button 
             class="confirm-btn" 
             @click="proceedToMemberSelect"
             :disabled="!purchaseForm.offerId"
           >
-            下一步：选择成员
+            {{ t('market.nextSelectMember') }}
           </button>
         </div>
       </div>
@@ -120,13 +121,25 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import axios from 'axios';
+import dayjs from 'dayjs';
 import MemberSelector from '../../components/MemberSelector.vue';
 
+const { t } = useI18n();
+const route = useRoute();
 const loading = ref(false);
 const catalog = ref([]);
+const orderHistory = ref([]);
 const selectedItem = ref(null);
 const purchasing = ref(false);
+
+// 当前成员 ID（用于限购统计）：优先路由，其次 localStorage
+const currentMemberId = computed(() => {
+  const id = route.params.id || localStorage.getItem('currentMemberId');
+  return id ? parseInt(id, 10) : null;
+});
 
 // 弹窗状态
 const showOfferModal = ref(false);
@@ -141,12 +154,12 @@ const purchaseForm = ref({
   offerId: null,
 });
 
-const categories = [
-  { label: '全部', value: '', icon: '📦' },
-  { label: '物品', value: 'item', icon: '🎁' },
-  { label: '权限', value: 'permission', icon: '🔓' },
-  { label: '抽奖券', value: 'ticket', icon: '🎟️' },
-];
+const categories = computed(() => [
+  { label: t('category.all'), value: '', icon: '📦' },
+  { label: t('category.item'), value: 'item', icon: '🎁' },
+  { label: t('category.permission'), value: 'permission', icon: '🔓' },
+  { label: t('category.ticket'), value: 'ticket', icon: '🎟️' },
+]);
 
 // 计算选中的 offer 价格
 const selectedOfferCost = computed(() => {
@@ -156,6 +169,52 @@ const selectedOfferCost = computed(() => {
   const offer = selectedItem.value.offers?.find(o => o.id === purchaseForm.value.offerId);
   return offer?.cost || 0;
 });
+
+// 加载当前成员近期订单（用于限购次数计算）
+const loadOrders = async () => {
+  if (!currentMemberId.value) return;
+  try {
+    const res = await axios.get('/api/v2/orders', {
+      params: { member_id: currentMemberId.value, limit: 100 },
+    });
+    if (res.data?.code === 200) {
+      orderHistory.value = res.data.data?.orders || [];
+    }
+  } catch (err) {
+    console.error('加载订单历史失败:', err);
+    orderHistory.value = [];
+  }
+};
+
+// 根据 limit_type + orderHistory 计算该商品的限购状态
+const getItemLimitStatus = (item) => {
+  const limitType = item?.limit_type;
+  const limitMax = item?.limit_max != null ? Number(item.limit_max) : 0;
+  if (!limitType || limitType === 'unlimited' || limitMax <= 0) {
+    return { available: true, limited: false, text: '' };
+  }
+  let since;
+  if (limitType === 'daily') {
+    since = dayjs().startOf('day');
+  } else if (limitType === 'weekly') {
+    since = dayjs().startOf('week');
+  } else if (limitType === 'monthly') {
+    since = dayjs().startOf('month');
+  } else {
+    return { available: true, limited: false, text: '' };
+  }
+  const sinceDate = since.toDate();
+  const orders = orderHistory.value.filter(
+    (o) =>
+      Number(o.sku_id) === Number(item.id) &&
+      (o.status === 'paid' || o.status === 'fulfilled') &&
+      new Date(o.created_at) >= sinceDate
+  );
+  const used = orders.reduce((sum, o) => sum + (Number(o.quantity) || 1), 0);
+  const available = used < limitMax;
+  const text = available ? t('market.redeemedCount', { used, max: limitMax }) : t('market.exhausted');
+  return { available, limited: true, text };
+};
 
 // 加载商品目录
 const loadCatalog = async () => {
@@ -190,6 +249,7 @@ const loadCatalog = async () => {
 
 // 打开购买流程
 const openPurchaseModal = (item) => {
+  if (!getItemLimitStatus(item).available) return;
   selectedItem.value = item;
   purchaseForm.value = { memberId: null, offerId: null };
   
@@ -206,7 +266,7 @@ const openPurchaseModal = (item) => {
     showMemberSelector.value = true;
   } else {
     // 没有 offer 且没有 default_offer_id，提示并阻止下单
-    alert('该商品未配置价格方案（Offer），请到【市场管理-商品管理】为该商品发布/启用Offer');
+    alert(t('market.noOfferAlert'));
     return;
   }
 };
@@ -245,13 +305,14 @@ const handleMemberConfirm = async ({ memberId }) => {
     });
     
     if (res.data?.code === 200) {
-      alert('兑换成功！');
+      alert(t('common.success'));
       showMemberSelector.value = false;
       selectedItem.value = null;
       purchaseForm.value = { memberId: null, offerId: null };
+      await loadOrders();
     }
   } catch (err) {
-    alert(err.response?.data?.msg || '兑换失败');
+    alert(err.response?.data?.msg || t('common.failed'));
   } finally {
     purchasing.value = false;
   }
@@ -260,16 +321,21 @@ const handleMemberConfirm = async ({ memberId }) => {
 // 获取 Offer 类型标签
 const getOfferTypeLabel = (type) => {
   const labels = {
-    normal: '普通',
-    mystery_shop: '神秘商店',
-    auction: '拍卖',
-    promotion: '促销',
+    normal: t('market.offerTypeNormal'),
+    mystery_shop: t('market.offerTypeMystery'),
+    auction: t('market.offerTypeAuction'),
+    promotion: t('market.offerTypePromotion'),
   };
   return labels[type] || type;
 };
 
-onMounted(() => {
+const initData = () => {
   loadCatalog();
+  loadOrders();
+};
+
+onMounted(() => {
+  initData();
 });
 </script>
 
@@ -380,12 +446,45 @@ onMounted(() => {
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
 }
 
+.shop-item.disabled {
+  opacity: 0.6;
+  filter: grayscale(0.8);
+}
+
+.shop-item.disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.shop-item.disabled .buy-btn {
+  background: #909399;
+  cursor: not-allowed;
+}
+
 .item-image {
+  position: relative;
   height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+}
+
+.limit-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  z-index: 1;
+}
+
+.limit-badge.exhausted {
+  background: rgba(220, 53, 69, 0.9);
 }
 
 .item-image .item-icon {

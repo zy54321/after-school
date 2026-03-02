@@ -42,6 +42,40 @@ export default {
       switchedToZh: '已切换至中文',
       switchedToEn: 'Switched to English',
     },
+    empty: '完',
+    remaining: '剩 {count} 次',
+  },
+  family: {
+    bank: '家庭成长银行',
+    market: '市场',
+    member: '成员',
+    dashboard: '总览',
+    logout: '退出',
+  },
+  market: {
+    shopTitle: '奖励商城',
+    shopDesc: '用积分兑换你想要的奖励',
+    redeem: '兑换',
+    exhausted: '已达上限',
+    points: '积分',
+    emptyShop: '暂无商品',
+    redeemedCount: '已兑 {used}/{max}',
+    selectMemberTitle: '选择兑换成员',
+    confirmRedeem: '确认兑换',
+    selectOfferTitle: '选择兑换方式',
+    selectPricePlan: '选择价格方案',
+    nextSelectMember: '下一步：选择成员',
+    noOfferAlert: '该商品未配置价格方案（Offer），请到【市场管理-商品管理】为该商品发布/启用Offer',
+    offerTypeNormal: '普通',
+    offerTypeMystery: '神秘商店',
+    offerTypeAuction: '拍卖',
+    offerTypePromotion: '促销',
+  },
+  category: {
+    all: '全部',
+    item: '物品',
+    permission: '权限',
+    ticket: '抽奖券',
   },
   // 1. 仪表盘
   dashboard: {
@@ -260,7 +294,10 @@ export default {
     welcomeBackAction: '欢迎回来，进入系统', // 中间大按钮 (已登录状态)
     identityTitle: '身份确认', // 弹窗标题
     accessing: '正在访问', // 弹窗内提示
-    systemStrategy: '商业分析地图', // 系统名称
+    systemStrategy: '地图规划分析', // 系统名称
+    tipTitle: '提示',
+    goLogin: '去登录',
+    needLoginForStrategy: '请先登录以访问地图规划分析',
     systemEdu: '教务管理系统', // 系统名称
     enterNow: '立即进入', // 弹窗内大按钮
     switchAccount: '切换账号', // 弹窗内小按钮
@@ -273,7 +310,7 @@ export default {
     radius: '热力半径',
   },
   strategy: {
-    title: '商业分析地图',
+    title: '地图规划分析',
     subTitle: 'V1.0',
     layers: '图层控制',
     arsenal: '工具',
@@ -358,10 +395,10 @@ export default {
       btn: '进入工作台',
     },
     strategyCard: {
-      title: '商业分析地图',
-      desc: '让商业选址决策有据可依。通过地理数据可视化分析，快速识别优质商圈、评估竞争环境、优化选址决策，帮助企业在市场拓展中降低风险、提高成功率。',
+      title: '地图规划分析',
+      desc: '面向多场景的地图辅助规划工具。支持点位标记、路线规划、范围评估与方案对比，可用于商业、旅游、出行等规划决策场景。',
       tag: '公开演示',
-      btn: '进入分析地图',
+      btn: '进入规划地图',
     },
     familyCard: {
       title: '家庭成长银行',
@@ -438,53 +475,56 @@ export default {
     },
     empty: '暂无字典配置'
   },
-  // 商业分析系统首页翻译
+  // 地图规划系统首页翻译
   analytics: {
     home: {
-      title: '商业分析地图',
-      slogan: '让商业选址决策更智能、更精准',
-      subSlogan: '基于地理信息系统的商业数据分析平台，降低选址风险，提高决策成功率。通过可视化地图帮助您快速识别优质商圈、评估竞争环境、制定精准的市场拓展策略。',
-      ctaBtn: '立即体验演示',
-      enterNow: '进入分析地图',
+      title: '地图规划分析',
+      slogan: '让多场景空间规划更智能、更直观',
+      subSlogan: '这是一个基于地图的点位辅助规划系统，支持商业选址、旅游行程、出行路线等场景。通过可视化标记、图层管理与测量分析，帮助您快速比较方案并做出更稳妥的空间决策。',
+      ctaBtn: '立即体验',
+      enterNow: '进入规划地图',
+      featuresTitle: '核心功能',
+      ctaTitle: '准备好开始了吗？',
+      ctaDesc: '立即体验地图规划分析，让地图数据辅助您的规划决策。',
       intro: {
         title: '系统简介',
-        desc: '商业分析地图是一款专为教育机构、连锁企业等需要精准选址的行业打造的地理信息分析工具。系统集成了先进的地图可视化引擎和灵活的数据字典管理，让您能够在地图上直观地标记、分析和决策。',
+        desc: '地图规划分析是一款面向多场景的地理信息辅助决策工具。系统集成了地图可视化引擎和灵活的数据字典管理，支持在地图上直观标记、组织与分析点位信息，帮助您更高效地完成规划与决策。',
         highlight1: '多要素地理数据支持',
-        highlight1Desc: '支持点、线、面三种地理要素类型，满足不同业务场景的需求',
+        highlight1Desc: '支持点、线、面三种地理要素类型，满足不同规划场景需求',
         highlight2: '灵活配置数据模型',
-        highlight2Desc: '通过字典管理功能，可自定义要素类型和属性字段，适应不同行业需求',
+        highlight2Desc: '通过字典管理功能可自定义要素类型和属性字段，适配不同业务与出行规划需求',
         highlight3: '数据驱动决策分析',
-        highlight3Desc: '所有数据实时保存，支持多维度分析和可视化展示，为商业决策提供科学依据',
+        highlight3Desc: '所有数据实时保存，支持多维度分析和可视化展示，为空间规划决策提供依据',
       },
       features: {
         mapTitle: '地理数据可视化',
         mapDesc: '集成 Mapbox GL 地图引擎，支持多种地理要素的叠加展示，包括点要素（校区、竞争对手、学校、小区）、线要素（路线、拦截线）、面要素（热区）等',
-        siteTitle: '智能选址分析',
-        siteDesc: '通过多维度数据标记和分析，包括竞争对手分布、生源热力图、服务半径等，帮助您找到最佳商业位置',
+        siteTitle: '点位规划分析',
+        siteDesc: '通过点位标记、路径分析和覆盖范围评估，帮助您快速比较不同规划方案',
         dataTitle: '灵活数据管理',
-        dataDesc: '支持自定义要素类型和属性字段，通过字典管理功能灵活配置业务数据模型，适应不同行业和业务场景的需求',
+        dataDesc: '支持自定义要素类型和属性字段，通过字典管理灵活配置数据模型，适配不同规划任务需求',
         dictTitle: '字典管理',
         dictDesc: '强大的字典管理功能，支持按点、线、面分类管理要素类型，自定义属性字段（文本、数字、日期、布尔、下拉、评分等）',
         layerTitle: '图层控制',
         layerDesc: '智能图层控制系统，支持按要素类型分组显示/隐藏，手风琴式折叠设计，让地图展示更加清晰有序',
-        demographicsTitle: '人口统计分析',
-        demographicsDesc: '基于社区、商圈的人口数据分析，包括户数、均价、建筑年代等维度，辅助评估市场潜力',
+        demographicsTitle: '区域数据分析',
+        demographicsDesc: '基于区域图层和指标数据进行分析，辅助评估点位价值与覆盖效果',
         measurementTitle: '测量工具',
         measurementDesc: '支持距离测量、面积测量等功能，帮助您精确评估服务半径和覆盖范围',
       },
       useCases: {
         title: '应用场景',
         case1: {
-          title: '教育机构选址',
-          desc: '分析周边学校分布、生源热力、竞争对手位置，找到最佳校区选址',
+          title: '商业网点规划',
+          desc: '结合覆盖范围、密度与可达性对比，辅助门店或服务网点布局决策',
         },
         case2: {
-          title: '连锁门店拓展',
-          desc: '评估商圈潜力、分析竞争密度、规划服务覆盖范围，制定扩张策略',
+          title: '旅游行程规划',
+          desc: '组织多点位路线并评估路程时间与覆盖范围，让行程安排更高效',
         },
         case3: {
-          title: '市场调研分析',
-          desc: '收集和整理市场数据，通过地图可视化分析市场格局和机会',
+          title: '出行与活动规划',
+          desc: '通过地图对比不同接送路线、活动点位与服务区域，提升执行效率',
         },
       },
       advantages: {

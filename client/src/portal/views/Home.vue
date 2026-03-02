@@ -109,11 +109,11 @@ const handleStrategyClick = () => {
   } else {
     // 未登录，提示需要登录
     ElMessageBox.confirm(
-      '请先登录以访问商业分析地图',
-      '提示',
+      t('login.needLoginForStrategy'),
+      t('login.tipTitle'),
       {
-        confirmButtonText: '去登录',
-        cancelButtonText: '取消',
+        confirmButtonText: t('login.goLogin'),
+        cancelButtonText: t('common.cancel'),
         type: 'info'
       }
     ).then(() => {
