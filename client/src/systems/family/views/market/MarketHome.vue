@@ -3,9 +3,9 @@
     <header class="market-header">
       <h1 class="market-title">
         <span class="title-icon">🏪</span>
-        家庭市场
+        {{ t('marketHome.title') }}
       </h1>
-      <p class="market-subtitle">全家共享的奖励商城、拍卖、抽奖和任务系统</p>
+      <p class="market-subtitle">{{ t('marketHome.subtitle') }}</p>
     </header>
 
     <div class="market-grid">
@@ -13,11 +13,11 @@
       <router-link to="/family/market/shop" class="market-card shop">
         <div class="card-icon">🛍️</div>
         <div class="card-content">
-          <h3>奖励商城</h3>
-          <p>用积分兑换奖励</p>
+          <h3>{{ t('marketHome.shop') }}</h3>
+          <p>{{ t('marketHome.shopDesc') }}</p>
         </div>
         <div class="card-stats" v-if="stats.skuCount">
-          <span class="stat">{{ stats.skuCount }} 件商品</span>
+          <span class="stat">{{ stats.skuCount }} {{ t('marketHome.items') }}</span>
         </div>
       </router-link>
 
@@ -25,24 +25,24 @@
       <router-link to="/family/market/mystery" class="market-card mystery">
         <div class="card-icon">✨</div>
         <div class="card-content">
-          <h3>神秘商店</h3>
-          <p>限时折扣，每日刷新</p>
+          <h3>{{ t('marketHome.mystery') }}</h3>
+          <p>{{ t('marketHome.mysteryDesc') }}</p>
         </div>
         <div class="card-stats" v-if="stats.mysteryOfferCount">
-          <span class="stat">{{ stats.mysteryOfferCount }} 件特惠</span>
+          <span class="stat">{{ stats.mysteryOfferCount }} {{ t('marketHome.specialOffers') }}</span>
         </div>
-        <div class="card-badge" v-if="stats.canFreeRefresh">免费刷新</div>
+        <div class="card-badge" v-if="stats.canFreeRefresh">{{ t('marketHome.freeRefresh') }}</div>
       </router-link>
 
       <!-- 拍卖入口 -->
       <router-link to="/family/market/auction" class="market-card auction">
         <div class="card-icon">🔨</div>
         <div class="card-content">
-          <h3>拍卖大厅</h3>
-          <p>竞拍稀有奖励</p>
+          <h3>{{ t('marketHome.auction') }}</h3>
+          <p>{{ t('marketHome.auctionDesc') }}</p>
         </div>
         <div class="card-stats" v-if="stats.activeSessions">
-          <span class="stat">{{ stats.activeSessions }} 场进行中</span>
+          <span class="stat">{{ stats.activeSessions }} {{ t('marketHome.activeSessions') }}</span>
         </div>
       </router-link>
 
@@ -50,11 +50,11 @@
       <router-link to="/family/market/draw" class="market-card draw">
         <div class="card-icon">🎰</div>
         <div class="card-content">
-          <h3>幸运抽奖</h3>
-          <p>试试你的手气</p>
+          <h3>{{ t('marketHome.draw') }}</h3>
+          <p>{{ t('marketHome.drawDesc') }}</p>
         </div>
         <div class="card-stats" v-if="stats.activePools">
-          <span class="stat">{{ stats.activePools }} 个奖池</span>
+          <span class="stat">{{ stats.activePools }} {{ t('marketHome.pools') }}</span>
         </div>
       </router-link>
 
@@ -62,11 +62,11 @@
       <router-link to="/family/market/tasks" class="market-card tasks">
         <div class="card-icon">📋</div>
         <div class="card-content">
-          <h3>悬赏任务</h3>
-          <p>完成任务赚积分</p>
+          <h3>{{ t('marketHome.tasks') }}</h3>
+          <p>{{ t('marketHome.tasksDesc') }}</p>
         </div>
         <div class="card-stats" v-if="stats.openTasks">
-          <span class="stat">{{ stats.openTasks }} 个待领取</span>
+          <span class="stat">{{ stats.openTasks }} {{ t('marketHome.openTasks') }}</span>
         </div>
       </router-link>
 
@@ -74,11 +74,11 @@
       <router-link to="/family/market/issues" class="market-card issues">
         <div class="card-icon">⚠️</div>
         <div class="card-content">
-          <h3>问题关注</h3>
-          <p>追踪和改进</p>
+          <h3>{{ t('marketHome.issues') }}</h3>
+          <p>{{ t('marketHome.issuesDesc') }}</p>
         </div>
         <div class="card-stats" v-if="stats.activeIssues">
-          <span class="stat">{{ stats.activeIssues }} 个关注中</span>
+          <span class="stat">{{ stats.activeIssues }} {{ t('marketHome.activeIssues') }}</span>
         </div>
       </router-link>
 
@@ -86,11 +86,11 @@
       <router-link to="/family/market/reminders" class="market-card reminders">
         <div class="card-icon">🔔</div>
         <div class="card-content">
-          <h3>提醒系统</h3>
-          <p>重要事项提醒</p>
+          <h3>{{ t('marketHome.reminders') }}</h3>
+          <p>{{ t('marketHome.remindersDesc') }}</p>
         </div>
         <div class="card-stats" v-if="stats.pendingReminders">
-          <span class="stat">{{ stats.pendingReminders }} 个待处理</span>
+          <span class="stat">{{ stats.pendingReminders }} {{ t('marketHome.pendingReminders') }}</span>
         </div>
       </router-link>
 
@@ -98,8 +98,8 @@
       <router-link to="/family/market/admin" class="market-card admin">
         <div class="card-icon">🧩</div>
         <div class="card-content">
-          <h3>市场管理</h3>
-          <p>配置 SKU 与 Offer</p>
+          <h3>{{ t('marketHome.admin') }}</h3>
+          <p>{{ t('marketHome.adminDesc') }}</p>
         </div>
       </router-link>
     </div>
@@ -108,7 +108,7 @@
     <section class="member-quick-access">
       <h2>
         <span>👨‍👩‍👧‍👦</span>
-        成员资产
+        {{ t('marketHome.memberAssets') }}
       </h2>
       <div class="member-list">
         <router-link 
@@ -120,7 +120,7 @@
           <div class="member-avatar">{{ member.name?.charAt(0) || '?' }}</div>
           <div class="member-info">
             <div class="member-name">{{ member.name }}</div>
-            <div class="member-balance">{{ member.balance || 0 }} 积分</div>
+            <div class="member-balance">{{ member.balance || 0 }} {{ t('marketHome.points') }}</div>
           </div>
         </router-link>
       </div>
@@ -130,7 +130,10 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import axios from 'axios';
+
+const { t } = useI18n();
 
 const stats = ref({
   skuCount: 0,

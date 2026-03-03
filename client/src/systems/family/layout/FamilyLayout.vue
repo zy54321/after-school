@@ -31,6 +31,7 @@
         </nav>
         
         <div class="user-section">
+          <button @click="toggleLanguage" class="logout-btn lang-btn" style="margin-right: 8px">{{ locale === 'zh' ? 'EN' : '中' }}</button>
           <button @click="handleLogout" class="logout-btn">{{ t('family.logout') }}</button>
         </div>
       </div>
@@ -50,7 +51,12 @@ import { useI18n } from 'vue-i18n';
 import axios from 'axios';
 import { clearSessionCache } from '@/router';
 
-const { t } = useI18n();
+const { t, locale } = useI18n({ useScope: 'global' });
+
+const toggleLanguage = () => {
+  locale.value = locale.value === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('lang', locale.value);
+};
 const route = useRoute();
 const router = useRouter();
 
@@ -187,6 +193,9 @@ const handleLogout = async () => {
   gap: 16px;
 }
 
+.lang-btn {
+  margin-right: 8px;
+}
 
 .logout-btn {
   padding: 8px 16px;

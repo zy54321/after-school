@@ -3,36 +3,36 @@
     <!-- 头部 -->
     <header class="dashboard-header">
       <div class="header-left">
-        <h1>🏠 家庭中心</h1>
+        <h1>🏠 {{ t('familyDashboard.center') }}</h1>
       </div>
       <div class="header-right">
         <router-link to="/family/market" class="header-btn market">
-          🏪 市场
+          🏪 {{ t('family.market') }}
         </router-link>
       </div>
     </header>
 
     <!-- ========== 上半部分：家庭市场状态 ========== -->
     <section class="market-overview">
-      <h2 class="section-title">📊 市场动态</h2>
+      <h2 class="section-title">📊 {{ t('familyDashboard.marketDynamics') }}</h2>
       
       <div class="status-grid">
         <!-- 拍卖进行中 -->
         <router-link to="/family/market/auction" class="status-card auction" :class="{ active: marketStatus.activeAuctions > 0 }">
           <div class="status-icon">🔨</div>
           <div class="status-info">
-            <div class="status-label">拍卖进行中</div>
+            <div class="status-label">{{ t('familyDashboard.activeAuctions') }}</div>
             <div class="status-value">{{ marketStatus.activeAuctions }}</div>
           </div>
-          <div class="status-badge" v-if="marketStatus.activeAuctions > 0">热门</div>
+          <div class="status-badge" v-if="marketStatus.activeAuctions > 0">{{ t('familyDashboard.hot') }}</div>
         </router-link>
 
         <!-- 神秘商店 -->
         <router-link to="/family/market/mystery" class="status-card mystery" :class="{ active: marketStatus.mysteryOffers > 0 }">
           <div class="status-icon">✨</div>
           <div class="status-info">
-            <div class="status-label">今日特惠</div>
-            <div class="status-value">{{ marketStatus.mysteryOffers }} 件</div>
+            <div class="status-label">{{ t('familyDashboard.todaySpecial') }}</div>
+            <div class="status-value">{{ marketStatus.mysteryOffers }} {{ t('familyDashboard.items') }}</div>
           </div>
           <div class="status-countdown" v-if="marketStatus.mysteryExpiresIn">
             {{ marketStatus.mysteryExpiresIn }}
@@ -43,7 +43,7 @@
         <router-link to="/family/market/draw" class="status-card draw" :class="{ active: marketStatus.activePools > 0 }">
           <div class="status-icon">🎰</div>
           <div class="status-info">
-            <div class="status-label">开放抽奖池</div>
+            <div class="status-label">{{ t('familyDashboard.activePools') }}</div>
             <div class="status-value">{{ marketStatus.activePools }}</div>
           </div>
         </router-link>
@@ -52,7 +52,7 @@
         <router-link to="/family/market/tasks" class="status-card tasks" :class="{ active: marketStatus.openTasks > 0 }">
           <div class="status-icon">📋</div>
           <div class="status-info">
-            <div class="status-label">可领取任务</div>
+            <div class="status-label">{{ t('familyDashboard.openTasks') }}</div>
             <div class="status-value">{{ marketStatus.openTasks }}</div>
           </div>
           <div class="status-badge bounty" v-if="marketStatus.totalBounty > 0">
@@ -64,11 +64,11 @@
         <router-link to="/family/market/reminders" class="status-card reminders" :class="{ warning: marketStatus.overdueReminders > 0 }">
           <div class="status-icon">🔔</div>
           <div class="status-info">
-            <div class="status-label">待办提醒</div>
+            <div class="status-label">{{ t('familyDashboard.pendingReminders') }}</div>
             <div class="status-value">{{ marketStatus.pendingReminders }}</div>
           </div>
           <div class="status-badge overdue" v-if="marketStatus.overdueReminders > 0">
-            ⚠️ {{ marketStatus.overdueReminders }} 逾期
+            ⚠️ {{ marketStatus.overdueReminders }} {{ t('familyDashboard.overdue') }}
           </div>
         </router-link>
 
@@ -76,11 +76,11 @@
         <router-link to="/family/market/issues" class="status-card issues" :class="{ warning: marketStatus.highAttentionIssues > 0 }">
           <div class="status-icon">⚠️</div>
           <div class="status-info">
-            <div class="status-label">关注问题</div>
+            <div class="status-label">{{ t('familyDashboard.attentionIssues') }}</div>
             <div class="status-value">{{ marketStatus.activeIssues }}</div>
           </div>
           <div class="status-badge alert" v-if="marketStatus.highAttentionIssues > 0">
-            🔥 {{ marketStatus.highAttentionIssues }} 高关注
+            🔥 {{ marketStatus.highAttentionIssues }} {{ t('familyDashboard.highAttention') }}
           </div>
         </router-link>
       </div>
@@ -88,7 +88,7 @@
 
     <!-- ========== 下半部分：成员资产卡片 ========== -->
     <section class="members-section">
-      <h2 class="section-title">👥 成员资产</h2>
+      <h2 class="section-title">👥 {{ t('familyDashboard.memberAssets') }}</h2>
       
       <div class="members-grid" v-if="members.length > 0">
         <div 
@@ -109,21 +109,21 @@
               <span class="stat-icon">💰</span>
               <div class="stat-content">
                 <span class="stat-value">{{ member.balance || 0 }}</span>
-                <span class="stat-label">积分</span>
+                <span class="stat-label">{{ t('familyDashboard.points') }}</span>
               </div>
             </div>
             <div class="stat-item inventory">
               <span class="stat-icon">🎒</span>
               <div class="stat-content">
                 <span class="stat-value">{{ member.inventoryCount || 0 }}</span>
-                <span class="stat-label">物品</span>
+                <span class="stat-label">{{ t('familyDashboard.inventory') }}</span>
               </div>
             </div>
             <div class="stat-item orders">
               <span class="stat-icon">📦</span>
               <div class="stat-content">
                 <span class="stat-value">{{ member.recentOrders || 0 }}</span>
-                <span class="stat-label">近期订单</span>
+                <span class="stat-label">{{ t('familyDashboard.recentOrders') }}</span>
               </div>
             </div>
           </div>
@@ -135,21 +135,21 @@
           </div>
 
           <div class="member-footer">
-            <span class="view-detail">查看详情 →</span>
+            <span class="view-detail">{{ t('familyDashboard.viewDetails') }}</span>
           </div>
         </div>
       </div>
 
       <div class="empty-members" v-else-if="!loading">
-        <p>暂无成员</p>
-        <button class="add-member-btn" @click="openAddMember">+ 添加成员</button>
+        <p>{{ t('familyDashboard.noMembers') }}</p>
+        <button class="add-member-btn" @click="openAddMember">{{ t('familyDashboard.addMember') }}</button>
       </div>
     </section>
 
     <!-- 加载状态 -->
     <div class="loading-overlay" v-if="loading">
       <div class="loading-spinner"></div>
-      <p>加载中...</p>
+      <p>{{ t('familyDashboard.loading') }}</p>
     </div>
   </div>
 </template>
@@ -157,7 +157,10 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import axios from 'axios';
+
+const { t, locale } = useI18n();
 
 const router = useRouter();
 
@@ -344,7 +347,7 @@ const formatTime = (dateStr) => {
   if (diffMins < 60) return `${diffMins}分钟前`;
   if (diffHours < 24) return `${diffHours}小时前`;
   if (diffDays < 7) return `${diffDays}天前`;
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(locale.value === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric' });
 };
 
 // 跳转到成员资产页

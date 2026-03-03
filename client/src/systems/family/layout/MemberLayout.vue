@@ -34,7 +34,7 @@
               <div
                 class="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                 @click="openEditModal">
-                <span class="text-white text-xs">编辑</span>
+                <span class="text-white text-xs">{{ t('memberLayout.edit') }}</span>
               </div>
             </div>
             <div class="flex-1">
@@ -43,7 +43,7 @@
                 <button
                   @click="openEditModal"
                   class="edit-btn-icon"
-                  title="编辑个人信息">
+                  :title="t('memberLayout.editProfile')">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -51,12 +51,12 @@
                   </svg>
                 </button>
               </div>
-              <p class="text-sm text-gray-400">{{ member.bio || '点击编辑添加个性签名' }}</p>
+              <p class="text-sm text-gray-400">{{ member.bio || t('memberLayout.bioPlaceholder') }}</p>
             </div>
           </div>
           <div
             class="balance-card bg-gradient-to-br from-yellow-400 to-orange-500 text-black px-6 py-3 rounded-xl shadow-lg transform hover:scale-105 transition-transform">
-            <div class="text-xs font-bold opacity-80 uppercase tracking-wider">当前积分</div>
+            <div class="text-xs font-bold opacity-80 uppercase tracking-wider">{{ t('memberLayout.currentPoints') }}</div>
             <div class="text-3xl font-black font-mono tracking-tight">{{ balance }}</div>
           </div>
         </div>
@@ -64,24 +64,24 @@
         <nav class="asset-nav flex items-center justify-between gap-4 border-b border-white/10 pb-4">
           <div class="flex gap-1 flex-1">
             <router-link :to="`/family/member/${currentMemberId}/wallet`" class="nav-item" active-class="active">
-              <span>💰</span> 积分流水
+              <span>💰</span> {{ t('memberLayout.pointsFlow') }}
             </router-link>
             <router-link :to="`/family/member/${currentMemberId}/inventory`" class="nav-item" active-class="active">
-              <span>🎒</span> 我的背包
+              <span>🎒</span> {{ t('memberLayout.backpack') }}
             </router-link>
             <router-link :to="`/family/member/${currentMemberId}/orders`" class="nav-item" active-class="active">
-              <span>📦</span> 订单记录
+              <span>📦</span> {{ t('memberLayout.orderHistory') }}
             </router-link>
             <router-link :to="`/family/member/${currentMemberId}/activity`" class="nav-item" active-class="active">
-              <span>📊</span> 活动记录
+              <span>📊</span> {{ t('memberLayout.activityRecord') }}
             </router-link>
           </div>
           <div class="flex gap-2 flex-none">
             <button class="action-btn add" @click="handleOpenAdjustModal('add')">
-              <span class="text-lg mr-1">+</span> 奖励加分
+              <span class="text-lg mr-1">+</span> {{ t('memberLayout.addPoints') }}
             </button>
             <button class="action-btn deduct" @click="handleOpenAdjustModal('deduct')">
-              <span class="text-lg mr-1">-</span> 惩罚扣分
+              <span class="text-lg mr-1">-</span> {{ t('memberLayout.deductPoints') }}
             </button>
           </div>
         </nav>
@@ -97,7 +97,7 @@
     </div>
 
     <div class="loading-state flex-1 flex items-center justify-center text-gray-500" v-else>
-      <div class="animate-pulse">加载中...</div>
+      <div class="animate-pulse">{{ t('memberLayout.loading') }}</div>
     </div>
 
     <!-- 编辑个人信息弹窗 -->
@@ -105,7 +105,7 @@
       v-if="showEditModal" @click.self="closeEditModal">
       <div class="modal-content bg-[#1e1e2d] border border-white/10 shadow-2xl rounded-3xl w-[90%] max-w-[500px] p-6">
         <div class="flex justify-between items-center mb-6">
-          <h2 class="text-xl font-bold text-white">编辑个人信息</h2>
+          <h2 class="text-xl font-bold text-white">{{ t('memberLayout.editProfile') }}</h2>
           <button @click="closeEditModal" class="modal-close-btn">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -116,7 +116,7 @@
         <div class="space-y-4">
           <!-- 头像上传 -->
           <div>
-            <label class="block text-sm font-medium text-gray-400 mb-2">头像</label>
+            <label class="block text-sm font-medium text-gray-400 mb-2">{{ t('memberLayout.avatar') }}</label>
             <div class="flex items-center gap-4">
               <div class="relative">
                 <div v-if="editForm.avatarPreview" class="w-20 h-20 rounded-full overflow-hidden border-2 border-white/10">
@@ -132,10 +132,10 @@
                 <input type="file" :ref="el => avatarInput = el" @change="handleAvatarChange" accept="image/*"
                   class="hidden" />
                 <button @click="avatarInput?.click()" class="modern-btn neutral small">
-                  选择头像
+                  {{ t('memberLayout.selectAvatar') }}
                 </button>
                 <button v-if="editForm.avatarPreview" @click="clearAvatar" class="modern-btn danger-soft ml-2">
-                  清除
+                  {{ t('memberLayout.clear') }}
                 </button>
               </div>
             </div>
@@ -143,8 +143,8 @@
 
           <!-- 个性签名 -->
           <div>
-            <label class="block text-sm font-medium text-gray-400 mb-2">个性签名</label>
-            <input v-model="editForm.bio" type="text" placeholder="请输入个性签名..."
+            <label class="block text-sm font-medium text-gray-400 mb-2">{{ t('memberLayout.bio') }}</label>
+            <input v-model="editForm.bio" type="text" :placeholder="t('memberLayout.bioInput')"
               class="w-[calc(100%-40px)] bg-[#252538] text-white border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:border-blue-500/50 transition-all outline-none placeholder-gray-600"
               maxlength="200" />
             <div class="text-xs text-gray-500 mt-1 text-right">{{ editForm.bio?.length || 0 }}/200</div>
@@ -153,14 +153,14 @@
 
         <div class="flex gap-3 mt-6">
           <button @click="closeEditModal" class="modern-btn neutral flex-1">
-            取消
+            {{ t('memberLayout.cancel') }}
           </button>
           <button @click="submitEdit" :disabled="editing" class="modern-btn primary-blue flex-1">
             <span v-if="editing" class="flex items-center justify-center gap-2">
               <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-              保存中...
+              {{ t('memberLayout.saving') }}
             </span>
-            <span v-else>保存</span>
+            <span v-else>{{ t('memberLayout.save') }}</span>
           </button>
         </div>
       </div>
@@ -171,9 +171,11 @@
 <script setup>
 import { ref, computed, onMounted, watch, getCurrentInstance, provide } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 
+const { t } = useI18n();
 const route = useRoute();
 const { proxy } = getCurrentInstance();
 const members = ref([]);
@@ -239,12 +241,12 @@ const handleAvatarChange = (e) => {
   if (file) {
     // 验证文件类型
     if (!file.type.startsWith('image/')) {
-      ElMessage.warning('请选择图片文件');
+      ElMessage.warning(t('memberLayout.selectImageFile'));
       return;
     }
     // 验证文件大小（2MB）
     if (file.size > 2 * 1024 * 1024) {
-      ElMessage.warning('图片大小不能超过2MB');
+      ElMessage.warning(t('memberLayout.imageSizeLimit'));
       return;
     }
     editForm.value.avatarFile = file;
@@ -265,7 +267,7 @@ const clearAvatar = () => {
 const submitEdit = async () => {
   // 使用 currentMemberId 作为 id（从路由参数获取，更可靠）
   if (!currentMemberId.value || !member.value) {
-    ElMessage.error('成员信息不完整，请刷新页面重试');
+    ElMessage.error(t('memberLayout.memberIncomplete'));
     return;
   }
   editing.value = true;
@@ -287,16 +289,16 @@ const submitEdit = async () => {
     });
 
     if (res.data?.code === 200) {
-      ElMessage.success('更新成功');
+      ElMessage.success(t('common.success'));
       closeEditModal();
       await loadWallet();
       await loadMembers();
     } else {
-      ElMessage.error(res.data?.msg || '更新失败');
+      ElMessage.error(res.data?.msg || t('memberLayout.updateFailed'));
     }
   } catch (err) {
     console.error('更新成员信息失败:', err);
-    const errorMsg = err.response?.data?.msg || err.response?.data?.error || '更新失败';
+    const errorMsg = err.response?.data?.msg || err.response?.data?.error || t('memberLayout.updateFailed');
     ElMessage.error(errorMsg);
     // 如果是数据库字段不存在的错误，提示运行迁移
     if (errorMsg.includes('column') && errorMsg.includes('does not exist')) {
