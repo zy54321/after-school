@@ -72,6 +72,10 @@
           <input type="number" v-model.number="poolForm.tickets_per_draw" />
         </div>
         <div class="form-group">
+          <label>每次消耗积分</label>
+          <input type="number" v-model.number="poolForm.config.pointsPerDraw" />
+        </div>
+        <div class="form-group">
           <label>类型</label>
           <select v-model="poolForm.pool_type">
             <option value="wheel">wheel</option>
@@ -176,6 +180,7 @@ const poolForm = ref({
   icon: '',
   entry_ticket_type_id: null,
   tickets_per_draw: 1,
+  config: { pointsPerDraw: 0 },
   pool_type: 'wheel',
   status: 'active',
 });
@@ -218,6 +223,7 @@ const refresh = async () => {
 };
 
 const openPoolModal = (pool = null) => {
+  poolForm.value.config = pool && pool.config ? { ...pool.config } : { pointsPerDraw: 0 };
   if (pool) {
     poolForm.value = {
       id: pool.id,
@@ -226,6 +232,7 @@ const openPoolModal = (pool = null) => {
       icon: pool.icon || '',
       entry_ticket_type_id: pool.entry_ticket_type_id || null,
       tickets_per_draw: pool.tickets_per_draw || 1,
+      config: poolForm.value.config,
       pool_type: pool.pool_type || 'wheel',
       status: pool.status || 'active',
     };
@@ -237,6 +244,7 @@ const openPoolModal = (pool = null) => {
       icon: '',
       entry_ticket_type_id: null,
       tickets_per_draw: 1,
+      config: { pointsPerDraw: 0 },
       pool_type: 'wheel',
       status: 'active',
     };
@@ -257,6 +265,7 @@ const submitPool = async () => {
       icon: poolForm.value.icon || undefined,
       entry_ticket_type_id: poolForm.value.entry_ticket_type_id,
       tickets_per_draw: poolForm.value.tickets_per_draw,
+      config: poolForm.value.config || { pointsPerDraw: 0 },
       pool_type: poolForm.value.pool_type,
       status: poolForm.value.status,
     };

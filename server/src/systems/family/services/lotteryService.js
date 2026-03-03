@@ -8,9 +8,24 @@
  * - 保底机制
  * - 记录日志（含 pool_version_id）
  */
+const dayjs = require('dayjs');
 const lotteryRepo = require('../repos/lotteryRepo');
 const marketplaceRepo = require('../repos/marketplaceRepo');
 const walletRepo = require('../repos/walletRepo');
+
+function getLimitStartTime(limitType) {
+  const now = dayjs();
+  switch (limitType) {
+    case 'daily':
+      return now.startOf('day').toDate();
+    case 'weekly':
+      return now.startOf('week').toDate();
+    case 'monthly':
+      return now.startOf('month').toDate();
+    default:
+      return now.subtract(100, 'year').toDate();
+  }
+}
 
 /**
  * 执行抽奖 (事务)
@@ -99,6 +114,30 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
     if (prizes.length === 0) {
       throw new Error('奖池为空');
     }
+
+    // ========== 3.1 过滤出未超限购的 SKU 奖品（积分与商品限购联动）==========
+    const availablePrizes = [];
+    for (const p of prizes) {
+      if (p.type !== 'sku' || !p.sku_id) {
+        availablePrizes.push(p);
+        continue;
+      }
+      const sku = await marketplaceRepo.getSkuByIdRaw(p.sku_id, client);
+      if (!sku || !sku.limit_type || sku.limit_type === 'unlimited' || (sku.limit_max == null || sku.limit_max <= 0)) {
+        availablePrizes.push(p);
+        continue;
+      }
+      const sinceDate = getLimitStartTime(sku.limit_type);
+      const count = await marketplaceRepo.getOrderCountSince(memberId, p.sku_id, sinceDate, client);
+      const addQty = p.value || 1;
+      if (count + addQty > sku.limit_max) {
+        continue;
+      }
+      availablePrizes.push(p);
+    }
+    if (availablePrizes.length === 0) {
+      throw new Error('当前无可领取的奖品（已达限购或奖池为空）');
+    }
     
     // ========== 4. 检查并扣减抽奖券 ==========
     let ticketInventory = null;
@@ -141,6 +180,24 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
       // 扣减抽奖券
       await lotteryRepo.decrementInventory(ticketInventory.id, drawPool.tickets_per_draw, client);
     }
+
+    // ========== 4.1 积分消耗检查与扣减 ==========
+    const poolConfig = drawPool.config && typeof drawPool.config === 'object' ? drawPool.config : {};
+    const pointsPerDraw = poolConfig.pointsPerDraw != null ? Number(poolConfig.pointsPerDraw) : 0;
+    if (pointsPerDraw > 0) {
+      const balance = await walletRepo.getBalance(memberId, client);
+      if (balance < pointsPerDraw) {
+        throw new Error(`积分不足，本次抽奖需消耗 ${pointsPerDraw} 积分，当前余额 ${balance}`);
+      }
+      await walletRepo.createPointsLog({
+        memberId,
+        parentId: drawPool.parent_id,
+        description: `抽奖消耗：${drawPool.name || '抽奖池'}`,
+        pointsChange: -pointsPerDraw,
+        reasonCode: 'lottery',
+        idempotencyKey: idempotencyKey ? `lottery_deduct_${idempotencyKey}` : null,
+      }, client);
+    }
     
     // ========== 5. 计算连续抽奖次数（保底检查） ==========
     let consecutiveCount = 1;
@@ -156,20 +213,17 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
       }
     }
     
-    // ========== 6. 抽取奖品 ==========
+    // ========== 6. 抽取奖品（使用过滤后的 availablePrizes）==========
     let selectedPrize;
     
     if (isGuarantee) {
-      // 触发保底，直接给保底奖品
-      selectedPrize = prizes.find(p => p.id === version.guarantee_prize_id);
+      selectedPrize = availablePrizes.find(p => p.id === version.guarantee_prize_id);
       if (!selectedPrize) {
-        // 保底奖品不存在，按正常概率抽取
-        selectedPrize = weightedRandom(prizes, version.total_weight);
+        selectedPrize = weightedRandom(availablePrizes);
         isGuarantee = false;
       }
     } else {
-      // 按权重随机抽取
-      selectedPrize = weightedRandom(prizes, version.total_weight);
+      selectedPrize = weightedRandom(availablePrizes);
     }
     
     // ========== 7. 发放奖励 ==========
@@ -564,23 +618,18 @@ exports.getMemberPoolStats = async (memberId, poolId) => {
 // ========== 内部辅助函数 ==========
 
 /**
- * 按权重随机抽取
+ * 按权重随机抽取（倒数权重：设定值越大，概率越小）
  */
-function weightedRandom(prizes, totalWeight) {
-  if (!totalWeight) {
-    totalWeight = prizes.reduce((sum, p) => sum + (p.weight || 0), 0);
-  }
-  
-  const random = Math.random() * totalWeight;
+function weightedRandom(prizes) {
+  const trueWeights = prizes.map(p => ({ ...p, trueWeight: 1.0 / (p.weight || 1) }));
+  const totalTrueWeight = trueWeights.reduce((sum, p) => sum + p.trueWeight, 0);
+  const random = Math.random() * totalTrueWeight;
   let cumulative = 0;
-  
-  for (const prize of prizes) {
-    cumulative += prize.weight || 0;
+  for (const p of trueWeights) {
+    cumulative += p.trueWeight;
     if (random <= cumulative) {
-      return prize;
+      return p;
     }
   }
-  
-  // 兜底返回最后一个
-  return prizes[prizes.length - 1];
+  return trueWeights[trueWeights.length - 1];
 }
