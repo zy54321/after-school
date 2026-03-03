@@ -33,7 +33,7 @@
     <div class="shop-grid" v-if="catalog.length > 0">
       <div v-for="item in catalog" :key="item.id" class="shop-item" :class="{ disabled: !getItemLimitStatus(item).available }">
         <div class="item-image">
-          <div class="limit-badge" :class="{ exhausted: !getItemLimitStatus(item).available }" v-if="getItemLimitStatus(item).limited">{{ getItemLimitStatus(item).text }}</div>
+          <div class="limit-badge" :class="{ exhausted: !getItemLimitStatus(item).available }" v-if="getItemLimitStatus(item).limited">{{ getItemLimitStatus(item).available ? getItemLimitStatus(item).text : t('market.exhausted') }}</div>
           <span class="item-icon">{{ item.icon || '🎁' }}</span>
         </div>
         <div class="item-info">
@@ -212,7 +212,8 @@ const getItemLimitStatus = (item) => {
   );
   const used = orders.reduce((sum, o) => sum + (Number(o.quantity) || 1), 0);
   const available = used < limitMax;
-  const text = available ? t('market.redeemedCount', { used, max: limitMax }) : t('market.exhausted');
+  const remaining = limitMax - used;
+  const text = remaining <= 0 ? t('market.exhausted') : t('market.redeemedCount', { used, max: limitMax });
   return { available, limited: true, text };
 };
 

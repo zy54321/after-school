@@ -668,6 +668,18 @@ export default {
       features: {
         title: '核心功能',
         subtitle: '一站式解决家庭教育管理需求',
+        taskTitle: '任务管理系统',
+        taskDesc: '支持赚分任务和扣分任务，自定义任务分类、积分值、目标成员，灵活配置家庭教育规则',
+        rewardTitle: '奖励兑换中心',
+        rewardDesc: '奖品和竞拍两种奖励模式，支持周期限制（每周/每月），防止过度消费，培养理性消费习惯',
+        logTitle: '积分流水记录',
+        logDesc: '完整的积分变动历史，包括赚分、扣分、兑换、竞拍等所有操作，支持撤销功能',
+        calendarTitle: '账单日历视图',
+        calendarDesc: '可视化展示每日积分变动，帮助家长和孩子了解积分变化趋势，培养时间管理意识',
+        configTitle: '个性化配置',
+        configDesc: '支持自定义任务分类、奖励类型，每个家庭可以根据自己的教育理念灵活配置',
+        memberTitle: '多成员管理',
+        memberDesc: '支持多个家庭成员，每个成员独立的积分账户，适合多子女家庭使用',
       },
       cta: {
         title: '准备好开始了吗？',

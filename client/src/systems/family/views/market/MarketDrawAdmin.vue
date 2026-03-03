@@ -117,8 +117,8 @@
               <div>
                 <select v-model.number="row.sku_id">
                   <option :value="null">选择商品</option>
-                  <option v-for="sku in skus" :key="sku.id" :value="sku.id">
-                    {{ sku.name }} ({{ sku.type }})
+                  <option v-for="sku in skus" :key="sku.id" :value="sku.id" :disabled="!getSkuAvailableStatus(sku).available">
+                    {{ sku.name }} ({{ sku.type }}){{ !getSkuAvailableStatus(sku).available ? ' (已达上限/已售罄)' : '' }}
                   </option>
                 </select>
               </div>
@@ -161,12 +161,15 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
+import dayjs from 'dayjs';
 
 const loading = ref(false);
 const saving = ref(false);
 const pools = ref([]);
 const ticketTypes = ref([]);
 const skus = ref([]);
+const orderHistory = ref([]);
+const firstMemberId = ref(null);
 const skuMap = computed(() => new Map(skus.value.map((sku) => [sku.id, sku])));
 
 const showPoolModal = ref(false);
@@ -213,17 +216,68 @@ const loadSkus = async () => {
   }
 };
 
+const loadOrderHistory = async () => {
+  try {
+    if (!firstMemberId.value) {
+      const membersRes = await axios.get('/api/v2/family/members');
+      const members = membersRes.data?.data?.members ?? membersRes.data?.members ?? [];
+      const list = Array.isArray(members) ? members : [];
+      firstMemberId.value = list[0]?.id ?? null;
+    }
+    if (!firstMemberId.value) {
+      orderHistory.value = [];
+      return;
+    }
+    const res = await axios.get('/api/v2/orders', { params: { member_id: firstMemberId.value, limit: 500 } });
+    if (res.data?.code === 200) {
+      const list = res.data.data?.orders ?? res.data.data ?? [];
+      orderHistory.value = Array.isArray(list) ? list : [];
+    } else {
+      orderHistory.value = [];
+    }
+  } catch {
+    orderHistory.value = [];
+  }
+};
+
+function getSkuAvailableStatus(sku) {
+  const limitType = sku?.limit_type;
+  const limitMax = sku?.limit_max != null ? Number(sku.limit_max) : 0;
+  if (!limitType || limitType === 'unlimited' || limitMax <= 0) {
+    return { available: true };
+  }
+  let since;
+  if (limitType === 'daily') {
+    since = dayjs().startOf('day').toDate();
+  } else if (limitType === 'weekly') {
+    since = dayjs().startOf('week').toDate();
+  } else if (limitType === 'monthly') {
+    since = dayjs().startOf('month').toDate();
+  } else {
+    return { available: true };
+  }
+  const orders = orderHistory.value.filter(
+    (o) =>
+      Number(o.sku_id) === Number(sku.id) &&
+      (o.status === 'paid' || o.status === 'fulfilled') &&
+      new Date(o.created_at) >= since
+  );
+  const used = orders.reduce((sum, o) => sum + (Number(o.quantity) || 1), 0);
+  const available = used < limitMax;
+  return { available };
+}
+
 const refresh = async () => {
   loading.value = true;
   try {
-    await Promise.all([loadPools(), loadTicketTypes(), loadSkus()]);
+    await Promise.all([loadPools(), loadTicketTypes(), loadSkus(), loadOrderHistory()]);
   } finally {
     loading.value = false;
   }
 };
 
 const openPoolModal = (pool = null) => {
-  poolForm.value.config = pool && pool.config ? { ...pool.config } : { pointsPerDraw: 0 };
+  poolForm.value.config = pool && pool.config ? JSON.parse(JSON.stringify(pool.config)) : { pointsPerDraw: 0 };
   if (pool) {
     poolForm.value = {
       id: pool.id,
@@ -259,20 +313,21 @@ const closePoolModal = () => {
 const submitPool = async () => {
   saving.value = true;
   try {
+    const config = poolForm.value.config != null ? { ...poolForm.value.config } : { pointsPerDraw: 0 };
     const payload = {
       name: poolForm.value.name,
       description: poolForm.value.description || undefined,
       icon: poolForm.value.icon || undefined,
       entry_ticket_type_id: poolForm.value.entry_ticket_type_id,
       tickets_per_draw: poolForm.value.tickets_per_draw,
-      config: poolForm.value.config || { pointsPerDraw: 0 },
+      config,
       pool_type: poolForm.value.pool_type,
       status: poolForm.value.status,
     };
     if (poolForm.value.id) {
       await axios.put(`/api/v2/draw/pools/${poolForm.value.id}`, payload);
     } else {
-      await axios.post('/api/v2/draw/pools', payload);
+      await axios.post(`/api/v2/draw/pools`, payload);
     }
     closePoolModal();
     await refresh();
@@ -292,11 +347,10 @@ const openVersionModal = async (pool) => {
     guarantee_prize_id: null,
   };
 
-  // 2. 尝试获取该 Pool 的最新版本详情（如果列表接口没返回详情，可能需要单独 fetch）
-  // 这里假设我们需要单独获取详情来确保拿到 prizes
+  // 2. 拉取订单流水与奖池详情，供限购/库存前置检查与回填
   loading.value = true;
   try {
-    // 假设后端有 GET /api/v2/draw/pools/:id 接口返回详情
+    await loadOrderHistory();
     const res = await axios.get(`/api/v2/draw/pools/${pool.id}`);
     if (res.data?.code === 200 && res.data.data?.version) {
       const version = res.data.data.version;

@@ -136,7 +136,7 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
       availablePrizes.push(p);
     }
     if (availablePrizes.length === 0) {
-      throw new Error('当前无可领取的奖品（已达限购或奖池为空）');
+      throw new Error('奖池内所有奖品均已达兑换上限或库存不足，无法抽奖');
     }
     
     // ========== 4. 检查并扣减抽奖券 ==========
@@ -181,22 +181,30 @@ exports.spin = async (poolId, memberId, idempotencyKey) => {
       await lotteryRepo.decrementInventory(ticketInventory.id, drawPool.tickets_per_draw, client);
     }
 
-    // ========== 4.1 积分消耗检查与扣减 ==========
+    // ========== 4.1 积分前置校验与同事务扣减（不调用外部 Repo，纯 client 事务内）==========
     const poolConfig = drawPool.config && typeof drawPool.config === 'object' ? drawPool.config : {};
     const pointsPerDraw = poolConfig.pointsPerDraw != null ? Number(poolConfig.pointsPerDraw) : 0;
     if (pointsPerDraw > 0) {
-      const balance = await walletRepo.getBalance(memberId, client);
+      const balanceResult = await client.query(
+        'SELECT COALESCE(SUM(points_change), 0) as balance FROM family_points_log WHERE member_id = $1',
+        [memberId]
+      );
+      const balance = parseInt(balanceResult.rows[0].balance, 10);
       if (balance < pointsPerDraw) {
         throw new Error(`积分不足，本次抽奖需消耗 ${pointsPerDraw} 积分，当前余额 ${balance}`);
       }
-      await walletRepo.createPointsLog({
-        memberId,
-        parentId: drawPool.parent_id,
-        description: `抽奖消耗：${drawPool.name || '抽奖池'}`,
-        pointsChange: -pointsPerDraw,
-        reasonCode: 'lottery',
-        idempotencyKey: idempotencyKey ? `lottery_deduct_${idempotencyKey}` : null,
-      }, client);
+      await client.query(
+        `INSERT INTO family_points_log
+         (member_id, parent_id, task_id, reward_id, order_id, description, points_change, reason_code, idempotency_key)
+         VALUES ($1, $2, NULL, NULL, NULL, $3, $4, 'lottery', $5)`,
+        [
+          memberId,
+          drawPool.parent_id,
+          `抽奖消耗：${drawPool.name || '抽奖池'}`,
+          -pointsPerDraw,
+          idempotencyKey ? `lottery_deduct_${idempotencyKey}` : null,
+        ]
+      );
     }
     
     // ========== 5. 计算连续抽奖次数（保底检查） ==========
@@ -619,17 +627,15 @@ exports.getMemberPoolStats = async (memberId, poolId) => {
 
 /**
  * 按权重随机抽取（倒数权重：设定值越大，概率越小）
+ * 防报错使用 Number(p.weight)||1，浮点精度兜底返回最后一项
  */
 function weightedRandom(prizes) {
-  const trueWeights = prizes.map(p => ({ ...p, trueWeight: 1.0 / (p.weight || 1) }));
-  const totalTrueWeight = trueWeights.reduce((sum, p) => sum + p.trueWeight, 0);
-  const random = Math.random() * totalTrueWeight;
-  let cumulative = 0;
-  for (const p of trueWeights) {
-    cumulative += p.trueWeight;
-    if (random <= cumulative) {
-      return p;
-    }
+  const withTrueWeight = prizes.map(p => ({ ...p, trueWeight: 1.0 / (Number(p.weight) || 1) }));
+  const totalTrueWeight = withTrueWeight.reduce((sum, p) => sum + p.trueWeight, 0);
+  let rand = Math.random() * totalTrueWeight;
+  for (const p of withTrueWeight) {
+    rand -= p.trueWeight;
+    if (rand <= 0) return p;
   }
-  return trueWeights[trueWeights.length - 1];
+  return prizes[prizes.length - 1];
 }

@@ -603,6 +603,8 @@ export default {
         highlight3Desc: 'Bill calendar clearly displays point change history, making children\'s growth process clear at a glance',
       },
       features: {
+        title: 'Core Features',
+        subtitle: 'One-stop solution for family education management',
         taskTitle: 'Task Management System',
         taskDesc: 'Supports earning and deduction tasks, custom task categories, point values, target members, flexibly configuring family education rules',
         rewardTitle: 'Reward Redemption Center',
@@ -650,10 +652,6 @@ export default {
         stat1: 'Habit Success Rate 85%+',
         stat2: 'Task Completion Rate +60%',
         stat3: 'Multi-Member Support',
-      },
-      features: {
-        title: 'Core Features',
-        subtitle: 'One-stop solution for family education management',
       },
       cta: {
         title: 'Ready to Get Started?',
